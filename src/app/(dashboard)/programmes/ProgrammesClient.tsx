@@ -17,7 +17,6 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseProgrammeRequirements, checkQualifications, sortProgrammesByQualification } from "@/lib/dashboard/qualifications";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
 import { Programme, type QualificationCheckResult, StudentSubject } from "@/lib/dashboard/types";
@@ -159,16 +158,14 @@ export default function ProgrammesClient({
   universities,
   programmes,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<StatusFilter>("all");
   const [openUniversityIds, setOpenUniversityIds] = useState<Record<string, boolean>>({});
   const [selectedProgrammeId, setSelectedProgrammeId] = useState<string | null>(null);
   const [universityFieldFilters, setUniversityFieldFilters] = useState<Record<string, string>>({});
+  const [mobileDetailProgrammeId, setMobileDetailProgrammeId] = useState<string | null>(null);
+  const [mobileDetailPresented, setMobileDetailPresented] = useState(false);
   const hasSetInitialOpenState = useRef(false);
-  const mobileProgrammeId = searchParams.get("programme");
 
   const universityMap = useMemo(
     () => new Map(universities.map((university) => [university.id, university])),
@@ -308,8 +305,8 @@ export default function ProgrammesClient({
   );
 
   const mobileSelectedProgramme = useMemo(
-    () => filteredResults.find((result) => result.programme.id === mobileProgrammeId) ?? null,
-    [filteredResults, mobileProgrammeId]
+    () => filteredResults.find((result) => result.programme.id === mobileDetailProgrammeId) ?? null,
+    [filteredResults, mobileDetailProgrammeId]
   );
 
   const selectedUniversity = selectedProgramme
@@ -333,32 +330,54 @@ export default function ProgrammesClient({
   const mobileDetailOpen = Boolean(mobileSelectedProgramme && mobileSelectedUniversity);
 
   useEffect(() => {
-    if (!mobileSelectedProgramme) return;
-    if (selectedProgrammeId === mobileSelectedProgramme.programme.id) return;
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setMobileDetailProgrammeId(params.get("programme"));
+    };
 
-    setSelectedProgrammeId(mobileSelectedProgramme.programme.id);
-  }, [mobileSelectedProgramme, selectedProgrammeId]);
+    handlePopState();
+    window.addEventListener("popstate", handlePopState);
+
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileDetailProgrammeId) return;
+    if (selectedProgrammeId === mobileDetailProgrammeId) return;
+
+    setSelectedProgrammeId(mobileDetailProgrammeId);
+  }, [mobileDetailProgrammeId, selectedProgrammeId]);
 
   useEffect(() => {
     if (!mobileDetailOpen) return;
+
+    const frame = window.requestAnimationFrame(() => setMobileDetailPresented(true));
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
+      window.cancelAnimationFrame(frame);
+      setMobileDetailPresented(false);
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileDetailOpen]);
 
   function openMobileProgramme(programmeId: string) {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
     params.set("programme", programmeId);
 
-    router.push(`${pathname}?${params.toString()}`);
+    window.history.pushState({ programmeId }, "", `${window.location.pathname}?${params.toString()}`);
+    setMobileDetailProgrammeId(programmeId);
   }
 
   function closeMobileProgramme() {
-    router.back();
+    if (mobileDetailProgrammeId) {
+      window.history.back();
+      return;
+    }
+
+    setMobileDetailProgrammeId(null);
   }
 
   const emptyState = filteredResults.length === 0;
@@ -598,7 +617,7 @@ export default function ProgrammesClient({
                                         [result.programme.universityId]: true,
                                       }));
 
-                                      if (window.matchMedia("(max-width: 767px)").matches) {
+                                      if (window.matchMedia("(max-width: 1023px)").matches) {
                                         openMobileProgramme(result.programme.id);
                                       }
                                     }}
@@ -666,14 +685,18 @@ export default function ProgrammesClient({
       {mobileDetailOpen && mobileSelectedProgramme && mobileSelectedUniversity && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_32%,#fafaf9_100%)] lg:hidden">
           <div className="mx-auto min-h-full max-w-7xl px-4 pb-6 pt-4 sm:px-6">
-            <ProgrammeDetailsPanel
+            <div
+              className={`transition-all duration-300 ease-out ${mobileDetailPresented ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"}`}
+            >
+              <ProgrammeDetailsPanel
               aps={aps}
               selectedProgramme={mobileSelectedProgramme}
               selectedUniversity={mobileSelectedUniversity}
               selectedRequirements={mobileSelectedRequirements}
               onBack={closeMobileProgramme}
               variant="mobile"
-            />
+              />
+            </div>
           </div>
         </div>
       )}
