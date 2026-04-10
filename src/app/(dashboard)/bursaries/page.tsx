@@ -54,13 +54,13 @@ export default async function BursariesPage() {
     bursaries = [];
   }
 
-  let initialTracked: { bursary_id: string; bursary_name: string; status: string; updated_at: string }[] = [];
+  let initialTracked: { bursary_id: string; bursary_name: string; status: "saved" | "applied"; updated_at: string }[] = [];
   try {
     const { data: tracked } = await supabase
       .from("bursary_applications")
       .select("bursary_id, bursary_name, status, updated_at")
       .eq("student_id", user.id);
-    initialTracked = (tracked ?? []) as typeof initialTracked;
+    initialTracked = (tracked ?? []) as unknown as typeof initialTracked;
   } catch {
     initialTracked = [];
   }

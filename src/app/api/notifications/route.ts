@@ -215,11 +215,11 @@ export async function GET() {
     return NextResponse.json({ error: appsResult.error.message }, { status: 500 });
   }
 
-  const apps = (appsResult.data ?? []) as AppRow[];
+  const apps = (appsResult.data ?? []) as unknown as AppRow[];
   const notifications: NotificationItem[] = [];
 
   // ── Email-detected notifications ─────────────────────────────────────────
-  for (const log of (emailLogsResult.data ?? []) as EmailLogRow[]) {
+  for (const log of (emailLogsResult.data ?? []) as unknown as EmailLogRow[]) {
     const uni = log.applications?.universities;
     const statusLabel = String(log.detected_status ?? "").replace(/_/g, " ");
 

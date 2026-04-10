@@ -49,7 +49,7 @@ export async function GET(
     faculties: { name: string } | null;
   };
 
-  const appList = ((applications ?? []) as AppRow[]).map((a) => ({
+  const appList = ((applications ?? []) as unknown as AppRow[]).map((a) => ({
     id: a.id,
     status: a.status,
     updatedAt: a.updated_at,
