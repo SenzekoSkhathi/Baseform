@@ -2,11 +2,11 @@ import Image from "next/image";
 
 export default function RootLoading() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-white via-gray-50 to-gray-100 px-6">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br from-white via-gray-50 to-gray-100 px-6">
       {/* Subtle background elements */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-gradient-to-br from-blue-200/20 to-transparent blur-3xl" />
-        <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-gradient-to-tr from-orange-100/20 to-transparent blur-3xl" />
+        <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-linear-to-br from-blue-200/20 to-transparent blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-linear-to-tr from-orange-100/20 to-transparent blur-3xl" />
       </div>
 
       {/* Frosted glass card */}
