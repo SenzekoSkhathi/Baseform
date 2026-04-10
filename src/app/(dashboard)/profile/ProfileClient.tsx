@@ -501,9 +501,9 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
         </header>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-12">
-          <section className="space-y-5 lg:col-span-4">
+          <section className="order-2 min-w-0 space-y-5 lg:order-1 lg:col-span-4">
             <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-bold text-gray-900">Personal details</h2>
+              <h2 className="text-sm font-bold text-gray-900">Personal Details</h2>
 
               {isEditing ? (
                 <div className="mt-3 space-y-3">
@@ -792,7 +792,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
             </div>
           </section>
 
-          <section className="space-y-5 lg:col-span-8">
+          <section className="order-1 min-w-0 space-y-5 lg:order-2 lg:col-span-8">
             <div className="rounded-3xl bg-orange-500 p-5 text-white shadow-[0_16px_40px_rgba(249,115,22,0.35)] sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-widest text-orange-100">Total APS</p>
               <div className="mt-2 flex items-end justify-between gap-4">
@@ -809,7 +809,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
 
             <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
               <div className="border-b border-gray-50 px-5 py-3.5">
-                <p className="text-sm font-bold text-gray-900">Subject performance</p>
+                <p className="text-sm font-bold text-gray-900">Subjects</p>
               </div>
 
               <div className="divide-y divide-gray-50">
@@ -920,7 +920,7 @@ function InfoRow({
   return (
     <div className="flex items-center gap-3 py-3">
       <span className="shrink-0 text-gray-400">{icon}</span>
-      <span className="w-26 shrink-0 text-xs font-medium text-gray-400">{label}</span>
+      <span className="w-22 shrink-0 text-xs font-medium text-gray-400 sm:w-26">{label}</span>
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
         {value ?? "-"}
       </span>
