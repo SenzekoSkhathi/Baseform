@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PwaInstallButton from "@/components/ui/PwaInstallButton";
+import AppSplashScreen from "@/components/ui/AppSplashScreen";
 
 export const metadata: Metadata = {
   title: "Baseform — Your University Application Co-pilot",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icon.png",
     shortcut: "/icon.png",
-    apple: "/icon.png",
+    apple: "/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -59,6 +60,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <AppSplashScreen />
         {children}
         <PwaInstallButton />
       </body>
