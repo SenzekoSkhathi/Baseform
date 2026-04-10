@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
+  ArrowLeft,
   AlertTriangle,
   BookOpen,
   Building2,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseProgrammeRequirements, checkQualifications, sortProgrammesByQualification } from "@/lib/dashboard/qualifications";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
 import { Programme, type QualificationCheckResult, StudentSubject } from "@/lib/dashboard/types";
@@ -157,12 +159,16 @@ export default function ProgrammesClient({
   universities,
   programmes,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<StatusFilter>("all");
   const [openUniversityIds, setOpenUniversityIds] = useState<Record<string, boolean>>({});
   const [selectedProgrammeId, setSelectedProgrammeId] = useState<string | null>(null);
   const [universityFieldFilters, setUniversityFieldFilters] = useState<Record<string, string>>({});
   const hasSetInitialOpenState = useRef(false);
+  const mobileProgrammeId = searchParams.get("programme");
 
   const universityMap = useMemo(
     () => new Map(universities.map((university) => [university.id, university])),
@@ -301,14 +307,59 @@ export default function ProgrammesClient({
     [filteredResults, selectedProgrammeId]
   );
 
+  const mobileSelectedProgramme = useMemo(
+    () => filteredResults.find((result) => result.programme.id === mobileProgrammeId) ?? null,
+    [filteredResults, mobileProgrammeId]
+  );
+
   const selectedUniversity = selectedProgramme
     ? universityMap.get(selectedProgramme.programme.universityId) ?? null
+    : null;
+
+  const mobileSelectedUniversity = mobileSelectedProgramme
+    ? universityMap.get(mobileSelectedProgramme.programme.universityId) ?? null
     : null;
 
   const selectedRequirements = useMemo(
     () => parseProgrammeRequirements(selectedProgramme?.programme.additionalRequirements ?? null),
     [selectedProgramme]
   );
+
+  const mobileSelectedRequirements = useMemo(
+    () => parseProgrammeRequirements(mobileSelectedProgramme?.programme.additionalRequirements ?? null),
+    [mobileSelectedProgramme]
+  );
+
+  const mobileDetailOpen = Boolean(mobileSelectedProgramme && mobileSelectedUniversity);
+
+  useEffect(() => {
+    if (!mobileSelectedProgramme) return;
+    if (selectedProgrammeId === mobileSelectedProgramme.programme.id) return;
+
+    setSelectedProgrammeId(mobileSelectedProgramme.programme.id);
+  }, [mobileSelectedProgramme, selectedProgrammeId]);
+
+  useEffect(() => {
+    if (!mobileDetailOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileDetailOpen]);
+
+  function openMobileProgramme(programmeId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("programme", programmeId);
+
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function closeMobileProgramme() {
+    router.back();
+  }
 
   const emptyState = filteredResults.length === 0;
 
@@ -546,6 +597,10 @@ export default function ProgrammesClient({
                                         ...current,
                                         [result.programme.universityId]: true,
                                       }));
+
+                                      if (window.matchMedia("(max-width: 767px)").matches) {
+                                        openMobileProgramme(result.programme.id);
+                                      }
                                     }}
                                     className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
                                       isSelected
@@ -595,191 +650,33 @@ export default function ProgrammesClient({
             })}
           </div>
 
-          <aside className="lg:sticky lg:top-6">
-            <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
-              <div className="bg-[linear-gradient(135deg,#0f172a_0%,#1f2937_50%,#ea580c_140%)] px-5 py-5 text-white">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-orange-100">
-                  <GraduationCap size={14} />
-                  Programme details
-                </div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight">
-                  {selectedProgramme?.programme.name ?? "Select a programme"}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Click any programme on the left to inspect APS, subjects, qualification type, duration, and application requirements.
-                </p>
-              </div>
-
-              {selectedProgramme && selectedUniversity ? (
-                <div className="space-y-5 px-5 py-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${getStatusStylesForResult(selectedProgramme.status)}`}>
-                      {getStatusLabel(selectedProgramme.status)}
-                    </span>
-                    <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-                      {selectedProgramme.programme.universityAbbreviation}
-                    </span>
-                    <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-                      {selectedProgramme.programme.fieldOfStudy || "Other"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <DetailMetric label="APS required" value={selectedProgramme.programme.apsMinimum.toString()} />
-                    <DetailMetric label="Your APS" value={aps.toString()} tone={aps >= selectedProgramme.programme.apsMinimum ? "emerald" : "rose"} />
-                    <DetailMetric label="Duration" value={`${selectedProgramme.programme.durationYears} years`} />
-                    <DetailMetric label="Qualification" value={formatQualificationType(selectedProgramme.programme.qualificationType)} />
-                    <DetailMetric label="NQF" value={selectedProgramme.programme.nqfLevel.toString()} />
-                    <DetailMetric label="Places" value={selectedProgramme.programme.placesAvailable?.toString() ?? "Not listed"} />
-                  </div>
-
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
-                      <BookOpen size={16} className="text-orange-500" />
-                      University
-                    </div>
-                    <p className="font-semibold text-stone-950">{selectedUniversity.name}</p>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {[selectedUniversity.city, selectedUniversity.province].filter(Boolean).join(", ") || "Location not listed"}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-600">
-                      <span className="rounded-full bg-white px-3 py-1 shadow-sm">Fee: {formatCurrency(selectedUniversity.applicationFee)}</span>
-                      <span className="rounded-full bg-white px-3 py-1 shadow-sm">Deadline: {formatDate(selectedUniversity.closingDate)}</span>
-                    </div>
-                  </div>
-
-                  {selectedProgramme.programme.nativeScoreMinimum !== null && (
-                    <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                      <div className="flex items-center gap-2 text-sm font-bold text-orange-700">
-                        <Target size={16} />
-                        Scoring system
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-orange-900">
-                        {selectedProgramme.programme.scoringSystem} · Native score minimum {selectedProgramme.programme.nativeScoreMinimum}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
-                      <CheckCircle2 size={16} className="text-emerald-500" />
-                      Subject requirements
-                    </div>
-
-                    {selectedRequirements.subjectRequirements.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedRequirements.subjectRequirements.map((subject) => (
-                          <span
-                            key={subject.subject}
-                            className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-700"
-                          >
-                            {subject.subject}{subject.minimumMark !== null ? ` ≥ ${subject.minimumMark}%` : ""}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-stone-500">No explicit subject requirement was found in the seed text.</p>
-                    )}
-
-                    {selectedProgramme.missingSubjects.length > 0 && (
-                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                        <div className="flex items-center gap-2 font-bold">
-                          <AlertTriangle size={16} />
-                          You are missing
-                        </div>
-                        <p className="mt-2 leading-6">{selectedProgramme.missingSubjects.join(", ")}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
-                      <Clock3 size={16} className="text-stone-500" />
-                      Extra notes
-                    </div>
-
-                    {selectedProgramme.additionalNotes.length > 0 ? (
-                      <ul className="space-y-2 text-sm leading-6 text-stone-600">
-                        {selectedProgramme.additionalNotes.map((note) => (
-                          <li key={note} className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" />
-                            <span>{note}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-stone-500">No extra notes were captured for this programme.</p>
-                    )}
-                  </div>
-
-                  {selectedProgramme.programme.additionalRequirements && (
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="mb-2 text-sm font-bold text-stone-900">Seed text</div>
-                      <p className="text-sm leading-6 text-stone-600">
-                        {selectedProgramme.programme.additionalRequirements}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {selectedUniversity.applicationUrl ? (
-                      <a
-                        href={selectedUniversity.applicationUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                      >
-                        Open application portal
-                        <ExternalLink size={16} />
-                      </a>
-                    ) : (
-                      <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
-                        Application link not listed
-                      </div>
-                    )}
-
-                    {selectedUniversity.websiteUrl ? (
-                      <a
-                        href={selectedUniversity.websiteUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
-                      >
-                        Visit university website
-                        <ExternalLink size={16} />
-                      </a>
-                    ) : (
-                      <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
-                        Website not listed
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
-                    <div className="mb-2 flex items-center gap-2 font-bold text-stone-900">
-                      <Sparkles size={16} className="text-orange-500" />
-                      Fit summary
-                    </div>
-                    <p className="leading-6">{selectedProgramme.overallMessage}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 px-5 py-5">
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5 text-sm leading-6 text-stone-500">
-                    Use the programme list on the left to inspect admission details. The panel will update with APS, subject requirements, and application links.
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <DetailMetric label="APS required" value="—" />
-                    <DetailMetric label="Duration" value="—" />
-                    <DetailMetric label="Qualification" value="—" />
-                    <DetailMetric label="NQF" value="—" />
-                  </div>
-                </div>
-              )}
-            </div>
+          <aside className="hidden lg:block lg:sticky lg:top-6">
+            <ProgrammeDetailsPanel
+              aps={aps}
+              selectedProgramme={selectedProgramme}
+              selectedUniversity={selectedUniversity}
+              selectedRequirements={selectedRequirements}
+              onBack={closeMobileProgramme}
+              variant="desktop"
+            />
           </aside>
         </div>
       </div>
+
+      {mobileDetailOpen && mobileSelectedProgramme && mobileSelectedUniversity && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_32%,#fafaf9_100%)] lg:hidden">
+          <div className="mx-auto min-h-full max-w-7xl px-4 pb-6 pt-4 sm:px-6">
+            <ProgrammeDetailsPanel
+              aps={aps}
+              selectedProgramme={mobileSelectedProgramme}
+              selectedUniversity={mobileSelectedUniversity}
+              selectedRequirements={mobileSelectedRequirements}
+              onBack={closeMobileProgramme}
+              variant="mobile"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -833,6 +730,224 @@ function DetailMetric({
     <div className="rounded-2xl border border-stone-200 bg-white p-3">
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">{label}</div>
       <div className={`mt-2 rounded-xl px-3 py-2 text-sm font-bold ${toneStyles}`}>{value}</div>
+    </div>
+  );
+}
+
+function ProgrammeDetailsPanel({
+  aps,
+  selectedProgramme,
+  selectedUniversity,
+  selectedRequirements,
+  onBack,
+  variant,
+}: {
+  aps: number;
+  selectedProgramme: QualificationCheckResult | null;
+  selectedUniversity: University | null;
+  selectedRequirements: ReturnType<typeof parseProgrammeRequirements>;
+  onBack: () => void;
+  variant: "desktop" | "mobile";
+}) {
+  const isMobile = variant === "mobile";
+
+  return (
+    <div className={`overflow-hidden border border-stone-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)] ${isMobile ? "rounded-[1.75rem]" : "rounded-[1.75rem]"}`}>
+      <div className="bg-[linear-gradient(135deg,#0f172a_0%,#1f2937_50%,#ea580c_140%)] px-5 py-5 text-white">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-orange-100">
+            <GraduationCap size={14} />
+            Programme details
+          </div>
+
+          {isMobile && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"
+            >
+              <ArrowLeft size={14} />
+              Back
+            </button>
+          )}
+        </div>
+
+        <h2 className="mt-2 text-2xl font-black tracking-tight">
+          {selectedProgramme?.programme.name ?? "Select a programme"}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          {isMobile
+            ? "Tap Back to return to the programme list where you left off."
+            : "Click any programme on the left to inspect APS, subjects, qualification type, duration, and application requirements."}
+        </p>
+      </div>
+
+      {selectedProgramme && selectedUniversity ? (
+        <div className="space-y-5 px-5 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${getStatusStylesForResult(selectedProgramme.status)}`}>
+              {getStatusLabel(selectedProgramme.status)}
+            </span>
+            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+              {selectedProgramme.programme.universityAbbreviation}
+            </span>
+            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+              {selectedProgramme.programme.fieldOfStudy || "Other"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <DetailMetric label="APS required" value={selectedProgramme.programme.apsMinimum.toString()} />
+            <DetailMetric label="Your APS" value={aps.toString()} tone={aps >= selectedProgramme.programme.apsMinimum ? "emerald" : "rose"} />
+            <DetailMetric label="Duration" value={`${selectedProgramme.programme.durationYears} years`} />
+            <DetailMetric label="Qualification" value={formatQualificationType(selectedProgramme.programme.qualificationType)} />
+            <DetailMetric label="NQF" value={selectedProgramme.programme.nqfLevel.toString()} />
+            <DetailMetric label="Places" value={selectedProgramme.programme.placesAvailable?.toString() ?? "Not listed"} />
+          </div>
+
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
+              <BookOpen size={16} className="text-orange-500" />
+              University
+            </div>
+            <p className="font-semibold text-stone-950">{selectedUniversity.name}</p>
+            <p className="mt-1 text-sm text-stone-500">
+              {[selectedUniversity.city, selectedUniversity.province].filter(Boolean).join(", ") || "Location not listed"}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-600">
+              <span className="rounded-full bg-white px-3 py-1 shadow-sm">Fee: {formatCurrency(selectedUniversity.applicationFee)}</span>
+              <span className="rounded-full bg-white px-3 py-1 shadow-sm">Deadline: {formatDate(selectedUniversity.closingDate)}</span>
+            </div>
+          </div>
+
+          {selectedProgramme.programme.nativeScoreMinimum !== null && (
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-orange-700">
+                <Target size={16} />
+                Scoring system
+              </div>
+              <p className="mt-2 text-sm leading-6 text-orange-900">
+                {selectedProgramme.programme.scoringSystem} · Native score minimum {selectedProgramme.programme.nativeScoreMinimum}
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-stone-200 bg-white p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
+              <CheckCircle2 size={16} className="text-emerald-500" />
+              Subject requirements
+            </div>
+
+            {selectedRequirements.subjectRequirements.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {selectedRequirements.subjectRequirements.map((subject) => (
+                  <span
+                    key={subject.subject}
+                    className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-700"
+                  >
+                    {subject.subject}{subject.minimumMark !== null ? ` ≥ ${subject.minimumMark}%` : ""}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-stone-500">No explicit subject requirement was found in the seed text.</p>
+            )}
+
+            {selectedProgramme.missingSubjects.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle size={16} />
+                  You are missing
+                </div>
+                <p className="mt-2 leading-6">{selectedProgramme.missingSubjects.join(", ")}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-stone-900">
+              <Clock3 size={16} className="text-stone-500" />
+              Extra notes
+            </div>
+
+            {selectedProgramme.additionalNotes.length > 0 ? (
+              <ul className="space-y-2 text-sm leading-6 text-stone-600">
+                {selectedProgramme.additionalNotes.map((note) => (
+                  <li key={note} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-stone-500">No extra notes were captured for this programme.</p>
+            )}
+          </div>
+
+          {selectedProgramme.programme.additionalRequirements && (
+            <div className="rounded-2xl border border-stone-200 bg-white p-4">
+              <div className="mb-2 text-sm font-bold text-stone-900">Seed text</div>
+              <p className="text-sm leading-6 text-stone-600">
+                {selectedProgramme.programme.additionalRequirements}
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {selectedUniversity.applicationUrl ? (
+              <a
+                href={selectedUniversity.applicationUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+              >
+                Open application portal
+                <ExternalLink size={16} />
+              </a>
+            ) : (
+              <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
+                Application link not listed
+              </div>
+            )}
+
+            {selectedUniversity.websiteUrl ? (
+              <a
+                href={selectedUniversity.websiteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
+              >
+                Visit university website
+                <ExternalLink size={16} />
+              </a>
+            ) : (
+              <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
+                Website not listed
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
+            <div className="mb-2 flex items-center gap-2 font-bold text-stone-900">
+              <Sparkles size={16} className="text-orange-500" />
+              Fit summary
+            </div>
+            <p className="leading-6">{selectedProgramme.overallMessage}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4 px-5 py-5">
+          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5 text-sm leading-6 text-stone-500">
+            Use the programme list on the left to inspect admission details. The panel will update with APS, subject requirements, and application links.
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <DetailMetric label="APS required" value="—" />
+            <DetailMetric label="Duration" value="—" />
+            <DetailMetric label="Qualification" value="—" />
+            <DetailMetric label="NQF" value="—" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
