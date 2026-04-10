@@ -329,16 +329,16 @@ export default function TrackerClient({ applications }: { applications: Applicat
   };
 
   return (
-    <div>
-      <div className="bg-white border-b border-gray-100 px-5 pt-12 pb-5">
+    <div className="overflow-x-hidden">
+      <div className="bg-white border-b border-gray-100 px-4 pt-12 pb-5 sm:px-5">
         <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Progress</h1>
         <p className="text-sm text-gray-400 font-medium mt-0.5">
           Build your goal path and track achievements manually
         </p>
       </div>
 
-      <div className="px-5 pt-4 pb-6">
-        <div className="grid gap-4 md:grid-cols-4">
+      <div className="px-4 pt-4 pb-6 sm:px-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           <StatCard
             icon={<Target size={16} className="text-orange-500" />}
             label="Completion"
@@ -366,12 +366,12 @@ export default function TrackerClient({ applications }: { applications: Applicat
         </div>
 
         <div className="mt-4 rounded-2xl border border-orange-100 bg-linear-to-br from-orange-50 to-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
               <p className="text-sm font-bold text-gray-900">Build Your Goal Path</p>
               <p className="text-xs text-gray-500">Create goals first, then mark each step complete.</p>
             </div>
-            <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-500">
+            <div className="inline-flex w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-500">
               Manual Tracker
             </div>
           </div>
@@ -441,12 +441,12 @@ export default function TrackerClient({ applications }: { applications: Applicat
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <div>
                 <p className="text-sm font-bold text-gray-900">Your Achievement Path</p>
                 <p className="text-xs text-gray-500">Complete each step to move forward.</p>
               </div>
-              <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+              <div className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
                 {progress.completed}/{progress.total} done
               </div>
             </div>
@@ -639,7 +639,7 @@ function ApplicationChip({ app, onAddGoals }: { app: Application; onAddGoals: ()
   const programmeName = faculty?.name ?? "Programme";
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-start">
       {logoUrl ? (
         <img
           src={logoUrl}
@@ -653,12 +653,12 @@ function ApplicationChip({ app, onAddGoals }: { app: Application; onAddGoals: ()
       )}
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold leading-snug text-gray-900">{programmeName}</p>
             <p className="mt-0.5 truncate text-[11px] text-gray-500">{universityName}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>
               {status.label}
             </span>
