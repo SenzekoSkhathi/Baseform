@@ -1,11 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import PwaInstallButton from "@/components/ui/PwaInstallButton";
 
 export const metadata: Metadata = {
   title: "Baseform — Your University Application Co-pilot",
   description:
     "Discover universities and bursaries you qualify for, track every application, and never miss a deadline.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -40,8 +46,22 @@ export default function RootLayout({
         {/* Preconnect to Supabase so DB/auth requests start sooner on slow SA data connections */}
         <link rel="preconnect" href="https://twswbccbxitlhkmrvomm.supabase.co" />
         <link rel="dns-prefetch" href="https://twswbccbxitlhkmrvomm.supabase.co" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                  navigator.serviceWorker.register('/sw.js').catch(function () {});
+                });
+              }
+            `,
+          }}
+        />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <PwaInstallButton />
+      </body>
     </html>
   );
 }
