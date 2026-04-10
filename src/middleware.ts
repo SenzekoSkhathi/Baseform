@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
   const isAdminRoute = pathname.startsWith("/admin");
+  const isRootPage = pathname === "/";
 
   // Not logged in, trying to access protected route
   if (isProtected && !user) {
@@ -45,6 +46,11 @@ export async function middleware(request: NextRequest) {
 
   // Already logged in, no need to see auth pages
   if (isAuthPage && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Logged-in users should land on dashboard instead of public marketing page.
+  if (isRootPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

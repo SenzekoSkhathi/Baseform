@@ -14,7 +14,7 @@ function isStandaloneMode() {
 
 export default function PwaInstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState<boolean | null>(null);
   const [isPrompting, setIsPrompting] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
@@ -43,10 +43,12 @@ export default function PwaInstallButton() {
   }, []);
 
   const shouldShow = useMemo(() => {
+    if (isInstalled === null) return false;
     if (isInstalled) return false;
     if (isDismissed) return false;
+    if (!deferredPrompt) return false;
     return true;
-  }, [isDismissed, isInstalled]);
+  }, [deferredPrompt, isDismissed, isInstalled]);
 
   async function handleInstall() {
     if (!deferredPrompt) {

@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PwaInstallButton from "@/components/ui/PwaInstallButton";
-import AppSplashScreen from "@/components/ui/AppSplashScreen";
 
 export const metadata: Metadata = {
   title: "Baseform — Your University Application Co-pilot",
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f97316",
+  themeColor: "#fff7ed",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -60,7 +59,6 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <AppSplashScreen />
         {children}
         <PwaInstallButton />
       </body>
