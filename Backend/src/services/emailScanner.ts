@@ -104,7 +104,7 @@ export async function scanUserEmails(userId: string): Promise<void> {
     { name: string; abbreviation: string | null; apps: AppRow[] }
   >();
 
-  for (const app of applications as AppRow[]) {
+  for (const app of applications as unknown as AppRow[]) {
     const uniId = String(app.university_id);
     if (!byUniversity.has(uniId)) {
       byUniversity.set(uniId, {

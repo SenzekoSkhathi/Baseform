@@ -62,7 +62,7 @@ export async function runDeadlineNotifier(): Promise<void> {
   };
 
   const byStudent = new Map<string, AppRow[]>();
-  for (const app of applications as AppRow[]) {
+  for (const app of applications as unknown as AppRow[]) {
     if (!app.universities?.closing_date) continue;
     const list = byStudent.get(app.student_id) ?? [];
     list.push(app);
