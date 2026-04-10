@@ -369,6 +369,13 @@ export default function SignupPage() {
                   >
                     {loading ? "Creating account…" : "Create account"}
                   </button>
+
+                  <p className="text-center text-xs text-gray-400 leading-relaxed">
+                    By creating an account you agree to our{" "}
+                    <Link href="/terms" className="text-gray-500 underline underline-offset-2">Terms of Service</Link>
+                    {" "}and{" "}
+                    <Link href="/privacy" className="text-gray-500 underline underline-offset-2">Privacy Policy</Link>.
+                  </p>
                 </form>
               </>
             )}

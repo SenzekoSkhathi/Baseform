@@ -18,7 +18,12 @@ import { log } from "./lib/logger.js";
 const app = new Hono();
 
 const PORT = Number(process.env.PORT ?? 3001);
-const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
+
+// Support comma-separated list: FRONTEND_URL=https://baseform.co.za,http://localhost:3000
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL ?? "http://localhost:3000")
+  .split(",")
+  .map((u) => u.trim())
+  .filter(Boolean);
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 
@@ -28,7 +33,7 @@ app.use("*", rateLimitDefault);
 app.use(
   "*",
   cors({
-    origin: [FRONTEND_URL],
+    origin: ALLOWED_ORIGINS,
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     credentials: true,
