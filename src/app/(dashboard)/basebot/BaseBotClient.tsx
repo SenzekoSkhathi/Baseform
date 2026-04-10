@@ -318,17 +318,18 @@ function EmptyState({
   onPrompt: (p: string) => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto text-center gap-5 px-4">
+    <div className="flex h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-3 text-center sm:px-4">
       <div className="flex items-center gap-2.5">
         <BotAvatar size="md" />
-        <h2 className="text-lg font-bold text-gray-900">Hi {firstName}, How can I help you today?</h2>
+        <h2 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">Hi {firstName}, How can I help you today?</h2>
       </div>
-      <div className="grid grid-cols-2 gap-2 w-full max-w-2xl">
+
+      <div className="flex w-full max-w-2xl flex-col gap-2 sm:grid sm:grid-cols-2">
         {SUGGESTED_PROMPTS.map((prompt) => (
           <button
             key={prompt}
             onClick={() => onPrompt(prompt)}
-            className="text-left text-sm text-gray-700 bg-white border border-gray-100 rounded-2xl px-3 py-1 hover:border-orange-200 hover:bg-orange-50/40 transition-all h-12 flex items-center"
+            className="flex min-h-12 items-center rounded-2xl border border-gray-100 bg-white px-3 py-2.5 text-left text-xs text-gray-700 transition-all hover:border-orange-200 hover:bg-orange-50/40 sm:text-sm"
           >
             {prompt}
           </button>
