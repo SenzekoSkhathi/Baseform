@@ -53,19 +53,41 @@ const STORAGE_KEY = "basebot-threads-v1";
 
 // ── Simple markdown renderer ──────────────────────────────────────────────────
 
+function normalizeResponseText(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/```(?:markdown|md|text)?\n?/gi, "")
+    .replace(/```/g, "")
+    .replace(/\$\$([\s\S]+?)\$\$/g, "$1")
+    .replace(/\$([^$\n]+)\$/g, "$1")
+    .replace(/\{([A-Za-z0-9 _\-]{1,60})\}/g, "$1")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={i}>{part.slice(2, -2)}</strong>
-    ) : (
-      part
-    ),
-  );
+  const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <span key={i} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[12px] text-gray-700">
+          {part.slice(1, -1)}
+        </span>
+      );
+    }
+
+    return part;
+  });
 }
 
 function MessageContent({ text }: { text: string }) {
-  const lines = text.split("\n");
+  const cleaned = normalizeResponseText(text);
+  const lines = cleaned.split("\n");
   const blocks: React.ReactNode[] = [];
   let i = 0;
 
@@ -79,18 +101,18 @@ function MessageContent({ text }: { text: string }) {
     }
 
     // Bullet list
-    if (/^[-*]\s/.test(raw)) {
+    if (/^[-*•]\s/.test(raw)) {
       const items: string[] = [];
-      while (i < lines.length && /^[-*]\s/.test(lines[i])) {
-        items.push(lines[i].replace(/^[-*]\s/, "").trim());
+      while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*•]\s/, "").trim());
         i++;
       }
       blocks.push(
-        <ul key={`ul-${i}`} className="space-y-1 my-1 pl-1">
+        <ul key={`ul-${i}`} className="my-2 space-y-1.5 pl-1">
           {items.map((item, j) => (
-            <li key={j} className="flex gap-2 text-sm">
-              <span className="text-orange-400 shrink-0 mt-0.5">•</span>
-              <span className="leading-relaxed">{renderInline(item)}</span>
+            <li key={j} className="flex gap-2 text-sm leading-7 text-gray-800 sm:text-[15px]">
+              <span className="mt-1.5 shrink-0 text-orange-500">•</span>
+              <span>{renderInline(item)}</span>
             </li>
           ))}
         </ul>,
@@ -99,18 +121,18 @@ function MessageContent({ text }: { text: string }) {
     }
 
     // Numbered list
-    if (/^\d+\.\s/.test(raw)) {
+    if (/^\d+[.)]\s/.test(raw)) {
       const items: string[] = [];
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\.\s/, "").trim());
+      while (i < lines.length && /^\d+[.)]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+[.)]\s/, "").trim());
         i++;
       }
       blocks.push(
-        <ol key={`ol-${i}`} className="space-y-1 my-1 pl-1">
+        <ol key={`ol-${i}`} className="my-2 space-y-1.5 pl-1">
           {items.map((item, j) => (
-            <li key={j} className="flex gap-2 text-sm">
-              <span className="text-orange-500 font-semibold shrink-0">{j + 1}.</span>
-              <span className="leading-relaxed">{renderInline(item)}</span>
+            <li key={j} className="flex gap-2 text-sm leading-7 text-gray-800 sm:text-[15px]">
+              <span className="shrink-0 font-semibold text-orange-600">{j + 1}.</span>
+              <span>{renderInline(item)}</span>
             </li>
           ))}
         </ol>,
@@ -120,9 +142,32 @@ function MessageContent({ text }: { text: string }) {
 
     // Heading
     if (/^#{1,3}\s/.test(line)) {
+      if (blocks.length > 0) {
+        blocks.push(
+          <div key={`sep-h-${i}`} className="my-3 h-px w-full bg-gray-100" />,
+        );
+      }
+
       blocks.push(
-        <p key={`h-${i}`} className="font-bold text-sm my-1">
+        <p key={`h-${i}`} className="my-2 text-sm font-bold leading-7 text-gray-900 sm:text-[15px]">
           {renderInline(line.replace(/^#{1,3}\s/, ""))}
+        </p>,
+      );
+      i++;
+      continue;
+    }
+
+    // Markdown-style bold section title on a single line.
+    if (/^\*\*[^*]+\*\*:?$/.test(line) || /^__[^_]+__:?$/.test(line)) {
+      if (blocks.length > 0) {
+        blocks.push(
+          <div key={`sep-bh-${i}`} className="my-3 h-px w-full bg-gray-100" />,
+        );
+      }
+
+      blocks.push(
+        <p key={`bh-${i}`} className="my-2 text-sm font-bold leading-7 text-gray-900 sm:text-[15px]">
+          {renderInline(line.replace(/:$/, ""))}
         </p>,
       );
       i++;
@@ -131,7 +176,7 @@ function MessageContent({ text }: { text: string }) {
 
     // Paragraph
     blocks.push(
-      <p key={`p-${i}`} className="text-sm leading-relaxed">
+      <p key={`p-${i}`} className="text-sm leading-7 text-gray-800 sm:text-[15px]">
         {renderInline(line)}
       </p>,
     );
@@ -321,7 +366,7 @@ function EmptyState({
     <div className="flex h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-3 text-center sm:px-4">
       <div className="flex items-center gap-2.5">
         <BotAvatar size="md" />
-        <h2 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">Hi {firstName}, How can I help you today?</h2>
+        <h2 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">Hi {firstName}, how can I help you today?</h2>
       </div>
 
       <div className="flex w-full max-w-2xl flex-col gap-2 sm:grid sm:grid-cols-2">
@@ -341,13 +386,13 @@ function EmptyState({
 
 function BotResponseSkeleton() {
   return (
-    <div className="flex gap-3 justify-start" aria-live="polite" aria-busy="true">
+    <div className="flex w-full gap-3 justify-start" aria-live="polite" aria-busy="true">
       <BotAvatar size="sm" />
-      <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 min-w-55">
+      <div className="min-w-0 flex-1 px-1 py-1">
         <div className="space-y-2">
-          <div className="h-3 w-44 rounded bg-gray-100 animate-pulse" />
-          <div className="h-3 w-56 rounded bg-gray-100 animate-pulse" />
-          <div className="h-3 w-40 rounded bg-gray-100 animate-pulse" />
+          <div className="h-3 w-[70%] rounded bg-gray-100 animate-pulse" />
+          <div className="h-3 w-[88%] rounded bg-gray-100 animate-pulse" />
+          <div className="h-3 w-[62%] rounded bg-gray-100 animate-pulse" />
         </div>
       </div>
     </div>
@@ -373,6 +418,20 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keep mobile scroll contained inside the chat list.
+  useEffect(() => {
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, []);
 
   // Restore from localStorage
   useEffect(() => {
@@ -485,7 +544,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   };
 
   return (
-    <div className="flex h-dvh bg-gray-50 overflow-hidden">
+    <div className="flex h-dvh overflow-hidden overscroll-none bg-gray-50">
       {/* Mobile overlay */}
       {isSidebarOpen && (
         <div
@@ -545,46 +604,47 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
           {messages.length === 0 ? (
             <EmptyState firstName={firstName} onPrompt={(p) => void handleSend(p)} />
           ) : (
-            <div className="max-w-3xl mx-auto space-y-4">
+            <div className="mx-auto max-w-3xl space-y-5">
               {apiError && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {apiError}
                 </div>
               )}
 
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={[
-                    "flex gap-3",
-                    msg.sender === "user" ? "justify-end" : "justify-start",
-                    msg.sender === "system" ? "justify-center" : "",
-                  ].join(" ")}
-                >
-                  {msg.sender === "bot" && <BotAvatar size="sm" />}
+              {messages.map((msg) => {
+                if (msg.sender === "bot") {
+                  return (
+                    <div key={msg.id} className="flex w-full items-start gap-3 justify-start">
+                      <BotAvatar size="sm" />
+                      <div className="min-w-0 flex-1 py-1 text-left text-gray-800">
+                        <MessageContent text={msg.text} />
+                      </div>
+                    </div>
+                  );
+                }
 
-                  <div
-                    className={[
-                      "max-w-[78%] rounded-2xl px-4 py-3",
-                      msg.sender === "user"
-                        ? "bg-orange-500 text-white rounded-tr-sm"
-                        : msg.sender === "system"
-                          ? "bg-amber-50 border border-amber-100 text-amber-700 text-xs text-center max-w-sm"
-                          : "bg-white border border-gray-100 text-gray-800 rounded-tl-sm",
-                    ].join(" ")}
-                  >
-                    {msg.sender === "user" ? (
+                if (msg.sender === "system") {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <div className="max-w-sm rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-center text-sm text-amber-700">
+                        <MessageContent text={msg.text} />
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-orange-500 px-4 py-3 text-white">
                       <p className="text-sm leading-relaxed">{msg.text}</p>
-                    ) : (
-                      <MessageContent text={msg.text} />
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {isLoading && <BotResponseSkeleton />}
 
