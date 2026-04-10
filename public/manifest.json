@@ -4,8 +4,8 @@
   "description": "Your SA university application co-pilot",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#f97316",
+  "theme_color": "#f97316",
   "orientation": "portrait",
   "icons": [
     {
