@@ -538,7 +538,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
 
           <button
             onClick={handleNewChat}
-            className="hidden md:flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-semibold transition-colors"
+            className="flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-semibold transition-colors"
           >
             New chat
           </button>
