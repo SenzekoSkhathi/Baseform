@@ -106,7 +106,7 @@ export default function SignupPage() {
           full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" "),
           phone: onboarding?.phone ?? null,
           school_name: onboarding?.schoolName ?? null,
-          grade_year: onboarding?.gradeYear ?? null,
+          grade_year: onboarding?.gradeYear ? onboarding.gradeYear : null,
           province: onboarding?.province ?? null,
           financial_need: onboarding?.financialNeed ?? null,
           field_of_interest: onboarding?.fieldOfInterest ?? null,

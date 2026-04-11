@@ -6,6 +6,7 @@ const SA_PROVINCES = [
 ] as const;
 
 const GUARDIAN_RELATIONSHIPS = ["Parent", "Guardian", "Grandparent", "Sibling", "Other"] as const;
+const GRADE_YEARS = ["Grade 11", "Grade 12"] as const;
 
 export const signupSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -14,7 +15,7 @@ export const signupSchema = z.object({
     full_name: z.string().min(1, "Full name is required").max(120),
     phone: z.string().max(20).nullable().optional(),
     school_name: z.string().max(120).nullable().optional(),
-    grade_year: z.number().int().min(10).max(13).nullable().optional(),
+    grade_year: z.enum(GRADE_YEARS).nullable().optional(),
     province: z.enum(SA_PROVINCES).nullable().optional(),
     financial_need: z.boolean().nullable().optional(),
     field_of_interest: z.string().max(80).nullable().optional(),
