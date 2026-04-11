@@ -179,13 +179,27 @@ export default function VerifyEmailPage() {
     setResending(false);
   }
 
+  async function handleAutoResend() {
+    // Silent auto-resend on page load (don't show errors since email was just sent during signup)
+    const supabase = createClient();
+    await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/verify-email`,
+      },
+    }).catch(() => {
+      // Silently ignore errors (likely rate limit from signup email just sent)
+    });
+  }
+
   useEffect(() => {
     if (verifyingLink) return;
     if (autoResent) return;
     if (!email.trim()) return;
 
     setAutoResent(true);
-    void handleResendCode();
+    void handleAutoResend();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifyingLink, autoResent, email]);
 

@@ -114,19 +114,6 @@ export default function SignupPage() {
       return;
     }
 
-    // Ensure a fresh verification email/code is sent even if the first delivery is delayed.
-    const { error: resendError } = await supabase.auth.resend({
-      type: "signup",
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo },
-    });
-
-    if (resendError) {
-      setError(`Account created, but we could not send a verification email: ${resendError.message}`);
-      setLoading(false);
-      return;
-    }
-
     const userId = signUpData.user?.id;
     if (!userId) {
       setError("Account was created, but we could not prepare your profile. Please try again.");
