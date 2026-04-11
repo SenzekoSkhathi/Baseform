@@ -96,12 +96,15 @@ export default function PlansPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (user) {
-      await supabase
-        .from("profiles")
-        .update({ tier: selected })
-        .eq("id", user.id);
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(`/plans?plan=${selected}`)}`);
+      return;
     }
+
+    await supabase
+      .from("profiles")
+      .update({ tier: selected })
+      .eq("id", user.id);
 
     if (selected === "free") {
       router.push("/dashboard");
