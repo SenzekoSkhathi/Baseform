@@ -453,11 +453,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
                   <p className="mt-1 truncate text-xs font-semibold text-green-600">
                     Connected Gmail: {gmailStatus.email_address}
                   </p>
-                ) : gmailStatus ? (
-                  <p className="mt-1 text-xs text-gray-400">Connected Gmail: Not connected</p>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-400">Checking Gmail connection…</p>
-                )}
+                ) : null}
                 <span className="mt-2 inline-flex rounded-full bg-orange-50 px-2.5 py-0.5 text-[11px] font-bold capitalize text-orange-600">
                   {displayProfile?.tier ?? "Free"} Plan
                 </span>
