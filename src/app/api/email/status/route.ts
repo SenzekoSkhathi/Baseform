@@ -13,13 +13,14 @@ export async function GET() {
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ connected: false, inactive: false });
+    return NextResponse.json({ connected: false, inactive: false, has_connection: false });
   }
 
   if (!data.is_active) {
     return NextResponse.json({
       connected: false,
       inactive: true,
+      has_connection: true,
       email_address: data.email_address,
       last_scanned_at: data.last_scanned_at,
     });
@@ -28,6 +29,7 @@ export async function GET() {
   return NextResponse.json({
     connected:       true,
     inactive:        false,
+    has_connection:  true,
     email_address:   data.email_address,
     last_scanned_at: data.last_scanned_at,
     connected_since: data.created_at,

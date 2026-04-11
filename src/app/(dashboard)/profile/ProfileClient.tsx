@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy, Send } from "lucide-react";
 import { apsRating } from "@/lib/aps/calculator";
@@ -159,6 +159,7 @@ function InviteGuardianButton({ hasGuardianEmail }: { hasGuardianEmail: boolean 
 export default function ProfileClient({ profile, aps, subjects, email }: Props) {
   const router = useRouter();
   const supabase = createClient();
+  const autoConnectTriggeredRef = useRef(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -180,6 +181,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
   const [displayProfile, setDisplayProfile] = useState(profile);
 
   const firstName = displayProfile?.full_name?.split(" ")[0] ?? "Student";
+  const isLoginEmailGmail = email.trim().toLowerCase().endsWith("@gmail.com");
   const rating = apsRating(aps);
 
   async function handleSaveProfile() {
@@ -251,6 +253,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
   type GmailStatus = {
     connected: boolean;
     inactive?: boolean;
+    has_connection?: boolean;
     email_address?: string;
     last_scanned_at?: string | null;
     connected_since?: string | null;
@@ -313,6 +316,22 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
     }
   }, [gmailStatus]);
 
+  useEffect(() => {
+    if (autoConnectTriggeredRef.current) return;
+    if (!isLoginEmailGmail) return;
+    if (gmailStatus === null) return;
+    if (gmailStatus.connected) return;
+    if (gmailStatus.has_connection) return;
+    if (searchParams.get("gmail")) return;
+
+    const timer = window.setTimeout(() => {
+      autoConnectTriggeredRef.current = true;
+      void handleConnectGmail();
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [gmailStatus, isLoginEmailGmail, searchParams]);
+
   async function handleConnectGmail() {
     setGmailLoading(true);
     try {
@@ -355,6 +374,9 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
     setGmailLoading(false);
   }
   // ── End Gmail connection ─────────────────────────────────────────────────────
+
+  const connectButtonLabel = isLoginEmailGmail ? "Connect this Gmail" : "Connect Gmail";
+  const reconnectButtonLabel = isLoginEmailGmail ? "Reconnect this Gmail" : "Reconnect Gmail";
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
@@ -761,19 +783,37 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-4 py-2.5 text-sm font-bold text-amber-800 hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Zap size={14} />
-                    {gmailLoading ? "Redirecting..." : "Reconnect Gmail"}
+                    {gmailLoading ? "Redirecting..." : reconnectButtonLabel}
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleConnectGmail}
-                  disabled={gmailLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Zap size={14} />
-                  {gmailLoading ? "Redirecting..." : "Connect Gmail"}
-                </button>
+                <div className="space-y-3">
+                  {isLoginEmailGmail ? (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+                      <p className="font-semibold">Your main account is a Gmail address.</p>
+                      <p className="mt-1 text-[11px] text-blue-700">
+                        Connect this mailbox to Baseform so we can scan it for application updates and send you reminders.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-700">
+                      <p className="font-semibold">Connect Gmail to turn on inbox tracking.</p>
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        We only scan the mailbox you connect here.
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleConnectGmail}
+                    disabled={gmailLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Zap size={14} />
+                    {gmailLoading ? "Redirecting..." : connectButtonLabel}
+                  </button>
+                </div>
               )}
 
               {gmailScanMsg && (
