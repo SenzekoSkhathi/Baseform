@@ -18,6 +18,7 @@ export default function VerifyEmailPage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [verifyingLink, setVerifyingLink] = useState(true);
+  const [autoResent, setAutoResent] = useState(false);
 
   async function triggerWelcomeEmail() {
     try {
@@ -177,6 +178,16 @@ export default function VerifyEmailPage() {
     setInfo("Verification email sent. Check your inbox for the new code.");
     setResending(false);
   }
+
+  useEffect(() => {
+    if (verifyingLink) return;
+    if (autoResent) return;
+    if (!email.trim()) return;
+
+    setAutoResent(true);
+    void handleResendCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifyingLink, autoResent, email]);
 
   if (verifyingLink) {
     return (
