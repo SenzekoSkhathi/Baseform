@@ -108,12 +108,9 @@ export default function SignupPage() {
           school_name: onboarding?.schoolName ?? null,
           grade_year: onboarding?.gradeYear ? onboarding.gradeYear : null,
           province: onboarding?.province ?? null,
-          financial_need:
-            onboarding?.financialNeed === "yes"
-              ? true
-              : onboarding?.financialNeed === "no"
-              ? false
-              : null,
+          financial_need: onboarding?.financialNeed === "yes" || onboarding?.financialNeed === "no"
+            ? onboarding.financialNeed
+            : null,
           field_of_interest: onboarding?.fieldOfInterest ?? null,
           guardian_name: guardian.name,
           guardian_phone: guardian.phone,
