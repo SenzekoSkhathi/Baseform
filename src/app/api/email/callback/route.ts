@@ -77,6 +77,66 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
   return "sent";
 }
 
+async function sendConnectedMailboxReceiptEmail(to: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn("[email/callback] RESEND_API_KEY is missing; skipping connected mailbox receipt email");
+    return "skipped";
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#fff9f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff9f2;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #fed7aa;">
+        <tr><td style="background:#f97316;padding:24px 28px;">
+          <p style="margin:0;color:#ffffff;font-size:22px;font-weight:900;">Baseform</p>
+          <p style="margin:4px 0 0;color:#ffedd5;font-size:12px;">Your SA university application companion</p>
+        </td></tr>
+        <tr><td style="padding:28px;">
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#f97316;text-transform:uppercase;letter-spacing:0.05em;">Security confirmation</p>
+          <h1 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#111827;">This mailbox is now connected to Baseform</h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+            <strong>${gmailAddress}</strong> was connected for read-only inbox tracking on Baseform.
+          </p>
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:18px 20px;margin-bottom:24px;">
+            <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#111827;">Did you do this?</p>
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">If yes, no action is needed. If this wasn't you, disconnect Gmail from your Baseform profile immediately and secure your account.</p>
+          </div>
+          <a href="${appUrl}/profile" style="display:inline-block;background:#f97316;color:#ffffff;font-size:14px;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;">
+            Review connection →
+          </a>
+        </td></tr>
+        <tr><td style="background:#fff7ed;border-top:1px solid #fed7aa;padding:16px 28px;text-align:center;">
+          <p style="margin:0;color:#9ca3af;font-size:11px;">Lumen AI (Pty) Ltd · baseformapplications.com</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const resendRes = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      from: FROM,
+      to,
+      subject: "Mailbox connected to Baseform",
+      html,
+    }),
+  });
+
+  if (!resendRes.ok) {
+    const body = await resendRes.text().catch(() => "");
+    throw new Error(`Resend send failed (${resendRes.status}): ${body}`);
+  }
+
+  return "sent";
+}
+
 async function resolveConnectedEmail(accessToken: string): Promise<string> {
   const gmailProfileRes = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/profile",
@@ -203,6 +263,12 @@ export async function GET(req: NextRequest) {
     const firstName = profile?.full_name?.trim().split(" ")[0] ?? "there";
     const recipient = profile?.email?.trim() || emailAddress;
     mailStatus = await sendGmailConnectedEmail(recipient, firstName, emailAddress, redirectBase);
+
+    const normalizedRecipient = recipient.trim().toLowerCase();
+    const normalizedConnected = emailAddress.trim().toLowerCase();
+    if (normalizedConnected && normalizedConnected !== normalizedRecipient) {
+      await sendConnectedMailboxReceiptEmail(emailAddress, emailAddress, redirectBase);
+    }
   } catch (e) {
     mailStatus = "error";
     console.error("[email/callback] Welcome email failed:", e);
