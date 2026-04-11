@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const subjectSchema = z.object({
@@ -8,8 +9,6 @@ const subjectSchema = z.object({
 });
 
 const bodySchema = z.object({
-  userId: z.string().uuid("Invalid user id"),
-  email: z.string().email("Invalid email address"),
   profile: z.object({
     full_name: z.string().min(1).max(120),
     phone: z.string().max(20).nullable().optional(),
@@ -47,7 +46,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    const { userId, email, profile, subjects } = parsed.data;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = user.id;
+    const email = user.email ?? "";
+    const { profile, subjects } = parsed.data;
     const admin = createAdminClient();
 
     const { error: profileError } = await admin.from("profiles").upsert({

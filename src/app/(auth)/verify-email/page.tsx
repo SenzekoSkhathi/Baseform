@@ -27,6 +27,35 @@ export default function VerifyEmailPage() {
     }
   }
 
+  async function persistPendingSignupProfile() {
+    const raw = localStorage.getItem("bf_pending_signup_profile");
+    if (!raw) return;
+
+    const payload = JSON.parse(raw);
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new Error("Could not load verified user session.");
+    }
+
+    const res = await fetch("/api/auth/signup/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error ?? "Could not save your profile details.");
+    }
+
+    localStorage.removeItem("bf_pending_signup_profile");
+  }
+
   useEffect(() => {
     if (initialEmail) setEmail(initialEmail);
   }, [initialEmail]);
@@ -52,6 +81,7 @@ export default function VerifyEmailPage() {
             token_hash: tokenHash,
           });
           if (verifyError) throw verifyError;
+          await persistPendingSignupProfile();
           await triggerWelcomeEmail();
           router.replace("/plans");
           return;
@@ -61,6 +91,7 @@ export default function VerifyEmailPage() {
         if (codeParam) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(codeParam);
           if (exchangeError) throw exchangeError;
+          await persistPendingSignupProfile();
           await triggerWelcomeEmail();
           router.replace("/plans");
           return;
@@ -69,6 +100,7 @@ export default function VerifyEmailPage() {
         setVerifyingLink(false);
       } catch (e) {
         console.error("[verify-email] Link verification failed:", e);
+        setError(e instanceof Error ? e.message : "Could not complete verification.");
         setVerifyingLink(false);
       }
     }
@@ -101,6 +133,14 @@ export default function VerifyEmailPage() {
 
     if (verifyError) {
       setError(verifyError.message);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await persistPendingSignupProfile();
+    } catch (persistError) {
+      setError(persistError instanceof Error ? persistError.message : "Could not save your profile details.");
       setLoading(false);
       return;
     }

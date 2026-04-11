@@ -121,11 +121,10 @@ export default function SignupPage() {
       return;
     }
 
-    const res = await fetch("/api/auth/signup/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId,
+    // Persist signup payload locally and save to DB only after email verification succeeds.
+    localStorage.setItem(
+      "bf_pending_signup_profile",
+      JSON.stringify({
         email,
         profile: {
           full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" "),
@@ -146,16 +145,8 @@ export default function SignupPage() {
             : guardian.whatsapp || null,
         },
         subjects: onboarding?.subjects ?? [],
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      setError(json.error ?? "Something went wrong. Please try again.");
-      setLoading(false);
-      return;
-    }
+      })
+    );
 
     localStorage.removeItem("bf_onboarding");
     router.push(`/verify-email?email=${encodeURIComponent(email)}`);
