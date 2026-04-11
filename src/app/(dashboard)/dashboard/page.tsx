@@ -25,24 +25,34 @@ export default async function DashboardPage() {
     ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
-  const [{ count: totalCount }, { count: submittedCount }] = await Promise.all([
-    supabase
-      .from("applications")
-      .select("*", { count: "exact", head: true })
-      .eq("student_id", user.id),
-    supabase
-      .from("applications")
-      .select("*", { count: "exact", head: true })
-      .eq("student_id", user.id)
-      .in("status", ["submitted", "accepted", "rejected", "waitlisted"]),
-  ]);
+  const { data: applications } = await supabase
+    .from("applications")
+    .select("status, universities ( abbreviation )")
+    .eq("student_id", user.id);
+
+  const institutionStatuses = new Map<string, { hasSubmitted: boolean }>();
+  for (const app of applications ?? []) {
+    const uni = (app as any).universities;
+    const rawAbbr = typeof uni?.abbreviation === "string" ? uni.abbreviation.trim().toUpperCase() : "";
+    const groupKey = ["UKZN", "DUT", "MUT", "UNIZULU", "UNISA"].includes(rawAbbr)
+      ? "CAO"
+      : rawAbbr || "UNKNOWN";
+    const current = institutionStatuses.get(groupKey) ?? { hasSubmitted: false };
+    if (["submitted", "accepted", "rejected", "waitlisted"].includes(app.status ?? "planning")) {
+      current.hasSubmitted = true;
+    }
+    institutionStatuses.set(groupKey, current);
+  }
+
+  const totalInstitutionCount = institutionStatuses.size;
+  const submittedInstitutionCount = Array.from(institutionStatuses.values()).filter((item) => item.hasSubmitted).length;
 
   return (
     <DashboardClient
       profile={profile}
       aps={aps}
-      totalCount={totalCount ?? 0}
-      submittedCount={submittedCount ?? 0}
+      totalInstitutionCount={totalInstitutionCount}
+      submittedInstitutionCount={submittedInstitutionCount}
     />
   );
 }

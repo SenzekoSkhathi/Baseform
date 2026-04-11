@@ -18,8 +18,8 @@ type Profile = {
 type Props = {
   profile: Profile;
   aps: number;
-  totalCount: number;
-  submittedCount: number;
+  totalInstitutionCount: number;
+  submittedInstitutionCount: number;
 };
 
 const tiles = [
@@ -91,7 +91,7 @@ function formatDate() {
   });
 }
 
-export default function DashboardClient({ profile, aps, totalCount, submittedCount }: Props) {
+export default function DashboardClient({ profile, aps, totalInstitutionCount, submittedInstitutionCount }: Props) {
   const firstName = profile?.full_name?.trim().split(" ")[0] || null;
   const rating = apsRating(aps);
   const gradeYear = profile?.grade_year ?? null;
@@ -164,8 +164,8 @@ export default function DashboardClient({ profile, aps, totalCount, submittedCou
             <ApsProgressCard
               aps={aps}
               rating={rating}
-              totalCount={totalCount}
-              submittedCount={submittedCount}
+              totalInstitutionCount={totalInstitutionCount}
+              submittedInstitutionCount={submittedInstitutionCount}
             />
           </div>
         </section>

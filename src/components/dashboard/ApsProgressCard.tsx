@@ -16,14 +16,14 @@ type View = "progress" | "aps";
 interface Props {
   aps: number;
   rating: string;
-  totalCount: number;
-  submittedCount: number;
+  totalInstitutionCount: number;
+  submittedInstitutionCount: number;
 }
 
-export default function ApsProgressCard({ aps, rating, totalCount, submittedCount }: Props) {
+export default function ApsProgressCard({ aps, rating, totalInstitutionCount, submittedInstitutionCount }: Props) {
   const apsPct = Math.min(Math.round((aps / MAX_APS) * 100), 100);
-  // Progress = submitted (or further) out of total tracked applications
-  const progressPct = totalCount === 0 ? 0 : Math.min(Math.round((submittedCount / totalCount) * 100), 100);
+  // Progress = institutions with at least one submitted/completed app out of tracked institutions
+  const progressPct = totalInstitutionCount === 0 ? 0 : Math.min(Math.round((submittedInstitutionCount / totalInstitutionCount) * 100), 100);
   const [animatedAps, setAnimatedAps] = useState(0);
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const [activeView, setActiveView] = useState<View>("progress");
@@ -38,7 +38,7 @@ export default function ApsProgressCard({ aps, rating, totalCount, submittedCoun
   }, [apsPct, progressPct]);
 
   const pointsAway = MAX_APS - aps;
-  const remaining = Math.max(totalCount - submittedCount, 0);
+  const remaining = Math.max(totalInstitutionCount - submittedInstitutionCount, 0);
   const isProgressView = activeView === "progress";
 
   return (
@@ -46,7 +46,7 @@ export default function ApsProgressCard({ aps, rating, totalCount, submittedCoun
       {/* Header row with tabs */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-gray-900">
-          {isProgressView ? "Progress" : "APS"}
+          {isProgressView ? "Applications Progress" : "APS"}
         </span>
         <div className="flex gap-1.5">
           <button
@@ -102,7 +102,7 @@ export default function ApsProgressCard({ aps, rating, totalCount, submittedCoun
         {isProgressView ? (
           <>
             <div className="flex-1 text-center">
-              <p className="text-sm font-bold text-gray-900">{submittedCount}</p>
+              <p className="text-sm font-bold text-gray-900">{submittedInstitutionCount}</p>
               <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">Submitted</p>
             </div>
             <div className="flex-1 text-center">
@@ -110,7 +110,7 @@ export default function ApsProgressCard({ aps, rating, totalCount, submittedCoun
               <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">Remaining</p>
             </div>
             <div className="flex-1 text-center">
-              <p className="text-sm font-bold text-gray-900">{totalCount}</p>
+              <p className="text-sm font-bold text-gray-900">{totalInstitutionCount}</p>
               <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">Total</p>
             </div>
           </>
