@@ -291,7 +291,14 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
   useEffect(() => {
     const result = searchParams.get("gmail");
     if (result === "connected") {
-      setGmailBanner({ type: "success", message: "Gmail connected successfully. Inbox tracking is now active." });
+      const mail = searchParams.get("mail");
+      if (mail === "error") {
+        setGmailBanner({ type: "warning", message: "Gmail connected, but we could not send the confirmation email." });
+      } else if (mail === "skipped") {
+        setGmailBanner({ type: "warning", message: "Gmail connected. Confirmation email is not configured yet." });
+      } else {
+        setGmailBanner({ type: "success", message: "Gmail connected successfully. Inbox tracking is now active." });
+      }
       void refreshGmailStatus();
       router.replace("/profile");
     } else if (result === "error") {

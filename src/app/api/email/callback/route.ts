@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
+const FROM = process.env.EMAIL_FROM ?? "Lumen AI (Pty) Ltd <noreply@baseformapplications.com>";
 
-async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string) {
+async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn("[email/callback] RESEND_API_KEY is missing; skipping Gmail connected email");
-    return;
+    return "skipped";
   }
 
   const html = `<!DOCTYPE html>
@@ -73,6 +73,8 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
     const body = await resendRes.text().catch(() => "");
     throw new Error(`Resend send failed (${resendRes.status}): ${body}`);
   }
+
+  return "sent";
 }
 
 async function resolveConnectedEmail(accessToken: string): Promise<string> {
@@ -194,14 +196,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
   }
 
+  let mailStatus: "sent" | "skipped" | "error" = "sent";
+
   // Send Gmail-connected confirmation email — non-fatal
   try {
     const firstName = profile?.full_name?.trim().split(" ")[0] ?? "there";
     const recipient = profile?.email?.trim() || emailAddress;
-    await sendGmailConnectedEmail(recipient, firstName, emailAddress, redirectBase);
+    mailStatus = await sendGmailConnectedEmail(recipient, firstName, emailAddress, redirectBase);
   } catch (e) {
+    mailStatus = "error";
     console.error("[email/callback] Welcome email failed:", e);
   }
 
-  return NextResponse.redirect(`${redirectBase}/profile?gmail=connected`);
+  return NextResponse.redirect(`${redirectBase}/profile?gmail=connected&mail=${mailStatus}`);
 }
