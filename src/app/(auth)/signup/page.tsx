@@ -96,12 +96,37 @@ export default function SignupPage() {
     const raw = localStorage.getItem("bf_onboarding");
     const onboarding: OnboardingData | null = raw ? JSON.parse(raw) : null;
 
-    const res = await fetch("/api/auth/signup", {
+    const supabase = createClient();
+    const redirectTo = `${window.location.origin}/verify-email`;
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectTo,
+        data: { full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" ") },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    const userId = signUpData.user?.id;
+    if (!userId) {
+      setError("Account was created, but we could not prepare your profile. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch("/api/auth/signup/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        userId,
         email,
-        password,
         profile: {
           full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" "),
           phone: onboarding?.phone ?? null,
@@ -132,18 +157,8 @@ export default function SignupPage() {
       return;
     }
 
-    // Account created — now sign in so session cookies are set
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (signInError) {
-      setError("Account created but sign-in failed. Please go to the login page.");
-      setLoading(false);
-      return;
-    }
-
     localStorage.removeItem("bf_onboarding");
-    router.push("/plans");
+    router.push(`/verify-email?email=${encodeURIComponent(email)}`);
   }
 
   return (

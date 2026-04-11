@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signupSchema } from "@/lib/validation/schemas";
-import { sendWelcomeEmail } from "@/lib/email/sendWelcome";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,11 +16,11 @@ export async function POST(req: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Create user via admin API — auto-confirm so they can log in immediately
+    // Create user via admin API — require email confirmation
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: { full_name: profile?.full_name ?? "" },
     });
 
@@ -77,10 +76,6 @@ export async function POST(req: NextRequest) {
         console.error("Subjects insert error:", subjectError.message);
       }
     }
-
-    // Send welcome email — non-fatal if it fails
-    const firstName = profile?.full_name?.trim().split(" ")[0] ?? "there";
-    void sendWelcomeEmail(email, firstName);
 
     return NextResponse.json({ success: true, userId });
   } catch (err) {

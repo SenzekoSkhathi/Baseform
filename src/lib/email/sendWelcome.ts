@@ -1,4 +1,5 @@
-const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
+import { sendEmail } from "@/lib/email/sender";
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
 
 function buildWelcomeHtml(firstName: string): string {
@@ -70,25 +71,14 @@ function buildWelcomeHtml(firstName: string): string {
 }
 
 export async function sendWelcomeEmail(to: string, firstName: string): Promise<void> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return; // skip silently in dev if key not set
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      from: FROM,
+  try {
+    await sendEmail({
       to,
       subject: `Welcome to Baseform, ${firstName}!`,
       html: buildWelcomeHtml(firstName),
-    }),
-  });
-
-  if (!res.ok) {
+    });
+  } catch (err) {
     // Non-fatal — account is created regardless
-    console.error("[sendWelcomeEmail] Resend error:", await res.text());
+    console.error("[sendWelcomeEmail] Resend error:", err);
   }
 }

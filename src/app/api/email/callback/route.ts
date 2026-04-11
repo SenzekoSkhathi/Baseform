@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-const FROM = process.env.EMAIL_FROM ?? "Baseform Authentication <no-reply@baseformapplications.com>";
+import { sendEmail } from "@/lib/email/sender";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.warn("[email/callback] RESEND_API_KEY is missing; skipping Gmail connected email");
-    return "skipped";
-  }
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
@@ -58,32 +51,14 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
 </body>
 </html>`;
 
-  const resendRes = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      from: FROM,
-      to,
-      subject: `Gmail connected — we've got your inbox covered`,
-      html,
-    }),
+  return sendEmail({
+    to,
+    subject: `Gmail connected — we've got your inbox covered`,
+    html,
   });
-
-  if (!resendRes.ok) {
-    const body = await resendRes.text().catch(() => "");
-    throw new Error(`Resend send failed (${resendRes.status}): ${body}`);
-  }
-
-  return "sent";
 }
 
 async function sendConnectedMailboxReceiptEmail(to: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.warn("[email/callback] RESEND_API_KEY is missing; skipping connected mailbox receipt email");
-    return "skipped";
-  }
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
@@ -118,23 +93,11 @@ async function sendConnectedMailboxReceiptEmail(to: string, gmailAddress: string
 </body>
 </html>`;
 
-  const resendRes = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      from: FROM,
-      to,
-      subject: "Mailbox connected to Baseform",
-      html,
-    }),
+  return sendEmail({
+    to,
+    subject: "Mailbox connected to Baseform",
+    html,
   });
-
-  if (!resendRes.ok) {
-    const body = await resendRes.text().catch(() => "");
-    throw new Error(`Resend send failed (${resendRes.status}): ${body}`);
-  }
-
-  return "sent";
 }
 
 async function resolveConnectedEmail(accessToken: string): Promise<string> {

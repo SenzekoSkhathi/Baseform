@@ -103,7 +103,12 @@ export default function PlansPage() {
         .eq("id", user.id);
     }
 
-    router.push("/dashboard");
+    if (selected === "free") {
+      router.push("/dashboard");
+      return;
+    }
+
+    router.push(`/payment?plan=${selected}`);
   }
 
   function handleBack() {
