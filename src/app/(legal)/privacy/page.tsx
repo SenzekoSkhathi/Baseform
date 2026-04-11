@@ -73,7 +73,14 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900">6. Your rights (POPIA)</h2>
+            <h2 className="text-lg font-semibold text-gray-900">6. Google API Limited Use Disclosure</h2>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Baseform's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" className="text-orange-500 hover:underline">Google API Services User Data Policy</a>, including the Limited Use requirements. We only request read access to scan for university and bursary-related emails, and this data is never used to serve ads or sold to third parties.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-gray-900">7. Your rights (POPIA)</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Under the Protection of Personal Information Act (POPIA), you have the right to access, correct, or delete your personal information. To exercise these rights, email us at{" "}
               <a href="mailto:info@baseformapplications.com" className="text-orange-500">info@baseformapplications.com</a>.
@@ -81,14 +88,14 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900">7. Data retention</h2>
+            <h2 className="text-lg font-semibold text-gray-900">8. Data retention</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               We retain your data for as long as your account is active. If you delete your account, your personal data is removed within 30 days. Anonymised, aggregated usage data may be retained indefinitely.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900">8. Contact</h2>
+            <h2 className="text-lg font-semibold text-gray-900">9. Contact</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Questions about this policy? Contact us at{" "}
               <a href="mailto:info@baseformapplications.com" className="text-orange-500">info@baseformapplications.com</a>.

@@ -11,7 +11,7 @@ function getResend(): Resend {
   return _resend;
 }
 
-const FROM = process.env.EMAIL_FROM ?? "Baseform <notifications@baseform.co.za>";
+const FROM = process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>";
 
 // ── Base layout ───────────────────────────────────────────────────────────────
 
@@ -184,6 +184,59 @@ export function buildGuardianEmail(opts: {
     </p>
 
     ${ctaButton("View on Baseform", opts.appUrl)}
+  `);
+
+  return { subject, html };
+}
+
+export function buildWelcomeEmail(opts: {
+  firstName: string;
+  appUrl: string;
+}): { subject: string; html: string } {
+  const subject = `Welcome to Baseform, ${opts.firstName} 🎓`;
+
+  const html = layout(`
+    <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#f97316;text-transform:uppercase;letter-spacing:0.05em;">Welcome aboard</p>
+    <h1 style="margin:0 0 16px;font-size:24px;font-weight:900;color:#111827;">Hi ${opts.firstName}, you're in!</h1>
+
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Your Baseform account is ready. We're here to help you discover universities and bursaries you qualify for,
+      track every application, and never miss a deadline.
+    </p>
+
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:18px 20px;margin-bottom:24px;">
+      <p style="margin:0 0 14px;font-size:13px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Here's what to do next</p>
+
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <div style="background:#f97316;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-center:center;text-align:center;padding-top:5px;flex-shrink:0;">1</div>
+        <div>
+          <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Browse your matches</p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">See every university and bursary you qualify for based on your APS.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <div style="background:#f97316;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-center:center;text-align:center;padding-top:5px;flex-shrink:0;">2</div>
+        <div>
+          <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Add applications to track</p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">Keep all your applications in one place and watch your progress.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="background:#f97316;color:#fff;font-size:11px;font-weight:900;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-center:center;text-align:center;padding-top:5px;flex-shrink:0;">3</div>
+        <div>
+          <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Ask BaseBot anything</p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">Got questions about APS, bursaries, or applications? BaseBot has answers 24/7.</p>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin:0 0 20px;font-size:14px;color:#6b7280;line-height:1.6;">
+      Deadlines move fast in SA — the earlier you start, the better your chances. Let's go.
+    </p>
+
+    ${ctaButton("Go to my dashboard", opts.appUrl)}
   `);
 
   return { subject, html };

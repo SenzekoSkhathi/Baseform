@@ -1,6 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const FROM = `Baseform Inc. <noreply@baseformapplications.com>`;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
+
+async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#fff9f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff9f2;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #fed7aa;">
+        <tr><td style="background:#f97316;padding:24px 28px;">
+          <p style="margin:0;color:#ffffff;font-size:22px;font-weight:900;">Baseform</p>
+          <p style="margin:4px 0 0;color:#ffedd5;font-size:12px;">Your SA university application companion</p>
+        </td></tr>
+        <tr><td style="padding:28px;">
+          <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#f97316;text-transform:uppercase;letter-spacing:0.05em;">Gmail Connected</p>
+          <h1 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#111827;">Hi ${firstName}, your inbox is connected!</h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+            <strong>${gmailAddress}</strong> is now linked to your Baseform account. We'll automatically scan your inbox for university replies and update your application statuses — no manual tracking needed.
+          </p>
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:18px 20px;margin-bottom:24px;">
+            <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">What happens next</p>
+            <div style="margin-bottom:10px;">
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Auto status updates</p>
+              <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">When a university emails you, we detect it and update your tracker automatically.</p>
+            </div>
+            <div style="margin-bottom:10px;">
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Guardian notifications</p>
+              <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">Your guardian will be notified when we detect a status change.</p>
+            </div>
+            <div>
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Read-only access</p>
+              <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">We only read emails — we never send, delete, or modify anything in your inbox.</p>
+            </div>
+          </div>
+          <p style="margin:0 0 20px;font-size:13px;color:#9ca3af;line-height:1.6;">
+            You can disconnect Gmail at any time from your profile settings.
+          </p>
+          <a href="${APP_URL}/profile" style="display:inline-block;background:#f97316;color:#ffffff;font-size:14px;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;">
+            View my profile →
+          </a>
+        </td></tr>
+        <tr><td style="background:#fff7ed;border-top:1px solid #fed7aa;padding:16px 28px;text-align:center;">
+          <p style="margin:0;color:#9ca3af;font-size:11px;">Baseform Inc. · baseformapplications.com</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      from: FROM,
+      to,
+      subject: `Gmail connected — we've got your inbox covered`,
+      html,
+    }),
+  });
+}
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -79,6 +146,22 @@ export async function GET(req: NextRequest) {
   if (dbError) {
     console.error("[email/callback] DB upsert failed:", dbError);
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
+  }
+
+  // Send Gmail-connected confirmation email — non-fatal
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", state)
+      .maybeSingle();
+
+    if (profile?.email) {
+      const firstName = profile.full_name?.trim().split(" ")[0] ?? "there";
+      await sendGmailConnectedEmail(profile.email, firstName, emailAddress);
+    }
+  } catch (e) {
+    console.error("[email/callback] Welcome email failed:", e);
   }
 
   return NextResponse.redirect(`${redirectBase}/profile?gmail=connected`);
