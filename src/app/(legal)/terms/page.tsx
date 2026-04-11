@@ -47,7 +47,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">4. Free and paid plans</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Baseform offers a free tier and paid subscription plans. Paid features are clearly marked. Subscriptions are billed monthly and can be cancelled at any time. We do not offer refunds for partial billing periods. Prices are in South African Rand (ZAR) and include VAT where applicable.
+              Baseform offers a free tier and paid subscription plans. Paid features are clearly marked. Subscriptions are billed periodically and can be cancelled at any time. We do not offer refunds for partial billing periods. Prices are in South African Rand (ZAR) and include VAT where applicable.
             </p>
           </section>
 
@@ -73,7 +73,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">7. Intellectual property</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              All content, design, and code in Baseform is owned by Baseform (Pty) Ltd. You retain ownership of the documents and information you upload. By uploading content, you grant us a limited licence to store and display it to provide the service.
+              All content, design, and code in Baseform is owned by Lumen (Pty) Ltd. You retain ownership of the documents and information you upload. By uploading content, you grant us a limited licence to store and display it to provide the service.
             </p>
           </section>
 
@@ -102,7 +102,7 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold text-gray-900">11. Contact</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Questions? Email us at{" "}
-              <a href="mailto:hello@baseformapplications.com" className="text-orange-500">hello@baseformapplications.com</a>.
+              <a href="mailto:info@baseformapplications.com" className="text-orange-500">info@baseformapplications.com</a>.
             </p>
           </section>
 

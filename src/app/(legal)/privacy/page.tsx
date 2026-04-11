@@ -23,7 +23,7 @@ export default function PrivacyPolicyPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">1. Who we are</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Baseform is a South African university application co-pilot designed to help Grade 12 students discover universities and bursaries, track applications, and never miss a deadline. We are operated by Baseform (Pty) Ltd, registered in South Africa.
+              Baseform is a South African university application co-pilot designed to help Grade 12 students discover universities and bursaries, track applications, and never miss a deadline. We are operated by Lumen AI (Pty) Ltd, registered in South Africa.
             </p>
           </section>
 
@@ -76,7 +76,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-gray-900">6. Your rights (POPIA)</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Under the Protection of Personal Information Act (POPIA), you have the right to access, correct, or delete your personal information. To exercise these rights, email us at{" "}
-              <a href="mailto:privacy@baseformapplications.com" className="text-orange-500">privacy@baseformapplications.com</a>.
+              <a href="mailto:info@baseformapplications.com" className="text-orange-500">info@baseformapplications.com</a>.
             </p>
           </section>
 
@@ -91,7 +91,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-gray-900">8. Contact</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Questions about this policy? Contact us at{" "}
-              <a href="mailto:privacy@baseformapplications.com" className="text-orange-500">privacy@baseformapplications.com</a>.
+              <a href="mailto:info@baseformapplications.com" className="text-orange-500">info@baseformapplications.com</a>.
             </p>
           </section>
 
