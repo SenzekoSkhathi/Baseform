@@ -73,7 +73,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">7. Intellectual property</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              All content, design, and code in Baseform is owned by Lumen (Pty) Ltd. You retain ownership of the documents and information you upload. By uploading content, you grant us a limited licence to store and display it to provide the service.
+              All content, design, and code in Baseform is owned by Lumen AI (Pty) Ltd. You retain ownership of the documents and information you upload. By uploading content, you grant us a limited licence to store and display it to provide the service.
             </p>
           </section>
 

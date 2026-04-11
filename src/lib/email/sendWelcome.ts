@@ -1,4 +1,4 @@
-const FROM = `Baseform Inc. <noreply@baseformapplications.com>`;
+const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
 
 function buildWelcomeHtml(firstName: string): string {
@@ -58,7 +58,7 @@ function buildWelcomeHtml(firstName: string): string {
         </td></tr>
 
         <tr><td style="background:#fff7ed;border-top:1px solid #fed7aa;padding:16px 28px;text-align:center;">
-          <p style="margin:0;color:#9ca3af;font-size:11px;">Baseform Inc. · Helping SA students apply smarter</p>
+          <p style="margin:0;color:#9ca3af;font-size:11px;">Lumen AI (Pty) Ltd · Helping SA students apply smarter</p>
           <p style="margin:4px 0 0;color:#d1d5db;font-size:11px;">baseformapplications.com</p>
         </td></tr>
 

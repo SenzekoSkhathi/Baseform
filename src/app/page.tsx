@@ -182,6 +182,16 @@ export default function Home() {
           </motion.aside>
         </section>
       </div>
+
+      <footer className="relative z-10 border-t border-orange-100/60 bg-[#fff9f2] py-4 px-4 sm:px-8 lg:px-10">
+        <div className="mx-auto flex max-w-7xl items-center justify-between text-xs text-slate-400">
+          <p>© {new Date().getFullYear()} Lumen AI (Pty) Ltd</p>
+          <div className="flex gap-4">
+            <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -74,7 +74,7 @@ export async function POST() {
       Authorization: `Bearer ${RESEND_KEY}`,
     },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>",
+      from: process.env.EMAIL_FROM ?? "Lumen AI (Pty) Ltd <noreply@baseformapplications.com>",
       to: profile.guardian_email,
       subject: `${studentName} shared their university progress with you`,
       html,

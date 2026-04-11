@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const FROM = `Baseform Inc. <noreply@baseformapplications.com>`;
+const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string) {
@@ -48,7 +48,7 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
           </a>
         </td></tr>
         <tr><td style="background:#fff7ed;border-top:1px solid #fed7aa;padding:16px 28px;text-align:center;">
-          <p style="margin:0;color:#9ca3af;font-size:11px;">Baseform Inc. · baseformapplications.com</p>
+          <p style="margin:0;color:#9ca3af;font-size:11px;">Lumen AI (Pty) Ltd · baseformapplications.com</p>
         </td></tr>
       </table>
     </td></tr>
