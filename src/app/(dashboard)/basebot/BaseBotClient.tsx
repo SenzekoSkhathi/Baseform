@@ -51,6 +51,44 @@ function relativeTime(date: Date): string {
 
 const STORAGE_KEY = "basebot-threads-v1";
 
+async function fetchThreadsFromDB(): Promise<ChatThread[]> {
+  try {
+    const res = await fetch("/api/basebot/threads");
+    if (!res.ok) return [];
+    const rows = await res.json() as Array<{
+      id: string; title: string; preview: string; updated_at: string;
+      messages: Array<{ id: string; text: string; sender: "user" | "bot" | "system"; timestamp: string }>;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      preview: r.preview,
+      updatedAt: new Date(r.updated_at),
+      messages: r.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function saveThreadToDB(thread: ChatThread): Promise<void> {
+  try {
+    await fetch("/api/basebot/threads", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: thread.id,
+        title: thread.title,
+        preview: thread.preview,
+        messages: thread.messages,
+        updated_at: thread.updatedAt.toISOString(),
+      }),
+    });
+  } catch {
+    // Silent — localStorage already has the data as fallback
+  }
+}
+
 // ── Simple markdown renderer ──────────────────────────────────────────────────
 
 function normalizeResponseText(text: string): string {
@@ -433,31 +471,40 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
     };
   }, []);
 
-  // Restore from localStorage
+  // Load threads: DB first, fallback to localStorage
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Array<{
-        id: string;
-        title: string;
-        preview: string;
-        updatedAt: string;
-        messages: Array<{ id: string; text: string; sender: "user" | "bot" | "system"; timestamp: string }>;
-      }>;
-      setThreads(
-        parsed.map((t) => ({
-          ...t,
-          updatedAt: new Date(t.updatedAt),
-          messages: t.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
-        })),
-      );
-    } catch {
-      // ignore parse errors
+    async function load() {
+      // Try DB first
+      const dbThreads = await fetchThreadsFromDB();
+      if (dbThreads.length > 0) {
+        setThreads(dbThreads);
+        // Sync DB threads into localStorage so they're available offline
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dbThreads));
+        return;
+      }
+      // Fallback: localStorage (works offline or when DB is slow)
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Array<{
+          id: string; title: string; preview: string; updatedAt: string;
+          messages: Array<{ id: string; text: string; sender: "user" | "bot" | "system"; timestamp: string }>;
+        }>;
+        setThreads(
+          parsed.map((t) => ({
+            ...t,
+            updatedAt: new Date(t.updatedAt),
+            messages: t.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })),
+          })),
+        );
+      } catch {
+        // ignore parse errors
+      }
     }
+    void load();
   }, []);
 
-  // Persist threads
+  // Persist threads to localStorage (always) + DB (best-effort)
   useEffect(() => {
     if (threads.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
@@ -472,6 +519,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   const saveThread = (threadId: string, msgs: Message[]) => {
     const thread = buildThread(threadId, msgs, threads.find((t) => t.id === threadId));
     setThreads((prev) => [thread, ...prev.filter((t) => t.id !== threadId)]);
+    void saveThreadToDB(thread);
   };
 
   const handleSend = async (text?: string) => {

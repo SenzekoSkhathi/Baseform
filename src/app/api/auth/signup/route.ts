@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const parsed = signupSchema.safeParse(body);
 
     if (!parsed.success) {
-      const message = parsed.error.errors[0]?.message ?? "Invalid request";
+      const message = parsed.error.issues[0]?.message ?? "Invalid request";
       return NextResponse.json({ error: message }, { status: 400 });
     }
 

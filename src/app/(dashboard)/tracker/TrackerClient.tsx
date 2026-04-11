@@ -12,6 +12,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
+import { createClient } from "@/lib/supabase/client";
 
 type Application = Record<string, any>;
 type GoalCategory = "Applications" | "Documents" | "Exams" | "Funding" | "Personal";
@@ -149,9 +150,36 @@ function buildGoalsFromApplication(app: Application): GoalDraft[] {
   return goals;
 }
 
-export default function TrackerClient({ applications }: { applications: Application[] }) {
+export default function TrackerClient({ applications: initialApplications }: { applications: Application[] }) {
+  const [applications, setApplications] = useState<Application[]>(initialApplications);
+  const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+
+  // Realtime: auto-update application statuses when email scan detects changes
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel("tracker-applications")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "applications" },
+        (payload) => {
+          const updated = payload.new as Application;
+          setApplications((prev) =>
+            prev.map((app) => (app.id === updated.id ? { ...app, ...updated } : app))
+          );
+          const uniName = (updated as Application & { universities?: { name: string } }).universities?.name;
+          const status = String(updated.status ?? "").replace(/_/g, " ");
+          setStatusBanner(`Application update: ${uniName ?? "A university"} → ${status}`);
+          setTimeout(() => setStatusBanner(null), 6000);
+        }
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, []);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<GoalCategory>("Applications");
   const [notes, setNotes] = useState("");
@@ -336,6 +364,13 @@ export default function TrackerClient({ applications }: { applications: Applicat
           Build your goal path and track achievements manually
         </p>
       </div>
+
+      {statusBanner && (
+        <div className="mx-4 mt-3 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 sm:mx-5">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          {statusBanner}
+        </div>
+      )}
 
       <div className="px-4 pt-4 pb-6 sm:px-5">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
