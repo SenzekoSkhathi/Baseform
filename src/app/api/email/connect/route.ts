@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const GOOGLE_SCOPES = [
@@ -6,13 +6,13 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clientId    = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  const redirectUri = new URL("/api/email/callback", req.url).toString();
 
   if (!clientId || !redirectUri) {
     return NextResponse.json({ error: "Google OAuth not configured" }, { status: 500 });

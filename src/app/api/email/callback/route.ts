@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
 
-async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string) {
+async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string) {
   const key = process.env.RESEND_API_KEY;
   if (!key) return;
 
@@ -43,7 +42,7 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
           <p style="margin:0 0 20px;font-size:13px;color:#9ca3af;line-height:1.6;">
             You can disconnect Gmail at any time from your profile settings.
           </p>
-          <a href="${APP_URL}/profile" style="display:inline-block;background:#f97316;color:#ffffff;font-size:14px;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;">
+          <a href="${appUrl}/profile" style="display:inline-block;background:#f97316;color:#ffffff;font-size:14px;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;">
             View my profile →
           </a>
         </td></tr>
@@ -68,6 +67,10 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
   });
 }
 
+function getAppUrl(req: NextRequest) {
+  return new URL(req.url).origin;
+}
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state"); // user ID we set in /connect
   const error = searchParams.get("error");
 
-  const redirectBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const redirectBase = getAppUrl(req);
 
   if (error || !code || !state) {
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
@@ -158,7 +161,7 @@ export async function GET(req: NextRequest) {
 
     if (profile?.email) {
       const firstName = profile.full_name?.trim().split(" ")[0] ?? "there";
-      await sendGmailConnectedEmail(profile.email, firstName, emailAddress);
+      await sendGmailConnectedEmail(profile.email, firstName, emailAddress, redirectBase);
     }
   } catch (e) {
     console.error("[email/callback] Welcome email failed:", e);
