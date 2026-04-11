@@ -14,19 +14,95 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [ready, setReady] = useState(false);
+  const [linkError, setLinkError] = useState("");
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // Supabase puts the recovery token in the URL hash.
-    // onAuthStateChange fires PASSWORD_RECOVERY once the client picks it up.
     const supabase = createClient();
+    let cancelled = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        if (cancelled) return;
         setReady(true);
+        setChecking(false);
+        setLinkError("");
       }
     });
-    return () => subscription.unsubscribe();
+
+    async function bootstrapRecoverySession() {
+      try {
+        const url = new URL(window.location.href);
+        const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+        const hashParams = new URLSearchParams(hash);
+        const queryParams = url.searchParams;
+
+        const type = hashParams.get("type") ?? queryParams.get("type");
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+        const authCode = queryParams.get("code");
+
+        if (authCode && type === "recovery") {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
+          if (exchangeError) throw exchangeError;
+          if (!cancelled) {
+            setReady(true);
+            setChecking(false);
+            setLinkError("");
+          }
+          return;
+        }
+
+        if (accessToken && refreshToken && type === "recovery") {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) throw sessionError;
+
+          window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+
+          if (!cancelled) {
+            setReady(true);
+            setChecking(false);
+            setLinkError("");
+          }
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          if (!cancelled) {
+            setReady(true);
+            setChecking(false);
+            setLinkError("");
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setChecking(false);
+          setReady(false);
+          setLinkError("This link may have expired.");
+        }
+      } catch (recoveryError) {
+        console.error("[reset-password] Recovery bootstrap failed:", recoveryError);
+        if (!cancelled) {
+          setChecking(false);
+          setReady(false);
+          setLinkError("This link may have expired.");
+        }
+      }
+    }
+
+    void bootstrapRecoverySession();
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -74,13 +150,24 @@ export default function ResetPasswordPage() {
     );
   }
 
-  if (!ready) {
+  if (checking) {
     return (
       <main className="min-h-screen w-full bg-gray-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8 text-center space-y-3">
           <h2 className="text-xl font-bold text-gray-900">Verifying your link…</h2>
+          <p className="text-sm text-gray-500">Please wait while we prepare your password reset session.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <main className="min-h-screen w-full bg-gray-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8 text-center space-y-3">
+          <h2 className="text-xl font-bold text-gray-900">We couldn’t verify this link</h2>
           <p className="text-sm text-gray-500">
-            This link may have expired.{" "}
+            {linkError || "This link may have expired."} {" "}
             <Link href="/forgot-password" className="text-orange-500 font-medium">
               Request a new one
             </Link>
