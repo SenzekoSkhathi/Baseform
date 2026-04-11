@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const FROM = process.env.EMAIL_FROM ?? "Lumen AI (Pty) Ltd <noreply@baseformapplications.com>";
+const FROM = process.env.EMAIL_FROM ?? "Baseform Authentication <no-reply@baseformapplications.com>";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
   const key = process.env.RESEND_API_KEY;
