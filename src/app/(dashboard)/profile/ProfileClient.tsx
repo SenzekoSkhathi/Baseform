@@ -449,7 +449,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
                   {displayProfile?.full_name ?? "-"}
                 </h1>
                 <p className="mt-0.5 truncate text-sm text-gray-500">{email}</p>
-                {gmailStatus?.connected ? (
+                {gmailStatus?.connected && gmailStatus.email_address ? (
                   <p className="mt-1 truncate text-xs font-semibold text-green-600">
                     Connected Gmail: {gmailStatus.email_address}
                   </p>

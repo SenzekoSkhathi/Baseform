@@ -5,7 +5,10 @@ const FROM = `Lumen AI (Pty) Ltd <noreply@baseformapplications.com>`;
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return;
+  if (!key) {
+    console.warn("[email/callback] RESEND_API_KEY is missing; skipping Gmail connected email");
+    return;
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -55,7 +58,7 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
 </body>
 </html>`;
 
-  await fetch("https://api.resend.com/emails", {
+  const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
@@ -65,6 +68,37 @@ async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddre
       html,
     }),
   });
+
+  if (!resendRes.ok) {
+    const body = await resendRes.text().catch(() => "");
+    throw new Error(`Resend send failed (${resendRes.status}): ${body}`);
+  }
+}
+
+async function resolveConnectedEmail(accessToken: string): Promise<string> {
+  const gmailProfileRes = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (gmailProfileRes.ok) {
+    const data = await gmailProfileRes.json().catch(() => ({}));
+    const gmailAddress = typeof data.emailAddress === "string" ? data.emailAddress.trim() : "";
+    if (gmailAddress) return gmailAddress;
+  }
+
+  const userInfoRes = await fetch(
+    "https://www.googleapis.com/oauth2/v2/userinfo",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (userInfoRes.ok) {
+    const data = await userInfoRes.json().catch(() => ({}));
+    const userInfoEmail = typeof data.email === "string" ? data.email.trim() : "";
+    if (userInfoEmail) return userInfoEmail;
+  }
+
+  return "";
 }
 
 function getAppUrl(req: NextRequest) {
@@ -118,14 +152,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
   }
 
-  // Fetch the Gmail address for this token
-  const profileRes = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
+  // Resolve the connected mailbox address (Gmail profile -> userinfo fallback).
+  let emailAddress = await resolveConnectedEmail(access_token);
 
-  const profileData = profileRes.ok ? await profileRes.json() : {};
-  const emailAddress: string = profileData.emailAddress ?? "";
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", state)
+    .maybeSingle();
+
+  if (!emailAddress) {
+    emailAddress = profile?.email?.trim() ?? "";
+  }
+
+  if (!emailAddress) {
+    console.error("[email/callback] Could not resolve connected Gmail email address");
+    return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
+  }
 
   const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
 
@@ -153,16 +196,9 @@ export async function GET(req: NextRequest) {
 
   // Send Gmail-connected confirmation email — non-fatal
   try {
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", state)
-      .maybeSingle();
-
-    if (profile?.email) {
-      const firstName = profile.full_name?.trim().split(" ")[0] ?? "there";
-      await sendGmailConnectedEmail(profile.email, firstName, emailAddress, redirectBase);
-    }
+    const firstName = profile?.full_name?.trim().split(" ")[0] ?? "there";
+    const recipient = profile?.email?.trim() || emailAddress;
+    await sendGmailConnectedEmail(recipient, firstName, emailAddress, redirectBase);
   } catch (e) {
     console.error("[email/callback] Welcome email failed:", e);
   }
