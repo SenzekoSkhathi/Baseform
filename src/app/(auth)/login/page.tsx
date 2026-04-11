@@ -110,12 +110,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">Password</label>
-                  <Link href="/forgot-password" className="text-xs text-orange-500 font-medium">
-                    Forgot password?
-                  </Link>
-                </div>
+                <label className="text-sm font-medium text-gray-700">Password</label>
                 <input
                   type="password"
                   value={password}
@@ -124,6 +119,11 @@ export default function LoginPage() {
                   required
                   className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
+                <div className="text-right">
+                  <Link href="/forgot-password" className="text-xs text-orange-500 font-medium">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               {error && (
