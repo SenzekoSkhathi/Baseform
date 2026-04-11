@@ -53,7 +53,9 @@ export default function ResetPasswordPage() {
     }
 
     setDone(true);
-    setTimeout(() => router.push("/dashboard"), 2000);
+
+    await supabase.auth.signOut();
+    setTimeout(() => router.push("/login"), 2000);
   }
 
   if (done) {
@@ -66,7 +68,7 @@ export default function ResetPasswordPage() {
             </svg>
           </div>
           <h2 className="text-xl font-bold text-gray-900">Password updated</h2>
-          <p className="text-sm text-gray-500">Redirecting you to your dashboard…</p>
+          <p className="text-sm text-gray-500">Redirecting you to login…</p>
         </div>
       </main>
     );
