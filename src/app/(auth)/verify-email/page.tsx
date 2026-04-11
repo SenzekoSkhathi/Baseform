@@ -22,7 +22,7 @@ export default function VerifyEmailPage() {
 
   async function triggerWelcomeEmail() {
     try {
-      await fetch("/api/auth/verify-email/welcome", { method: "POST" });
+      await fetch("/api/email/welcome", { method: "POST" });
     } catch (e) {
       console.error("[verify-email] Welcome trigger failed:", e);
     }

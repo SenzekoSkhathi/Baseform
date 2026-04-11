@@ -11,7 +11,7 @@ function getResend(): Resend {
   return _resend;
 }
 
-const FROM = process.env.EMAIL_FROM ?? "Baseform Authentication <no-reply@baseformapplications.com>";
+const FROM = process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>";
 
 // ── Base layout ───────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-const FROM = process.env.EMAIL_FROM ?? "Baseform Authentication <no-reply@baseformapplications.com>";
+const FROM = process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>";
 
 type SendEmailInput = {
   to: string;

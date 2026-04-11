@@ -63,7 +63,7 @@ export async function POST() {
 
     return NextResponse.json({ sent: true });
   } catch (err) {
-    console.error("[verify-email/welcome] Failed:", err);
+    console.error("[email/welcome] Failed:", err);
     return NextResponse.json({ error: "Failed to send welcome email" }, { status: 500 });
   }
 }
