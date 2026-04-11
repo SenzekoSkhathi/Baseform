@@ -1,18 +1,16 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
 import { supabaseAdmin } from "../lib/supabase.js";
-import { geminiModel, GEMINI_SYSTEM_PROMPT } from "../lib/gemini.js";
+import { anthropic, AI_MODEL, SYSTEM_PROMPT } from "../lib/ai.js";
 
 const ai = new Hono();
 
 ai.use("*", requireAuth);
 
-/** Convert frontend message history to Gemini's Content[] format.
- *  Frontend uses role "assistant"; Gemini requires "model". */
-function toGeminiHistory(messages: { role: string; content: string }[]) {
-  return messages.slice(0, -1).map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
+function toClaudeMessages(messages: { role: string; content: string }[]) {
+  return messages.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
   }));
 }
 
@@ -61,38 +59,43 @@ ai.post("/coach", async (ctx) => {
     }
   }
 
-  const systemPrompt = buildSystemPrompt(GEMINI_SYSTEM_PROMPT, studentContext);
-  const history = toGeminiHistory(messages);
-  const lastMessage = messages[messages.length - 1].content;
+  const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
+  const claudeMessages = toClaudeMessages(messages);
 
   try {
-    const chat = geminiModel.startChat({
-      systemInstruction: systemPrompt,
-      history,
+    const result = await anthropic.messages.create({
+      model: AI_MODEL,
+      max_tokens: 900,
+      system: systemPrompt,
+      messages: claudeMessages,
     });
 
-    const result = await chat.sendMessage(lastMessage);
-    const reply = result.response.text();
-    const usage = result.response.usageMetadata;
+    const reply = result.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+
+    const usage = result.usage;
 
     void supabaseAdmin
       .from("ai_coach_logs")
       .insert({
         student_id: user.id,
-        input_tokens: usage?.promptTokenCount ?? 0,
-        output_tokens: usage?.candidatesTokenCount ?? 0,
-        model: "gemini-2.0-flash",
+        input_tokens: usage?.input_tokens ?? 0,
+        output_tokens: usage?.output_tokens ?? 0,
+        model: AI_MODEL,
       });
 
     return ctx.json({
       reply,
       usage: {
-        input_tokens: usage?.promptTokenCount ?? 0,
-        output_tokens: usage?.candidatesTokenCount ?? 0,
+        input_tokens: usage?.input_tokens ?? 0,
+        output_tokens: usage?.output_tokens ?? 0,
       },
     });
   } catch (err) {
-    console.error("Gemini API error:", err);
+    console.error("Claude API error:", err);
     return ctx.json({ error: "AI service temporarily unavailable" }, 503);
   }
 });
@@ -113,45 +116,61 @@ ai.post("/coach/stream", async (ctx) => {
     return ctx.json({ error: "messages array is required" }, 400);
   }
 
-  const systemPrompt = buildSystemPrompt(GEMINI_SYSTEM_PROMPT, studentContext);
-  const history = toGeminiHistory(messages);
-  const lastMessage = messages[messages.length - 1].content;
+  for (const msg of messages) {
+    if (!['user', 'assistant'].includes(msg.role)) {
+      return ctx.json({ error: "Each message must have role 'user' or 'assistant'" }, 400);
+    }
+    if (typeof msg.content !== "string" || !msg.content.trim()) {
+      return ctx.json({ error: "Each message must have non-empty string content" }, 400);
+    }
+  }
 
-  const chat = geminiModel.startChat({
-    systemInstruction: systemPrompt,
-    history,
-  });
+  const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
+  const claudeMessages = toClaudeMessages(messages);
 
   return new Response(
     new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        let inputTokens = 0;
+        let outputTokens = 0;
 
         try {
-          const result = await chat.sendMessageStream(lastMessage);
+          const stream = await anthropic.messages.create({
+            model: AI_MODEL,
+            max_tokens: 900,
+            system: systemPrompt,
+            messages: claudeMessages,
+            stream: true,
+          });
 
-          for await (const chunk of result.stream) {
-            const text = chunk.text();
-            if (text) {
+          for await (const event of stream) {
+            if (event.type === "message_start") {
+              inputTokens = event.message.usage.input_tokens ?? inputTokens;
+            }
+
+            if (event.type === "message_delta") {
+              outputTokens = event.usage.output_tokens ?? outputTokens;
+            }
+
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              const text = event.delta.text;
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
               );
             }
           }
 
-          // Log usage after stream completes
-          const finalResponse = await result.response;
-          const usage = finalResponse.usageMetadata;
           void supabaseAdmin.from("ai_coach_logs").insert({
             student_id: user.id,
-            input_tokens: usage?.promptTokenCount ?? 0,
-            output_tokens: usage?.candidatesTokenCount ?? 0,
-            model: "gemini-2.0-flash",
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            model: AI_MODEL,
           });
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch (err) {
-          console.error("Gemini stream error:", err);
+          console.error("Claude stream error:", err);
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`
