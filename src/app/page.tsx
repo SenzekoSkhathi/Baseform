@@ -56,7 +56,7 @@ export default function Home() {
         }
 
         if (Array.isArray(payload?.homeStats)) {
-          const parsed = payload.homeStats
+          const parsed = (payload.homeStats as unknown[])
             .map((entry: unknown) => {
               const row = entry as Record<string, unknown>;
               const iconRaw = String(row.icon ?? "");
@@ -68,7 +68,7 @@ export default function Home() {
                 color: String(row.color ?? "text-orange-500"),
               };
             })
-            .filter((item): item is HomeStat => Boolean(item?.value && item?.label));
+            .filter((item: HomeStat | null): item is HomeStat => Boolean(item?.value && item?.label));
 
           if (parsed.length > 0) setStats(parsed);
         }
