@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ChevronLeft, ExternalLink, Search, Trophy, Bookmark, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ExternalLink, Search, Trophy, Bookmark } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Bursary = {
@@ -25,7 +25,7 @@ type Bursary = {
   is_active?: boolean;
 };
 
-type TrackStatus = "saved" | "applied";
+type TrackStatus = "saved";
 
 type TrackedBursary = {
   bursary_id: string;
@@ -104,7 +104,12 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
 
   // Keyed by bursary_id for O(1) lookups
   const [trackedMap, setTrackedMap] = useState<Record<string, TrackedBursary>>(() =>
-    Object.fromEntries(initialTracked.map((t) => [t.bursary_id, t]))
+    Object.fromEntries(
+      initialTracked.map((t) => [
+        t.bursary_id,
+        { ...t, status: "saved" as TrackStatus },
+      ])
+    )
   );
 
   function handleBack() {
@@ -211,7 +216,6 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
     [searched, trackedMap]
   );
 
-  const appliedCount = Object.values(trackedMap).filter((item) => item.status === "applied").length;
   const savedCount = Object.values(trackedMap).filter((item) => item.status === "saved").length;
 
   const activeList = mode === "discover" ? searched : trackedList;
@@ -235,7 +239,7 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
 
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Bursaries</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">
-            Discover bursaries, apply, and keep track of what you have already submitted.
+            Discover bursaries and keep track of what you have already saved.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -246,7 +250,7 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
             <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600">{bursaries.length} matched</span>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
               <p className="text-xs text-gray-400">Matched</p>
               <p className="mt-0.5 text-2xl font-black text-gray-900">{bursaries.length}</p>
@@ -254,10 +258,6 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
             <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
               <p className="text-xs text-gray-400">Saved</p>
               <p className="mt-0.5 text-2xl font-black text-amber-600">{savedCount}</p>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 col-span-2 sm:col-span-1">
-              <p className="text-xs text-gray-400">Applied</p>
-              <p className="mt-0.5 text-2xl font-black text-green-600">{appliedCount}</p>
             </div>
           </div>
         </header>
@@ -307,7 +307,7 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                 <p className="mt-1 text-sm text-gray-400">
                   {mode === "discover"
                     ? "Try adjusting your profile details to unlock more matches."
-                    : "Save or apply to bursaries to track them here."}
+                    : "Save bursaries to track them here."}
                 </p>
               </div>
             ) : (
@@ -386,31 +386,6 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                           <ExternalLink size={14} />
                           View source
                         </a>
-                      )}
-
-                      {!tracked || tracked.status === "saved" ? (
-                        <button
-                          onClick={() => {
-                            updateTracked(bursary.id, bursary.name, "applied");
-                            const applyTarget = bursary.applicationWebsite ?? bursary.sourceWebsite;
-                            if (applyTarget) window.open(applyTarget, "_blank", "noopener,noreferrer");
-                          }}
-                          disabled={isPending}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60"
-                        >
-                          <CheckCircle2 size={14} />
-                          Apply now
-                        </button>
-                      ) : null}
-
-                      {tracked?.status === "applied" && (
-                        <button
-                          onClick={() => updateTracked(bursary.id, bursary.name, "saved")}
-                          disabled={isPending}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          Mark as saved
-                        </button>
                       )}
 
                       {!tracked && (
