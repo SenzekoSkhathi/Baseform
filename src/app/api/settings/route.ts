@@ -8,6 +8,13 @@ type Preferences = {
   weeklySummary: boolean;
 };
 
+type AccountSettings = {
+  fullName: string;
+  phone: string;
+  province: string;
+  fieldOfInterest: string;
+};
+
 type NotificationPrefsRow = {
   deadline_alerts: boolean;
   status_updates: boolean;
@@ -25,6 +32,25 @@ const DEFAULT_NOTIFICATION_PREFS: NotificationPrefsRow = {
   status_updates: true,
   weekly_summary: false,
 };
+
+const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
+  fullName: "",
+  phone: "",
+  province: "",
+  fieldOfInterest: "",
+};
+
+const PROVINCES = new Set([
+  "Gauteng",
+  "Western Cape",
+  "Eastern Cape",
+  "KwaZulu-Natal",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Free State",
+  "Northern Cape",
+]);
 
 function normalizePreferences(value: unknown): Preferences {
   const candidate = typeof value === "object" && value !== null ? (value as Partial<Preferences>) : {};
@@ -60,6 +86,40 @@ function toDbPreferences(ui: Preferences): NotificationPrefsRow {
   };
 }
 
+function clampString(value: unknown, maxLen: number): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLen);
+}
+
+function normalizeAccount(value: unknown): AccountSettings {
+  const candidate = typeof value === "object" && value !== null ? (value as Partial<AccountSettings>) : {};
+  const province = clampString(candidate.province, 40);
+
+  return {
+    fullName: clampString(candidate.fullName, 120),
+    phone: clampString(candidate.phone, 20),
+    province: PROVINCES.has(province) ? province : "",
+    fieldOfInterest: clampString(candidate.fieldOfInterest, 80),
+  };
+}
+
+function toUiAccount(value: {
+  full_name?: unknown;
+  phone?: unknown;
+  province?: unknown;
+  field_of_interest?: unknown;
+} | null): AccountSettings {
+  return {
+    fullName: typeof value?.full_name === "string" ? value.full_name : DEFAULT_ACCOUNT_SETTINGS.fullName,
+    phone: typeof value?.phone === "string" ? value.phone : DEFAULT_ACCOUNT_SETTINGS.phone,
+    province: typeof value?.province === "string" ? value.province : DEFAULT_ACCOUNT_SETTINGS.province,
+    fieldOfInterest:
+      typeof value?.field_of_interest === "string"
+        ? value.field_of_interest
+        : DEFAULT_ACCOUNT_SETTINGS.fieldOfInterest,
+  };
+}
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -71,7 +131,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("profiles")
-    .select("notification_prefs, preferences")
+    .select("notification_prefs, preferences, full_name, phone, province, field_of_interest")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -80,12 +140,18 @@ export async function GET() {
   const fromNotificationPrefs = normalizeNotificationPrefs((data as { notification_prefs?: unknown } | null)?.notification_prefs);
   const fromLegacyPrefs = normalizePreferences((data as { preferences?: unknown } | null)?.preferences);
 
-  // Prefer new storage column when available; fallback preserves existing saved values.
-  const resolved: Preferences = (data as { notification_prefs?: unknown } | null)?.notification_prefs
+  const preferences: Preferences = (data as { notification_prefs?: unknown } | null)?.notification_prefs
     ? toUiPreferences(fromNotificationPrefs)
     : fromLegacyPrefs;
 
-  return NextResponse.json({ preferences: resolved });
+  const account = toUiAccount(data as {
+    full_name?: unknown;
+    phone?: unknown;
+    province?: unknown;
+    field_of_interest?: unknown;
+  } | null);
+
+  return NextResponse.json({ preferences, account });
 }
 
 export async function PATCH(req: Request) {
@@ -97,16 +163,37 @@ export async function PATCH(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const preferences = normalizePreferences(body?.preferences);
-  const notificationPrefs = toDbPreferences(preferences);
+  const hasPreferences = typeof body?.preferences === "object" && body.preferences !== null;
+  const hasAccount = typeof body?.account === "object" && body.account !== null;
+
+  if (!hasPreferences && !hasAccount) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+  let preferences: Preferences | null = null;
+  let account: AccountSettings | null = null;
+
+  if (hasPreferences) {
+    preferences = normalizePreferences(body.preferences);
+    updatePayload.notification_prefs = toDbPreferences(preferences);
+  }
+
+  if (hasAccount) {
+    account = normalizeAccount(body.account);
+    updatePayload.full_name = account.fullName || null;
+    updatePayload.phone = account.phone || null;
+    updatePayload.province = account.province || null;
+    updatePayload.field_of_interest = account.fieldOfInterest || null;
+  }
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("profiles")
-    .update({ notification_prefs: notificationPrefs })
+    .update(updatePayload)
     .eq("id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, preferences });
+  return NextResponse.json({ ok: true, preferences, account });
 }
