@@ -74,6 +74,17 @@ function MarkBadge({ mark }: { mark: number }) {
   );
 }
 
+function formatTierName(tier?: string | null): string {
+  const value = String(tier ?? "free").trim().toLowerCase();
+  if (value === "free") return "Free";
+  if (value === "essential") return "Essential";
+  if (value === "pro") return "Pro";
+  if (value === "ultra") return "Ultra";
+  if (value === "admin") return "Admin";
+  if (value === "disabled") return "Disabled";
+  return "Free";
+}
+
 function ShareButton() {
   const [state, setState] = useState<"idle" | "loading" | "copied">("idle");
 
@@ -484,7 +495,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
                   </p>
                 ) : null}
                 <span className="mt-2 inline-flex rounded-full bg-orange-50 px-2.5 py-0.5 text-[11px] font-bold capitalize text-orange-600">
-                  {displayProfile?.tier ?? "Free"} Plan
+                  {formatTierName(displayProfile?.tier)} Plan
                 </span>
               </div>
             </div>

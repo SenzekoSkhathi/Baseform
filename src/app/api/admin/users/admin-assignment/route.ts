@@ -11,9 +11,9 @@ function normalizeAction(value: unknown): AdminAssignmentAction | null {
   return null;
 }
 
-function normalizeTier(value: unknown): "free" | "pro" | "disabled" {
+function normalizeTier(value: unknown): "free" | "essential" | "pro" | "ultra" | "disabled" {
   const tier = String(value ?? "free").trim().toLowerCase();
-  if (tier === "pro" || tier === "disabled") return tier;
+  if (tier === "essential" || tier === "pro" || tier === "ultra" || tier === "disabled") return tier;
   return "free";
 }
 

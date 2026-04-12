@@ -1,6 +1,6 @@
 import type { AdminUser, SortDirection } from "../types";
 
-type UserSortKey = "full_name" | "email" | "tier";
+type UserSortKey = "full_name" | "email" | "tier" | "created_at";
 
 type UserManagementSectionProps = {
   userQuery: string;
@@ -70,10 +70,11 @@ export function UserManagementSection(props: UserManagementSectionProps) {
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900"
         >
           <option value="all">All tiers</option>
-          <option value="free">free</option>
-          <option value="pro">pro</option>
-          <option value="admin">admin</option>
-          <option value="disabled">disabled</option>
+          <option value="free">Free</option>
+          <option value="essential">Essential</option>
+          <option value="pro">Pro</option>
+          <option value="ultra">Ultra</option>
+          <option value="admin">Admin</option>
         </select>
       </div>
 
@@ -131,10 +132,11 @@ export function UserManagementSection(props: UserManagementSectionProps) {
                     onChange={(e) => props.onDraftTierChange(user.id, e.target.value)}
                     className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-gray-900"
                   >
-                    <option value="free">free</option>
-                    <option value="pro">pro</option>
-                    <option value="admin">admin</option>
-                    <option value="disabled">disabled</option>
+                    <option value="free">Free</option>
+                    <option value="essential">Essential</option>
+                    <option value="pro">Pro</option>
+                    <option value="ultra">Ultra</option>
+                    <option value="admin">Admin</option>
                   </select>
                 </td>
                 <td className="px-2 py-2">

@@ -73,9 +73,6 @@ export default function AdminClient() {
     tierFilter,
     setTierFilter,
     userPage,
-    userCursorStack,
-    userNextCursor,
-    setUserNextCursor,
     userHasMore,
     setUserHasMore,
     buildUserQueryParams,
@@ -244,7 +241,10 @@ export default function AdminClient() {
   async function loadUsers() {
     setUserLoading(true);
     try {
-      const params = buildUserQueryParams();
+      const params = buildUserQueryParams(
+        userSort.key as "full_name" | "email" | "tier" | "created_at",
+        userSort.direction
+      );
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const payload = (await readJsonSafe(res)) as UserPageResponse;
       setUsers(payload.items);
@@ -256,7 +256,6 @@ export default function AdminClient() {
         return next;
       });
       setUserHasMore(payload.hasMore);
-      setUserNextCursor(payload.nextCursor);
     } catch (error) {
       pushToast("error", error instanceof Error ? error.message : "Could not load users");
     } finally {
@@ -267,11 +266,11 @@ export default function AdminClient() {
   useEffect(() => {
     resetUserPaging();
     setSelectedUserIds([]);
-  }, [userQuery, tierFilter, resetUserPaging]);
+  }, [userQuery, tierFilter, userSort, resetUserPaging]);
 
   useEffect(() => {
     void loadUsers();
-  }, [userQuery, tierFilter, userCursorStack]);
+  }, [userQuery, tierFilter, userPage, userSort]);
 
   useEffect(() => {
     if (!metrics?.alertThresholds) return;
@@ -1147,7 +1146,7 @@ export default function AdminClient() {
           onToggleSelectOne={(userId, checked) => setSelectedUserIds((prev) => checked ? [...prev, userId] : prev.filter((id) => id !== userId))}
           onBulkDisable={bulkDisableUsers}
           isBulkDisableDisabled={saving === "users-bulk-disable" || selectedUserIds.length === 0}
-          userSortKey={userSort.key as "full_name" | "email" | "tier"}
+          userSortKey={userSort.key as "full_name" | "email" | "tier" | "created_at"}
           userSortDirection={userSort.direction}
           onSortByName={() => toggleSort<AdminUser>(setUserSort, userSort, "full_name")}
           onSortByEmail={() => toggleSort<AdminUser>(setUserSort, userSort, "email")}

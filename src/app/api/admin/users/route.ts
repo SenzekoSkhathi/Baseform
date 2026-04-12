@@ -3,10 +3,18 @@ import { requireAdminGuard } from "@/lib/admin/auth";
 import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
-function parseCursor(value: string | null): string | null {
-  if (!value) return null;
-  const createdAt = decodeURIComponent(value);
-  return createdAt || null;
+const USER_SORT_KEYS = ["full_name", "email", "tier", "created_at"] as const;
+type UserSortKey = (typeof USER_SORT_KEYS)[number];
+type UserSortDirection = "asc" | "desc";
+
+function parseSortKey(value: string | null): UserSortKey {
+  if (!value) return "created_at";
+  return USER_SORT_KEYS.includes(value as UserSortKey) ? (value as UserSortKey) : "created_at";
+}
+
+function parseSortDirection(value: string | null, sortKey: UserSortKey): UserSortDirection {
+  if (value === "asc" || value === "desc") return value;
+  return sortKey === "created_at" ? "desc" : "asc";
 }
 
 function escapeLike(value: string): string {
@@ -20,18 +28,24 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 10), 1), 100);
-  const cursor = parseCursor(url.searchParams.get("cursor"));
+  const pageRaw = Number(url.searchParams.get("page") ?? 1);
+  const pageNumber = Number.isFinite(pageRaw) ? Math.max(Math.floor(pageRaw), 1) : 1;
   const queryText = url.searchParams.get("q")?.trim() || "";
   const tier = url.searchParams.get("tier")?.trim() || "all";
+  const sortKey = parseSortKey(url.searchParams.get("sortKey"));
+  const sortDirection = parseSortDirection(url.searchParams.get("sortDirection"), sortKey);
+  const ascending = sortDirection === "asc";
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit;
 
   let query = admin
     .from("profiles")
     .select("id,full_name,tier,created_at,email")
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(limit + 1);
+    .order(sortKey, { ascending, nullsFirst: !ascending })
+    .order("id", { ascending })
+    .range(from, to);
 
-  if (tier === "free" || tier === "pro" || tier === "admin" || tier === "disabled") {
+  if (tier === "free" || tier === "essential" || tier === "pro" || tier === "ultra" || tier === "admin" || tier === "disabled") {
     query = query.eq("tier", tier);
   }
 
@@ -40,22 +54,15 @@ export async function GET(req: Request) {
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
   }
 
-  if (cursor) {
-    query = query.lt("created_at", cursor);
-  }
-
   const { data: profiles, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const hasMore = (profiles?.length ?? 0) > limit;
-  const page = hasMore ? (profiles ?? []).slice(0, limit) : profiles ?? [];
-  const nextCursor = hasMore && page.length > 0
-    ? `${encodeURIComponent(page[page.length - 1].created_at ?? "")}`
-    : null;
+  const pageItems = hasMore ? (profiles ?? []).slice(0, limit) : profiles ?? [];
 
   return NextResponse.json(
     {
-      items: page.map((profile) => ({
+      items: pageItems.map((profile) => ({
       id: profile.id,
       full_name: profile.full_name,
       tier: profile.tier,
@@ -63,7 +70,7 @@ export async function GET(req: Request) {
       email: profile.email ?? "",
     })),
       hasMore,
-      nextCursor,
+      nextCursor: null,
     }
   );
 }
@@ -82,7 +89,7 @@ export async function PATCH(req: Request) {
   }
 
   const normalizedTier = String(tier).trim().toLowerCase();
-  if (!["free", "pro", "disabled"].includes(normalizedTier)) {
+  if (!["free", "essential", "pro", "ultra", "disabled"].includes(normalizedTier)) {
     return NextResponse.json(
       { error: "Invalid tier for this endpoint. Use the admin assignment workflow for admin tier changes." },
       { status: 400 }

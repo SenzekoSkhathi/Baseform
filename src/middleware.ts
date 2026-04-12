@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { hasAdminAccess } from "@/lib/admin/access";
 
 const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin"];
 const AUTH_PAGES = ["/login", "/signup"];
@@ -61,7 +60,11 @@ export async function middleware(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!hasAdminAccess({ email: user.email, role: user.user_metadata?.role, tier: profile?.tier })) {
+    const tier = String(profile?.tier ?? "").trim().toLowerCase();
+    const appRole = String(user.app_metadata?.role ?? "").trim().toLowerCase();
+    const appTier = String(user.app_metadata?.tier ?? "").trim().toLowerCase();
+
+    if (tier !== "admin" && appRole !== "admin" && appTier !== "admin") {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

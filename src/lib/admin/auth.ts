@@ -1,9 +1,24 @@
 import { createClient } from "@/lib/supabase/server";
-import { hasAdminAccess } from "@/lib/admin/access";
 
 export type AdminGuardResult =
   | { ok: true; userId: string; email: string | null }
   | { ok: false; status: 401 | 403; error: string };
+
+type AdminDecisionInput = {
+  profileTier?: string | null;
+  appMetadata?: {
+    role?: string | null;
+    tier?: string | null;
+  } | null;
+};
+
+export function hasServerAuthoritativeAdminAccess(input: AdminDecisionInput) {
+  const tier = String(input.profileTier ?? "").trim().toLowerCase();
+  const appRole = String(input.appMetadata?.role ?? "").trim().toLowerCase();
+  const appTier = String(input.appMetadata?.tier ?? "").trim().toLowerCase();
+
+  return tier === "admin" || appRole === "admin" || appTier === "admin";
+}
 
 export async function requireAdminGuard(): Promise<AdminGuardResult> {
   const supabase = await createClient();
@@ -19,7 +34,12 @@ export async function requireAdminGuard(): Promise<AdminGuardResult> {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!hasAdminAccess({ email: user.email, role: user.user_metadata?.role, tier: profile?.tier })) {
+  if (
+    !hasServerAuthoritativeAdminAccess({
+      profileTier: profile?.tier,
+      appMetadata: user.app_metadata,
+    })
+  ) {
     return { ok: false, status: 403, error: "Forbidden" };
   }
 

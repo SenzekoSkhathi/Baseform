@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
-import { hasAdminAccess } from "@/lib/admin/access";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,11 +51,12 @@ export default function LoginPage() {
         .eq("id", signedInUser.id);
     }
 
-    router.push(
-      hasAdminAccess({ email: signedInUser?.email ?? email, role: signedInUser?.user_metadata?.role, tier: profile?.tier })
-        ? "/admin"
-        : "/dashboard"
-    );
+    const tier = String(profile?.tier ?? "").trim().toLowerCase();
+    const appRole = String(signedInUser?.app_metadata?.role ?? "").trim().toLowerCase();
+    const appTier = String(signedInUser?.app_metadata?.tier ?? "").trim().toLowerCase();
+    const isAdmin = tier === "admin" || appRole === "admin" || appTier === "admin";
+
+    router.push(isAdmin ? "/admin" : "/dashboard");
   }
 
   return (
