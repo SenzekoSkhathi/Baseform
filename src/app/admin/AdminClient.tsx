@@ -264,6 +264,7 @@ export default function AdminClient() {
   const [userLoading, setUserLoading] = useState(true);
   const [userSort, setUserSort] = useState<{ key: keyof AdminUser; direction: SortDirection }>({ key: "created_at", direction: "desc" });
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [userOriginalTierById, setUserOriginalTierById] = useState<Record<string, string>>({});
 
   const [uniQuery, setUniQuery] = useState("");
   const [uniPage, setUniPage] = useState(1);
@@ -437,6 +438,13 @@ export default function AdminClient() {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const payload = (await readJsonSafe(res)) as UserPageResponse;
       setUsers(payload.items);
+      setUserOriginalTierById((prev) => {
+        const next = { ...prev };
+        payload.items.forEach((user) => {
+          next[user.id] = String(user.tier ?? "free").toLowerCase();
+        });
+        return next;
+      });
       setUserHasMore(payload.hasMore);
       setUserNextCursor(payload.nextCursor);
     } catch (error) {
@@ -664,16 +672,40 @@ export default function AdminClient() {
     }
   }
 
-  async function updateUserTier(userId: string, tier: string) {
+  async function updateUserTier(userId: string, tier: string, originalTier: string) {
     setSaving(`user-${userId}`);
     try {
-      const res = await fetch("/api/admin/users", {
+      const nextTier = String(tier ?? "").trim().toLowerCase();
+      const currentTier = String(originalTier ?? "free").trim().toLowerCase();
+
+      let endpoint = "/api/admin/users";
+      let payload: Record<string, unknown> = { userId, tier: nextTier };
+
+      if (nextTier === "admin") {
+        const reason = window.prompt("Reason for granting admin access:", "")?.trim();
+        if (!reason) throw new Error("Admin assignment requires a reason.");
+        endpoint = "/api/admin/users/admin-assignment";
+        payload = { userId, action: "grant", reason };
+      } else if (currentTier === "admin" && nextTier !== "admin") {
+        const reason = window.prompt("Reason for revoking admin access:", "")?.trim();
+        if (!reason) throw new Error("Admin revocation requires a reason.");
+        endpoint = "/api/admin/users/admin-assignment";
+        payload = { userId, action: "revoke", reason, revokeToTier: nextTier };
+      }
+
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, tier }),
+        body: JSON.stringify(payload),
       });
       await readJsonSafe(res);
-      pushToast("success", "User tier updated.");
+      if (nextTier === "admin") {
+        pushToast("success", "Admin access granted.");
+      } else if (currentTier === "admin" && nextTier !== "admin") {
+        pushToast("success", "Admin access revoked.");
+      } else {
+        pushToast("success", "User tier updated.");
+      }
       await loadUsers();
     } catch (error) {
       pushToast("error", error instanceof Error ? error.message : "Could not update user");
@@ -684,6 +716,13 @@ export default function AdminClient() {
 
   async function bulkDisableUsers() {
     if (selectedUserIds.length === 0) return;
+
+    const selectedAdminIds = selectedUserIds.filter((id) => userOriginalTierById[id] === "admin");
+    if (selectedAdminIds.length > 0) {
+      pushToast("error", "Bulk disable does not support admin users. Revoke admin access individually with a reason first.");
+      return;
+    }
+
     if (!window.confirm(`Disable ${selectedUserIds.length} selected user(s)?`)) return;
 
     setSaving("users-bulk-disable");
@@ -1634,8 +1673,8 @@ export default function AdminClient() {
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex gap-1">
-                        <button type="button" onClick={() => updateUserTier(user.id, user.tier ?? "free")} disabled={saving === `user-${user.id}`} className="rounded-lg bg-orange-500 px-2 py-1 text-white disabled:opacity-50">Save</button>
-                        <button type="button" onClick={() => updateUserTier(user.id, "disabled")} disabled={saving === `user-${user.id}`} className="rounded-lg bg-red-600 px-2 py-1 text-white disabled:opacity-50">Disable</button>
+                        <button type="button" onClick={() => updateUserTier(user.id, user.tier ?? "free", userOriginalTierById[user.id] ?? (user.tier ?? "free"))} disabled={saving === `user-${user.id}`} className="rounded-lg bg-orange-500 px-2 py-1 text-white disabled:opacity-50">Save</button>
+                        <button type="button" onClick={() => updateUserTier(user.id, "disabled", userOriginalTierById[user.id] ?? (user.tier ?? "free"))} disabled={saving === `user-${user.id}`} className="rounded-lg bg-red-600 px-2 py-1 text-white disabled:opacity-50">Disable</button>
                       </div>
                     </td>
                   </tr>

@@ -1,5 +1,3 @@
-const SPECIAL_ADMIN_EMAILS = ["senzeko.admin@baseform.com"];
-
 type AdminAccessInput = {
   email?: string | null;
   role?: string | null;
@@ -7,9 +5,9 @@ type AdminAccessInput = {
 };
 
 export function hasAdminAccess(input: AdminAccessInput) {
-  const email = String(input.email ?? "").trim().toLowerCase();
   const role = String(input.role ?? "").trim().toLowerCase();
   const tier = String(input.tier ?? "").trim().toLowerCase();
 
-  return role === "admin" || tier === "admin" || SPECIAL_ADMIN_EMAILS.includes(email);
+  if (tier === "disabled") return false;
+  return role === "admin" || tier === "admin";
 }

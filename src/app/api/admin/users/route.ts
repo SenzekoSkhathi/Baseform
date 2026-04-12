@@ -81,6 +81,14 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "You cannot disable your own account." }, { status: 400 });
   }
 
+  const normalizedTier = String(tier).trim().toLowerCase();
+  if (!["free", "pro", "disabled"].includes(normalizedTier)) {
+    return NextResponse.json(
+      { error: "Invalid tier for this endpoint. Use the admin assignment workflow for admin tier changes." },
+      { status: 400 }
+    );
+  }
+
   const admin = createAdminClient();
   const { data: before, error: existingError } = await admin
     .from("profiles")
@@ -89,8 +97,16 @@ export async function PATCH(req: Request) {
     .maybeSingle();
 
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+  if (!before) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const { error } = await admin.from("profiles").update({ tier }).eq("id", String(userId));
+  if (String(before.tier ?? "").toLowerCase() === "admin") {
+    return NextResponse.json(
+      { error: "Admin tier revocation must use the admin assignment workflow with a reason." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await admin.from("profiles").update({ tier: normalizedTier }).eq("id", String(userId));
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -98,8 +114,8 @@ export async function PATCH(req: Request) {
     entityType: "user",
     entityKey: String(userId),
     action: "update",
-    beforeData: before ?? null,
-    afterData: { ...(before ?? {}), tier },
+    beforeData: before,
+    afterData: { ...before, tier: normalizedTier },
   });
 
   return NextResponse.json({ success: true });
