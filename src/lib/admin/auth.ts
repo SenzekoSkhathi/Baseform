@@ -6,16 +6,19 @@ export type AdminGuardResult =
 
 type AdminDecisionInput = {
   profileTier?: string | null;
-  appMetadata?: {
-    role?: string | null;
-    tier?: string | null;
-  } | null;
+  appMetadata?: unknown;
 };
+
+function readAdminMetadataField(metadata: unknown, field: "role" | "tier") {
+  if (!metadata || typeof metadata !== "object") return "";
+  const value = (metadata as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}
 
 export function hasServerAuthoritativeAdminAccess(input: AdminDecisionInput) {
   const tier = String(input.profileTier ?? "").trim().toLowerCase();
-  const appRole = String(input.appMetadata?.role ?? "").trim().toLowerCase();
-  const appTier = String(input.appMetadata?.tier ?? "").trim().toLowerCase();
+  const appRole = readAdminMetadataField(input.appMetadata, "role").trim().toLowerCase();
+  const appTier = readAdminMetadataField(input.appMetadata, "tier").trim().toLowerCase();
 
   return tier === "admin" || appRole === "admin" || appTier === "admin";
 }
