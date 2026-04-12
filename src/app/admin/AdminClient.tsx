@@ -1248,7 +1248,7 @@ export default function AdminClient() {
                 <input type="number" className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.minimum_aps ?? 0} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, minimum_aps: Number(e.target.value) } : b)))} />
                 <div className="flex gap-1">
                   <button type="button" onClick={() => saveBursary(bursary)} disabled={saving === `burs-${bursary.id}`} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Save</button>
-                  <button type="button" onClick={() => deleteBursary(bursary.id, bursary.name)} disabled={saving === `burs-del-${bursary.id}`} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete</button>
+                  <button type="button" onClick={() => deleteBursary(bursary.id, bursary.title)} disabled={saving === `burs-del-${bursary.id}`} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete</button>
                 </div>
               </div>
             ))}
