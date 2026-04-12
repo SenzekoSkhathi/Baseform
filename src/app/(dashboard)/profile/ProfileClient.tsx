@@ -85,24 +85,36 @@ function formatTierName(tier?: string | null): string {
   return "Free";
 }
 
-function ShareButton() {
-  const [state, setState] = useState<"idle" | "loading" | "copied">("idle");
+function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; fullName: string }) {
+  const [state, setState] = useState<"idle" | "loading">("idle");
 
   async function handleShare() {
     setState("loading");
     try {
-      const res = await fetch("/api/share");
-      if (!res.ok) throw new Error();
-      const { token } = await res.json();
-      const url = `${window.location.origin}/share/${token}`;
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "My APS Card — Baseform", url }).catch(() => {});
-        setState("idle");
-      } else {
-        await navigator.clipboard.writeText(url);
-        setState("copied");
-        setTimeout(() => setState("idle"), 2000);
-      }
+      // Build query params for the image endpoint
+      const params = new URLSearchParams({
+        aps: String(aps),
+        rating,
+        submitted: "0",
+        pending: "0",
+      });
+
+      // Fetch the image
+      const response = await fetch(`/api/share/card-image?${params}`);
+      if (!response.ok) throw new Error("Failed to generate image");
+
+      // Convert to blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "aps-card.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      setState("idle");
     } catch {
       setState("idle");
     }
@@ -114,8 +126,17 @@ function ShareButton() {
       disabled={state === "loading"}
       className="inline-flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-60"
     >
-      {state === "copied" ? <Check size={12} className="text-green-600" /> : <Share2 size={12} />}
-      {state === "copied" ? "Link copied!" : state === "loading" ? "Loading…" : "Share APS card"}
+      {state === "loading" ? (
+        <>
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-orange-700 border-t-transparent" />
+          Generating…
+        </>
+      ) : (
+        <>
+          <Share2 size={12} />
+          Download APS card
+        </>
+      )}
     </button>
   );
 }
@@ -525,7 +546,7 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
 
           {/* Share APS card + Invite guardian */}
           <div className="mt-4 flex flex-wrap gap-2">
-            <ShareButton />
+            <ShareButton aps={aps} rating={rating} fullName={displayProfile?.full_name || ""} />
             <InviteGuardianButton hasGuardianEmail={!!displayProfile?.guardian_email} />
           </div>
 

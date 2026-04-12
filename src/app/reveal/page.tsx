@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
-import { GraduationCap, Trophy, Clock, ArrowRight, Sparkles, ChevronLeft, Share2, Copy, Check } from "lucide-react";
+import { GraduationCap, Trophy, Clock, ArrowRight, Sparkles, ChevronLeft, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type RevealStats = {
@@ -26,7 +26,7 @@ function RevealContent() {
 
   const [gradeYear, setGradeYear] = useState<string | null>(null);
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [stats, setStats] = useState<RevealStats | null>(null);
 
   useEffect(() => {
@@ -43,12 +43,36 @@ function RevealContent() {
       .catch(() => {});
   }, []);
 
-  async function copyShareLink() {
-    if (!shareToken) return;
-    const url = `${window.location.origin}/share/${shareToken}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function downloadApsCard() {
+    setDownloading(true);
+    try {
+      // Build query params for the image endpoint
+      const params = new URLSearchParams({
+        aps: String(aps),
+        rating,
+        submitted: "0",
+        pending: "0",
+      });
+
+      // Fetch the image
+      const response = await fetch(`/api/share/card-image?${params}`);
+      if (!response.ok) throw new Error("Failed to generate image");
+
+      // Convert to blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "aps-card.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download APS card:", error);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   useEffect(() => {
@@ -270,11 +294,21 @@ function RevealContent() {
 
           {shareToken && (
             <button
-              onClick={copyShareLink}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              onClick={downloadApsCard}
+              disabled={downloading}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {copied ? <Check size={15} className="text-green-500" /> : <Share2 size={15} />}
-              {copied ? "Link copied!" : "Share your APS card"}
+              {downloading ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Share2 size={15} />
+                  Download your APS card
+                </>
+              )}
             </button>
           )}
         </div>
