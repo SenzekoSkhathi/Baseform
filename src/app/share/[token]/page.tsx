@@ -24,19 +24,24 @@ export default async function SharePage({
     .select("subject_name, mark")
     .eq("profile_id", profile.id);
 
+  const subjectNames = (subjects ?? [])
+    .map((s) => s.subject_name?.trim())
+    .filter((name): name is string => Boolean(name));
+
   const aps = subjects?.length
     ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
-  const firstName = (profile.full_name ?? "").trim().split(" ")[0] || "A student";
+  const fullName = (profile.full_name ?? "").trim() || "A student";
 
   return (
     <ShareCardClient
-      firstName={firstName}
+      fullName={fullName}
       aps={aps}
       rating={apsRating(aps)}
       school={profile.school_name ?? null}
       gradeYear={profile.grade_year ?? null}
+      subjects={subjectNames}
       shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za"}/share/${token}`}
     />
   );
