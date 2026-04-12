@@ -96,7 +96,7 @@ export default function AdminClient() {
 
   const [bursQuery, setBursQuery] = useState("");
   const [bursPage, setBursPage] = useState(1);
-  const [bursSort, setBursSort] = useState<{ key: keyof Bursary; direction: SortDirection }>({ key: "name", direction: "asc" });
+  const [bursSort, setBursSort] = useState<{ key: keyof Bursary; direction: SortDirection }>({ key: "title", direction: "asc" });
   const [selectedBursaryIds, setSelectedBursaryIds] = useState<string[]>([]);
 
   const [planQuery, setPlanQuery] = useState("");
@@ -140,13 +140,12 @@ export default function AdminClient() {
   });
 
   const [newBursary, setNewBursary] = useState({
-    name: "",
-    sponsor: "",
+    title: "",
+    provider: "",
     minimum_aps: "",
-    amount_min: "",
-    amount_max: "",
+    amount_per_year: "",
     closing_date: "",
-    website: "",
+    application_url: "",
     fields_of_study: "",
     is_active: true,
   });
@@ -411,7 +410,7 @@ export default function AdminClient() {
     const q = bursQuery.trim().toLowerCase();
     const base = bursaries.filter((b) => {
       if (!q) return true;
-      return b.name.toLowerCase().includes(q) || (b.sponsor ?? "").toLowerCase().includes(q);
+      return b.title.toLowerCase().includes(q) || (b.provider ?? "").toLowerCase().includes(q);
     });
     return sortBy(base, bursSort.key, bursSort.direction);
   }, [bursaries, bursQuery, bursSort]);
@@ -695,14 +694,14 @@ export default function AdminClient() {
   }
 
   async function saveBursary(bursary: Bursary) {
-    if (!bursary.name.trim()) return pushToast("error", "Bursary name is required.");
+    if (!bursary.title.trim()) return pushToast("error", "Bursary title is required.");
 
     setSaving(`burs-${bursary.id}`);
     try {
       const res = await fetch("/api/admin/content/bursaries", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...bursary, id: bursary.id, name: bursary.name.trim() }),
+        body: JSON.stringify({ ...bursary, id: bursary.id, title: bursary.title.trim() }),
       });
       await readJsonSafe(res);
       pushToast("success", "Bursary saved.");
@@ -759,7 +758,7 @@ export default function AdminClient() {
   }
 
   async function addBursary() {
-    if (!newBursary.name.trim()) return pushToast("error", "Bursary name is required.");
+    if (!newBursary.title.trim()) return pushToast("error", "Bursary title is required.");
 
     setSaving("new-burs");
     try {
@@ -767,20 +766,19 @@ export default function AdminClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newBursary.name.trim(),
-          sponsor: newBursary.sponsor || null,
+          title: newBursary.title.trim(),
+          provider: newBursary.provider || null,
           minimum_aps: newBursary.minimum_aps ? Number(newBursary.minimum_aps) : 0,
-          amount_min: newBursary.amount_min ? Number(newBursary.amount_min) : null,
-          amount_max: newBursary.amount_max ? Number(newBursary.amount_max) : null,
+          amount_per_year: newBursary.amount_per_year ? Number(newBursary.amount_per_year) : null,
           closing_date: newBursary.closing_date || null,
-          website: newBursary.website || null,
-          fields_of_study: newBursary.fields_of_study || null,
+          application_url: newBursary.application_url || null,
+          fields_of_study: newBursary.fields_of_study ? newBursary.fields_of_study.split(',').map(f => f.trim()).filter(Boolean) : [],
           provinces_eligible: ["All"],
           is_active: newBursary.is_active,
         }),
       });
       await readJsonSafe(res);
-      setNewBursary({ name: "", sponsor: "", minimum_aps: "", amount_min: "", amount_max: "", closing_date: "", website: "", fields_of_study: "", is_active: true });
+      setNewBursary({ title: "", provider: "", minimum_aps: "", amount_per_year: "", closing_date: "", application_url: "", fields_of_study: "", is_active: true });
       pushToast("success", "Bursary created.");
       await loadAll();
     } catch (error) {
@@ -1230,11 +1228,11 @@ export default function AdminClient() {
 
         <SectionCard title="Bursaries" subtitle="Add, search, sort, edit, archive, and delete bursaries.">
           <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-5">
-            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Name" value={newBursary.name} onChange={(e) => setNewBursary((p) => ({ ...p, name: e.target.value }))} />
-            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Sponsor" value={newBursary.sponsor} onChange={(e) => setNewBursary((p) => ({ ...p, sponsor: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Title" value={newBursary.title} onChange={(e) => setNewBursary((p) => ({ ...p, title: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Provider" value={newBursary.provider} onChange={(e) => setNewBursary((p) => ({ ...p, provider: e.target.value }))} />
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Min APS" value={newBursary.minimum_aps} onChange={(e) => setNewBursary((p) => ({ ...p, minimum_aps: e.target.value }))} />
-            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Website" value={newBursary.website} onChange={(e) => setNewBursary((p) => ({ ...p, website: e.target.value }))} />
-            <button type="button" onClick={addBursary} disabled={saving === "new-burs" || !newBursary.name.trim()} className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Add bursary</button>
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Amount/Year" value={newBursary.amount_per_year} onChange={(e) => setNewBursary((p) => ({ ...p, amount_per_year: e.target.value }))} />
+            <button type="button" onClick={addBursary} disabled={saving === "new-burs" || !newBursary.title.trim()} className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Add bursary</button>
           </div>
 
           <div className="mt-3"><input value={bursQuery} onChange={(e) => { setBursQuery(e.target.value); setBursPage(1); }} placeholder="Search bursaries" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400" /></div>
@@ -1246,7 +1244,7 @@ export default function AdminClient() {
             {pagedBursaries.items.map((bursary) => (
               <div key={bursary.id} className="grid items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 md:grid-cols-[24px_1fr_90px_160px]">
                 <input type="checkbox" checked={selectedBursaryIds.includes(bursary.id)} onChange={(e) => setSelectedBursaryIds((prev) => e.target.checked ? [...prev, bursary.id] : prev.filter((id) => id !== bursary.id))} />
-                <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.name} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, name: e.target.value } : b)))} />
+                <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.title} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, title: e.target.value } : b)))} />
                 <input type="number" className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.minimum_aps ?? 0} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, minimum_aps: Number(e.target.value) } : b)))} />
                 <div className="flex gap-1">
                   <button type="button" onClick={() => saveBursary(bursary)} disabled={saving === `burs-${bursary.id}`} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Save</button>
@@ -1257,7 +1255,7 @@ export default function AdminClient() {
           </div>
 
           <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-            <SortHeader label="Sort by name" active={bursSort.key === "name"} direction={bursSort.direction} onClick={() => toggleSort<Bursary>(setBursSort, bursSort, "name")} />
+            <SortHeader label="Sort by title" active={bursSort.key === "title"} direction={bursSort.direction} onClick={() => toggleSort<Bursary>(setBursSort, bursSort, "title")} />
             <SortHeader label="Sort by APS" active={bursSort.key === "minimum_aps"} direction={bursSort.direction} onClick={() => toggleSort<Bursary>(setBursSort, bursSort, "minimum_aps")} />
           </div>
 

@@ -169,15 +169,16 @@ export type Programme = {
 
 export type Bursary = {
   id: string;
-  name: string;
-  sponsor: string | null;
+  title: string;
+  provider: string | null;
+  description: string | null;
   minimum_aps: number | null;
-  amount_min: number | null;
-  amount_max: number | null;
+  amount_per_year: number | null;
   closing_date: string | null;
-  website: string | null;
+  application_url: string | null;
   provinces_eligible: string[] | null;
-  fields_of_study: string | null;
+  fields_of_study: string[] | null;
+  requires_financial_need: boolean | null;
   is_active: boolean;
 };
 
