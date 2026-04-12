@@ -91,7 +91,6 @@ function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; f
   async function handleShare() {
     setState("loading");
     try {
-      // Build query params for the image endpoint
       const params = new URLSearchParams({
         aps: String(aps),
         rating,
@@ -99,21 +98,35 @@ function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; f
         pending: "0",
       });
 
-      // Fetch the image
       const response = await fetch(`/api/share/card-image?${params}`);
       if (!response.ok) throw new Error("Failed to generate image");
 
-      // Convert to blob and download
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "aps-card.png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
+      const filename = `${(fullName || "student").trim().replace(/\s+/g, "-").toLowerCase()}-aps-card.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "My APS Card - Baseform",
+          text: "Here is my APS Card from Baseform.",
+          files: [file],
+        });
+      } else if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title: "My APS Card - Baseform",
+          text: "Sharing files is not supported on this browser. Try opening on mobile Chrome/Safari.",
+        });
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+
       setState("idle");
     } catch {
       setState("idle");
@@ -134,7 +147,7 @@ function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; f
       ) : (
         <>
           <Share2 size={12} />
-          Download APS card
+          Share APS card
         </>
       )}
     </button>
