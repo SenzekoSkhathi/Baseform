@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  eslint: {
+    // Temporary safeguard: Next.js build currently fails on an ESLint flat-config circular serialization bug.
+    // Linting is still available via explicit `npm run lint`.
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     // Tree-shake large icon/animation libraries — only ships icons/motion components actually used
     optimizePackageImports: ["lucide-react", "framer-motion"],

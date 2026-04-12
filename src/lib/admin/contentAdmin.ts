@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export const PROTECTED_SITE_SETTING_KEYS = new Set([
   "home_subtitle",
   "home_features",
@@ -13,11 +15,7 @@ export type AdminContentActor = {
 export type AdminContentAuditAction = "create" | "update" | "delete" | "import";
 
 export async function recordAdminContentAudit(
-  admin: {
-    from: (table: string) => {
-      insert: (values: Record<string, unknown> | Record<string, unknown>[]) => Promise<{ error: { message: string } | null }>;
-    };
-  },
+  admin: SupabaseClient,
   actor: AdminContentActor,
   entry: {
     entityType: string;
