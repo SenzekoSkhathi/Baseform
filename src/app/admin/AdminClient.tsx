@@ -143,6 +143,12 @@ type AdminUser = {
   created_at: string | null;
 };
 
+type UserPageResponse = {
+  items: AdminUser[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
 type University = {
   id: string;
   name: string;
@@ -252,6 +258,10 @@ export default function AdminClient() {
   const [userQuery, setUserQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
   const [userPage, setUserPage] = useState(1);
+  const [userCursorStack, setUserCursorStack] = useState<string[]>([]);
+  const [userNextCursor, setUserNextCursor] = useState<string | null>(null);
+  const [userHasMore, setUserHasMore] = useState(false);
+  const [userLoading, setUserLoading] = useState(true);
   const [userSort, setUserSort] = useState<{ key: keyof AdminUser; direction: SortDirection }>({ key: "created_at", direction: "desc" });
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
@@ -344,6 +354,18 @@ export default function AdminClient() {
     return params;
   }
 
+  function buildUserQueryParams() {
+    const params = new URLSearchParams();
+    params.set("limit", String(PAGE_SIZE));
+    if (userQuery.trim()) params.set("q", userQuery.trim());
+    if (tierFilter !== "all") params.set("tier", tierFilter);
+
+    const currentCursor = userCursorStack.at(-1);
+    if (currentCursor) params.set("cursor", currentCursor);
+
+    return params;
+  }
+
   function buildAlertHistoryQueryParams() {
     const params = new URLSearchParams();
     params.set("limit", "12");
@@ -378,9 +400,8 @@ export default function AdminClient() {
     setLoading(true);
     try {
       const metricParams = buildMetricsQueryParams();
-      const [mRes, uRes, uniRes, pRes, bRes, plansRes, settingsRes, historyRes] = await Promise.all([
+      const [mRes, uniRes, pRes, bRes, plansRes, settingsRes, historyRes] = await Promise.all([
         fetch(`/api/admin/metrics?${metricParams.toString()}`),
-        fetch("/api/admin/users"),
         fetch("/api/admin/content/universities"),
         fetch("/api/admin/content/programmes"),
         fetch("/api/admin/content/bursaries"),
@@ -391,7 +412,6 @@ export default function AdminClient() {
       const auditRes = await fetch(`/api/admin/content/audit?${buildContentAuditQueryParams().toString()}`);
 
       setMetrics((await readJsonSafe(mRes)) as MetricsResponse);
-      setUsers((await readJsonSafe(uRes)) as AdminUser[]);
       setUniversities((await readJsonSafe(uniRes)) as University[]);
       setProgrammes((await readJsonSafe(pRes)) as Programme[]);
       setBursaries((await readJsonSafe(bRes)) as Bursary[]);
@@ -409,6 +429,32 @@ export default function AdminClient() {
   useEffect(() => {
     loadAll();
   }, [rangePreset, appliedCustomFrom, appliedCustomTo, alertHistorySeverity, alertHistoryKey, alertHistoryFrom, alertHistoryTo, contentAuditEntityType, contentAuditAction, contentAuditFrom, contentAuditTo]);
+
+  async function loadUsers() {
+    setUserLoading(true);
+    try {
+      const params = buildUserQueryParams();
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const payload = (await readJsonSafe(res)) as UserPageResponse;
+      setUsers(payload.items);
+      setUserHasMore(payload.hasMore);
+      setUserNextCursor(payload.nextCursor);
+    } catch (error) {
+      pushToast("error", error instanceof Error ? error.message : "Could not load users");
+    } finally {
+      setUserLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setUserPage(1);
+    setUserCursorStack([]);
+    setSelectedUserIds([]);
+  }, [userQuery, tierFilter]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [userQuery, tierFilter, userCursorStack]);
 
   useEffect(() => {
     if (!metrics?.alertThresholds) return;
@@ -588,7 +634,6 @@ export default function AdminClient() {
     });
   }, [siteSettings, settingsQuery]);
 
-  const pagedUsers = paginate(filteredUsers, userPage, PAGE_SIZE);
   const pagedUniversities = paginate(filteredUniversities, uniPage, PAGE_SIZE);
   const pagedProgrammes = paginate(filteredProgrammes, progPage, PAGE_SIZE);
   const pagedBursaries = paginate(filteredBursaries, bursPage, PAGE_SIZE);
@@ -596,6 +641,20 @@ export default function AdminClient() {
   useEffect(() => setSelectedUserIds([]), [userPage, userQuery, tierFilter]);
   useEffect(() => setSelectedUniIds([]), [uniPage, uniQuery]);
   useEffect(() => setSelectedBursaryIds([]), [bursPage, bursQuery]);
+
+  const goToPreviousUserPage = () => {
+    if (userPage <= 1) return;
+    setUserPage((current) => Math.max(1, current - 1));
+    setUserCursorStack((current) => current.slice(0, -1));
+    setSelectedUserIds([]);
+  };
+
+  const goToNextUserPage = () => {
+    if (!userHasMore || !userNextCursor) return;
+    setUserPage((current) => current + 1);
+    setUserCursorStack((current) => [...current, userNextCursor]);
+    setSelectedUserIds([]);
+  };
 
   function toggleSort<T>(setSort: (value: { key: keyof T; direction: SortDirection }) => void, current: { key: keyof T; direction: SortDirection }, key: keyof T) {
     if (current.key === key) {
@@ -615,7 +674,7 @@ export default function AdminClient() {
       });
       await readJsonSafe(res);
       pushToast("success", "User tier updated.");
-      await loadAll();
+      await loadUsers();
     } catch (error) {
       pushToast("error", error instanceof Error ? error.message : "Could not update user");
     } finally {
@@ -639,7 +698,7 @@ export default function AdminClient() {
         )
       );
       pushToast("success", "Selected users disabled.");
-      await loadAll();
+      await loadUsers();
       setSelectedUserIds([]);
     } catch (error) {
       pushToast("error", error instanceof Error ? error.message : "Could not disable selected users");
@@ -1209,7 +1268,7 @@ export default function AdminClient() {
 
   if (loading) return <div className="min-h-screen bg-[#fff9f2] p-8 text-sm text-gray-600">Loading admin dashboard...</div>;
 
-  const userAllChecked = pagedUsers.items.length > 0 && pagedUsers.items.every((u) => selectedUserIds.includes(u.id));
+  const userAllChecked = users.length > 0 && users.every((u) => selectedUserIds.includes(u.id));
   const uniAllChecked = pagedUniversities.items.length > 0 && pagedUniversities.items.every((u) => selectedUniIds.includes(u.id));
   const bursAllChecked = pagedBursaries.items.length > 0 && pagedBursaries.items.every((b) => selectedBursaryIds.includes(b.id));
 
@@ -1538,6 +1597,15 @@ export default function AdminClient() {
             </select>
           </div>
 
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs text-gray-500">
+            <p>{userLoading ? "Loading users..." : `${users.length} users on this page`}</p>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={goToPreviousUserPage} disabled={userPage <= 1 || userLoading} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-700 disabled:opacity-50">Previous</button>
+              <span>Page {userPage}</span>
+              <button type="button" onClick={goToNextUserPage} disabled={!userHasMore || userLoading} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-700 disabled:opacity-50">Next</button>
+            </div>
+          </div>
+
           <div className="mb-2 flex items-center justify-end">
             <button type="button" onClick={bulkDisableUsers} disabled={saving === "users-bulk-disable" || selectedUserIds.length === 0} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Disable selected ({selectedUserIds.length})</button>
           </div>
@@ -1546,7 +1614,7 @@ export default function AdminClient() {
             <table className="min-w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-500">
-                  <th className="px-2 py-2"><input type="checkbox" checked={userAllChecked} onChange={(e) => setSelectedUserIds(e.target.checked ? Array.from(new Set([...selectedUserIds, ...pagedUsers.items.map((u) => u.id)])) : selectedUserIds.filter((id) => !pagedUsers.items.some((u) => u.id === id)))} /></th>
+                  <th className="px-2 py-2"><input type="checkbox" checked={userAllChecked} onChange={(e) => setSelectedUserIds(e.target.checked ? Array.from(new Set([...selectedUserIds, ...users.map((u) => u.id)])) : selectedUserIds.filter((id) => !users.some((u) => u.id === id)))} /></th>
                   <th className="px-2 py-2"><SortHeader label="Name" active={userSort.key === "full_name"} direction={userSort.direction} onClick={() => toggleSort<AdminUser>(setUserSort, userSort, "full_name")} /></th>
                   <th className="px-2 py-2"><SortHeader label="Email" active={userSort.key === "email"} direction={userSort.direction} onClick={() => toggleSort<AdminUser>(setUserSort, userSort, "email")} /></th>
                   <th className="px-2 py-2"><SortHeader label="Tier" active={userSort.key === "tier"} direction={userSort.direction} onClick={() => toggleSort<AdminUser>(setUserSort, userSort, "tier")} /></th>
@@ -1554,7 +1622,7 @@ export default function AdminClient() {
                 </tr>
               </thead>
               <tbody>
-                {pagedUsers.items.map((user) => (
+                {users.map((user) => (
                   <tr key={user.id} className="border-b border-gray-50">
                     <td className="px-2 py-2"><input type="checkbox" checked={selectedUserIds.includes(user.id)} onChange={(e) => setSelectedUserIds((prev) => e.target.checked ? [...prev, user.id] : prev.filter((id) => id !== user.id))} /></td>
                     <td className="px-2 py-2 font-medium text-gray-800">{user.full_name || "—"}</td>
@@ -1576,7 +1644,11 @@ export default function AdminClient() {
             </table>
           </div>
 
-          <Pagination page={userPage} totalPages={pagedUsers.totalPages} onPageChange={setUserPage} />
+          <div className="mt-3 flex items-center justify-end gap-2 text-xs">
+            <button type="button" onClick={goToPreviousUserPage} disabled={userPage <= 1 || userLoading} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 disabled:opacity-50">Prev</button>
+            <span className="text-gray-600">Page {userPage}</span>
+            <button type="button" onClick={goToNextUserPage} disabled={!userHasMore || userLoading} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 disabled:opacity-50">Next</button>
+          </div>
         </SectionCard>
 
         <SectionCard title="Universities" subtitle="Add, search, sort, edit, archive, and delete universities.">

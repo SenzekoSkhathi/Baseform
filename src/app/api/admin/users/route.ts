@@ -2,30 +2,68 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminGuard } from "@/lib/admin/auth";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+function parseCursor(value: string | null): string | null {
+  if (!value) return null;
+  const createdAt = decodeURIComponent(value);
+  return createdAt || null;
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[%,_]/g, (match) => `\\${match}`).replace(/,/g, " ");
+}
+
+export async function GET(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const admin = createAdminClient();
+  const url = new URL(req.url);
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 10), 1), 100);
+  const cursor = parseCursor(url.searchParams.get("cursor"));
+  const queryText = url.searchParams.get("q")?.trim() || "";
+  const tier = url.searchParams.get("tier")?.trim() || "all";
 
-  const [{ data: profiles }, usersRes] = await Promise.all([
-    admin.from("profiles").select("id,full_name,tier,created_at").order("created_at", { ascending: false }),
-    admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-  ]);
+  let query = admin
+    .from("profiles")
+    .select("id,full_name,tier,created_at,email")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
 
-  const emailById = new Map<string, string>();
-  for (const user of usersRes.data.users ?? []) {
-    emailById.set(user.id, user.email ?? "");
+  if (tier === "free" || tier === "pro" || tier === "admin" || tier === "disabled") {
+    query = query.eq("tier", tier);
   }
 
+  if (queryText) {
+    const search = escapeLike(queryText);
+    query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+  }
+
+  if (cursor) {
+    query = query.lt("created_at", cursor);
+  }
+
+  const { data: profiles, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const hasMore = (profiles?.length ?? 0) > limit;
+  const page = hasMore ? (profiles ?? []).slice(0, limit) : profiles ?? [];
+  const nextCursor = hasMore && page.length > 0
+    ? `${encodeURIComponent(page[page.length - 1].created_at ?? "")}`
+    : null;
+
   return NextResponse.json(
-    (profiles ?? []).map((profile: any) => ({
+    {
+      items: page.map((profile) => ({
       id: profile.id,
       full_name: profile.full_name,
       tier: profile.tier,
       created_at: profile.created_at,
-      email: emailById.get(profile.id) ?? "",
-    }))
+      email: profile.email ?? "",
+    })),
+      hasMore,
+      nextCursor,
+    }
   );
 }
 
