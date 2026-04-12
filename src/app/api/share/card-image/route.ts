@@ -36,11 +36,11 @@ function hashText(value: string): number {
 function learnerMessage(fullName: string, aps: number, universities: number, programmes: number): string {
   const firstName = fullName.split(" ")[0] || "Learner";
   const bank = [
-    `${firstName}, your ${aps} APS gives you a strong start. Keep applying while deadlines are still open.",
-    `${firstName}, you currently match ${universities} universities and ${programmes} programmes. Stay consistent and build on this.",
-    `${firstName}, this profile shows real momentum. Keep your academics focused and your opportunities grow.",
-    `${firstName}, your APS report is a great baseline. Continue improving key subjects to unlock even more options.",
-    `${firstName}, your preparation is paying off. Keep going and turn these opportunities into offers.",
+    `${firstName}, your ${aps} APS gives you a strong start. Keep applying while deadlines are still open.`,
+    `${firstName}, you currently match ${universities} universities and ${programmes} programmes. Stay consistent and build on this.`,
+    `${firstName}, this profile shows real momentum. Keep your academics focused and your opportunities grow.`,
+    `${firstName}, your APS report is a great baseline. Continue improving key subjects to unlock even more options.`,
+    `${firstName}, your preparation is paying off. Keep going and turn these opportunities into offers.`,
   ];
 
   const idx = hashText(`${fullName}-${aps}-${universities}-${programmes}`) % bank.length;
