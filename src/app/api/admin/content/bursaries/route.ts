@@ -3,7 +3,7 @@ import { requireAdminGuard } from "@/lib/admin/auth";
 import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
-const SELECT_COLUMNS = "id,title,provider,description,minimum_aps,amount_per_year,closing_date,application_url,provinces_eligible,fields_of_study,is_active";
+const SELECT_COLUMNS = "id,title,provider,description,minimum_aps,amount_per_year,closing_date,application_url,detail_page_url,application_links,funding_value,eligibility_requirements,application_instructions,source_category,provinces_eligible,fields_of_study,is_active";
 
 export async function GET() {
   const guard = await requireAdminGuard();

@@ -176,6 +176,12 @@ export type Bursary = {
   amount_per_year: number | null;
   closing_date: string | null;
   application_url: string | null;
+  detail_page_url: string | null;
+  application_links: string[] | null;
+  funding_value: string | null;
+  eligibility_requirements: string | null;
+  application_instructions: string | null;
+  source_category: string | null;
   provinces_eligible: string[] | null;
   fields_of_study: string[] | null;
   requires_financial_need: boolean | null;

@@ -15,7 +15,13 @@ type Bursary = {
   fields_of_study?: string[] | string | null;
   requires_financial_need?: boolean | null;
   application_url?: string | null;
+  detail_page_url?: string | null;
+  application_links?: string[] | string | null;
   closing_date?: string | null;
+  funding_value?: string | null;
+  eligibility_requirements?: string | null;
+  application_instructions?: string | null;
+  source_category?: string | null;
   is_active?: boolean;
 };
 
@@ -151,12 +157,39 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
         ? `R ${bursary.amount_per_year.toLocaleString("en-ZA")} / year`
         : null;
       const deadline = bursary.closing_date ?? null;
-      const website = bursary.application_url ?? null;
+      const links = Array.isArray(bursary.application_links)
+        ? bursary.application_links.filter((item): item is string => typeof item === "string")
+        : [];
+      const firstExternalLink = links.find((link) => link && !link.startsWith("mailto:")) ?? null;
+      const applicationWebsite = firstExternalLink ?? bursary.application_url ?? null;
+      const sourceWebsite = bursary.detail_page_url ?? null;
+      const website = applicationWebsite ?? sourceWebsite;
       const minAps = bursary.minimum_aps ?? null;
       const provinces = normalizeTextList(bursary.provinces_eligible, "All provinces") ?? "All provinces";
       const fieldsOfStudy = normalizeTextList(bursary.fields_of_study, null);
       const needsBased = bursary.requires_financial_need ?? false;
-      return { id, name, description, amount, deadline, website, minAps, provinces, fieldsOfStudy, needsBased };
+      const provider = bursary.provider ?? null;
+      const fundingValue = bursary.funding_value ?? null;
+      const eligibility = bursary.eligibility_requirements ?? null;
+      const sourceCategory = bursary.source_category ?? null;
+      return {
+        id,
+        name,
+        description,
+        amount,
+        deadline,
+        website,
+        applicationWebsite,
+        sourceWebsite,
+        minAps,
+        provinces,
+        fieldsOfStudy,
+        needsBased,
+        provider,
+        fundingValue,
+        eligibility,
+        sourceCategory,
+      };
     });
   }, [bursaries]);
 
@@ -167,6 +200,8 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
       (b) =>
         b.name.toLowerCase().includes(q) ||
         (b.description ?? "").toLowerCase().includes(q) ||
+        (b.provider ?? "").toLowerCase().includes(q) ||
+        (b.sourceCategory ?? "").toLowerCase().includes(q) ||
         (b.fieldsOfStudy ?? "").toLowerCase().includes(q)
     );
   }, [normalized, query]);
@@ -287,6 +322,9 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold leading-snug text-gray-900">{bursary.name}</h3>
+                        {bursary.provider && (
+                          <p className="mt-0.5 text-xs font-semibold text-gray-500">{bursary.provider}</p>
+                        )}
                         {bursary.fieldsOfStudy && (
                           <p className="mt-0.5 text-xs font-semibold text-orange-500">{bursary.fieldsOfStudy}</p>
                         )}
@@ -309,12 +347,22 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                       <p className="mt-2 line-clamp-2 text-sm text-gray-600">{bursary.description}</p>
                     )}
 
+                    {bursary.eligibility && (
+                      <p className="mt-1 line-clamp-2 text-xs text-gray-500">{bursary.eligibility}</p>
+                    )}
+
                     <div className="mt-3 flex flex-wrap gap-2">
                       {bursary.minAps !== null && (
                         <span className="rounded-lg bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700">Min APS: {bursary.minAps}</span>
                       )}
                       {bursary.amount && (
                         <span className="rounded-lg bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700">{bursary.amount}</span>
+                      )}
+                      {bursary.fundingValue && (
+                        <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">Funding details available</span>
+                      )}
+                      {bursary.sourceCategory && (
+                        <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">{bursary.sourceCategory}</span>
                       )}
                       <span className={[
                         "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
@@ -337,11 +385,35 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
+                      {bursary.applicationWebsite && (
+                        <a
+                          href={bursary.applicationWebsite}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        >
+                          <ExternalLink size={14} />
+                          Open application
+                        </a>
+                      )}
+                      {bursary.sourceWebsite && bursary.sourceWebsite !== bursary.applicationWebsite && (
+                        <a
+                          href={bursary.sourceWebsite}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                        >
+                          <ExternalLink size={14} />
+                          View source
+                        </a>
+                      )}
+
                       {!tracked || tracked.status === "saved" ? (
                         <button
                           onClick={() => {
                             updateTracked(bursary.id, bursary.name, "applied");
-                            if (bursary.website) window.open(bursary.website, "_blank", "noopener,noreferrer");
+                            const applyTarget = bursary.applicationWebsite ?? bursary.sourceWebsite;
+                            if (applyTarget) window.open(applyTarget, "_blank", "noopener,noreferrer");
                           }}
                           disabled={isPending}
                           className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60"

@@ -146,6 +146,13 @@ export default function AdminClient() {
     amount_per_year: "",
     closing_date: "",
     application_url: "",
+    detail_page_url: "",
+    application_links: "",
+    funding_value: "",
+    eligibility_requirements: "",
+    application_instructions: "",
+    source_category: "",
+    provinces_eligible: "All",
     fields_of_study: "",
     is_active: true,
   });
@@ -410,7 +417,9 @@ export default function AdminClient() {
     const q = bursQuery.trim().toLowerCase();
     const base = bursaries.filter((b) => {
       if (!q) return true;
-      return b.title.toLowerCase().includes(q) || (b.provider ?? "").toLowerCase().includes(q);
+      return b.title.toLowerCase().includes(q)
+        || (b.provider ?? "").toLowerCase().includes(q)
+        || (b.source_category ?? "").toLowerCase().includes(q);
     });
     return sortBy(base, bursSort.key, bursSort.direction);
   }, [bursaries, bursQuery, bursSort]);
@@ -772,13 +781,35 @@ export default function AdminClient() {
           amount_per_year: newBursary.amount_per_year ? Number(newBursary.amount_per_year) : null,
           closing_date: newBursary.closing_date || null,
           application_url: newBursary.application_url || null,
-          fields_of_study: newBursary.fields_of_study ? newBursary.fields_of_study.split(',').map(f => f.trim()).filter(Boolean) : [],
-          provinces_eligible: ["All"],
+          detail_page_url: newBursary.detail_page_url || null,
+          application_links: parseCommaList(newBursary.application_links),
+          funding_value: newBursary.funding_value || null,
+          eligibility_requirements: newBursary.eligibility_requirements || null,
+          application_instructions: newBursary.application_instructions || null,
+          source_category: newBursary.source_category || null,
+          fields_of_study: parseCommaList(newBursary.fields_of_study),
+          provinces_eligible: parseCommaList(newBursary.provinces_eligible),
           is_active: newBursary.is_active,
         }),
       });
       await readJsonSafe(res);
-      setNewBursary({ title: "", provider: "", minimum_aps: "", amount_per_year: "", closing_date: "", application_url: "", fields_of_study: "", is_active: true });
+      setNewBursary({
+        title: "",
+        provider: "",
+        minimum_aps: "",
+        amount_per_year: "",
+        closing_date: "",
+        application_url: "",
+        detail_page_url: "",
+        application_links: "",
+        funding_value: "",
+        eligibility_requirements: "",
+        application_instructions: "",
+        source_category: "",
+        provinces_eligible: "All",
+        fields_of_study: "",
+        is_active: true,
+      });
       pushToast("success", "Bursary created.");
       await loadAll();
     } catch (error) {
@@ -792,6 +823,13 @@ export default function AdminClient() {
     return value
       .split(/\r?\n/)
       .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  function parseCommaList(value: string): string[] {
+    return value
+      .split(",")
+      .map((item) => item.trim())
       .filter(Boolean);
   }
 
@@ -1227,11 +1265,20 @@ export default function AdminClient() {
         </SectionCard>
 
         <SectionCard title="Bursaries" subtitle="Add, search, sort, edit, archive, and delete bursaries.">
-          <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-5">
+          <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-3">
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Title" value={newBursary.title} onChange={(e) => setNewBursary((p) => ({ ...p, title: e.target.value }))} />
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Provider" value={newBursary.provider} onChange={(e) => setNewBursary((p) => ({ ...p, provider: e.target.value }))} />
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Min APS" value={newBursary.minimum_aps} onChange={(e) => setNewBursary((p) => ({ ...p, minimum_aps: e.target.value }))} />
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Amount/Year" value={newBursary.amount_per_year} onChange={(e) => setNewBursary((p) => ({ ...p, amount_per_year: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Application URL" value={newBursary.application_url} onChange={(e) => setNewBursary((p) => ({ ...p, application_url: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Detail page URL" value={newBursary.detail_page_url} onChange={(e) => setNewBursary((p) => ({ ...p, detail_page_url: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-2" placeholder="Application links (comma-separated)" value={newBursary.application_links} onChange={(e) => setNewBursary((p) => ({ ...p, application_links: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Source category" value={newBursary.source_category} onChange={(e) => setNewBursary((p) => ({ ...p, source_category: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Fields of study (comma-separated)" value={newBursary.fields_of_study} onChange={(e) => setNewBursary((p) => ({ ...p, fields_of_study: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Provinces (comma-separated)" value={newBursary.provinces_eligible} onChange={(e) => setNewBursary((p) => ({ ...p, provinces_eligible: e.target.value }))} />
+            <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Funding value" value={newBursary.funding_value} onChange={(e) => setNewBursary((p) => ({ ...p, funding_value: e.target.value }))} />
+            <textarea className="min-h-20 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Eligibility requirements" value={newBursary.eligibility_requirements} onChange={(e) => setNewBursary((p) => ({ ...p, eligibility_requirements: e.target.value }))} />
+            <textarea className="min-h-20 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Application instructions" value={newBursary.application_instructions} onChange={(e) => setNewBursary((p) => ({ ...p, application_instructions: e.target.value }))} />
             <button type="button" onClick={addBursary} disabled={saving === "new-burs" || !newBursary.title.trim()} className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Add bursary</button>
           </div>
 
@@ -1242,13 +1289,28 @@ export default function AdminClient() {
 
           <div className="mt-3 space-y-2">
             {pagedBursaries.items.map((bursary) => (
-              <div key={bursary.id} className="grid items-center gap-2 rounded-xl border border-gray-100 bg-white p-2 md:grid-cols-[24px_1fr_90px_160px]">
-                <input type="checkbox" checked={selectedBursaryIds.includes(bursary.id)} onChange={(e) => setSelectedBursaryIds((prev) => e.target.checked ? [...prev, bursary.id] : prev.filter((id) => id !== bursary.id))} />
-                <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.title} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, title: e.target.value } : b)))} />
-                <input type="number" className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.minimum_aps ?? 0} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, minimum_aps: Number(e.target.value) } : b)))} />
-                <div className="flex gap-1">
-                  <button type="button" onClick={() => saveBursary(bursary)} disabled={saving === `burs-${bursary.id}`} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Save</button>
-                  <button type="button" onClick={() => deleteBursary(bursary.id, bursary.title)} disabled={saving === `burs-del-${bursary.id}`} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete</button>
+              <div key={bursary.id} className="rounded-xl border border-gray-100 bg-white p-2">
+                <div className="grid items-center gap-2 md:grid-cols-[24px_1fr_90px_160px]">
+                  <input type="checkbox" checked={selectedBursaryIds.includes(bursary.id)} onChange={(e) => setSelectedBursaryIds((prev) => e.target.checked ? [...prev, bursary.id] : prev.filter((id) => id !== bursary.id))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.title} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, title: e.target.value } : b)))} />
+                  <input type="number" className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" value={bursary.minimum_aps ?? 0} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, minimum_aps: Number(e.target.value) } : b)))} />
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => saveBursary(bursary)} disabled={saving === `burs-${bursary.id}`} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Save</button>
+                    <button type="button" onClick={() => deleteBursary(bursary.id, bursary.title)} disabled={saving === `burs-del-${bursary.id}`} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete</button>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Provider" value={bursary.provider ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, provider: e.target.value || null } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Application URL" value={bursary.application_url ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, application_url: e.target.value || null } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Detail page URL" value={bursary.detail_page_url ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, detail_page_url: e.target.value || null } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-2" placeholder="Application links (comma-separated)" value={(bursary.application_links ?? []).join(", ")} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, application_links: parseCommaList(e.target.value) } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Source category" value={bursary.source_category ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, source_category: e.target.value || null } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Fields of study (comma-separated)" value={(bursary.fields_of_study ?? []).join(", ")} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, fields_of_study: parseCommaList(e.target.value) } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Provinces (comma-separated)" value={(bursary.provinces_eligible ?? []).join(", ")} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, provinces_eligible: parseCommaList(e.target.value) } : b)))} />
+                  <input className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Funding value" value={bursary.funding_value ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, funding_value: e.target.value || null } : b)))} />
+                  <textarea className="min-h-20 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Eligibility requirements" value={bursary.eligibility_requirements ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, eligibility_requirements: e.target.value || null } : b)))} />
+                  <textarea className="min-h-20 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 md:col-span-3" placeholder="Application instructions" value={bursary.application_instructions ?? ""} onChange={(e) => setBursaries((prev) => prev.map((b) => (b.id === bursary.id ? { ...b, application_instructions: e.target.value || null } : b)))} />
                 </div>
               </div>
             ))}

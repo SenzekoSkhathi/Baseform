@@ -36,7 +36,7 @@ export default async function BursariesPage() {
 
     let query = supabase
       .from("bursaries")
-      .select("id, title, provider, description, amount_per_year, minimum_aps, provinces_eligible, fields_of_study, requires_financial_need, application_url, closing_date, is_active")
+      .select("id, title, provider, description, amount_per_year, minimum_aps, provinces_eligible, fields_of_study, requires_financial_need, application_url, closing_date, is_active, detail_page_url, application_links, funding_value, eligibility_requirements, application_instructions, source_category")
       .lte("minimum_aps", aps)
       .eq("is_active", true)
       .order("minimum_aps", { ascending: false });
