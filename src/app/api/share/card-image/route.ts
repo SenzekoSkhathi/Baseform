@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     const grade = sanitizeText(searchParams.get("grade"), "Grade not specified");
     const school = sanitizeText(searchParams.get("school"), "School not specified");
     const subjects = sanitizeSubjects(searchParams.get("subjects"));
+    const siteUrl = "https://baseformapplications.com";
 
     const motivation =
       aps >= 35
@@ -265,14 +266,139 @@ export async function GET(request: Request) {
             "div",
             {
               style: {
-                marginTop: "auto",
-                fontSize: "22px",
-                fontWeight: 600,
-                color: "#64748b",
-                textAlign: "center",
+                marginTop: "20px",
+                width: "100%",
+                flex: 1,
+                borderRadius: "24px",
+                border: "2px solid #fed7aa",
+                background: "linear-gradient(180deg, #fff7ed 0%, #ffffff 100%)",
+                padding: "20px 22px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                boxSizing: "border-box",
               },
             },
-            motivation
+            createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                },
+              },
+              createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "22px",
+                    fontWeight: 700,
+                    color: "#374151",
+                    textAlign: "center",
+                  },
+                },
+                motivation
+              ),
+              createElement(
+                "div",
+                {
+                  style: {
+                    width: "100%",
+                    height: "2px",
+                    background: "#fde3c4",
+                  },
+                }
+              ),
+              createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color: "#475569",
+                  },
+                },
+                "Recommended next steps"
+              ),
+              createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  },
+                },
+                createElement(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "19px",
+                      color: "#475569",
+                    },
+                  },
+                  "1. Finalise your programme shortlist"
+                ),
+                createElement(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "19px",
+                      color: "#475569",
+                    },
+                  },
+                  "2. Track university and bursary deadlines"
+                ),
+                createElement(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "19px",
+                      color: "#475569",
+                    },
+                  },
+                  "3. Keep improving subjects with low APS impact"
+                )
+              )
+            ),
+            createElement(
+              "div",
+              {
+                style: {
+                  marginTop: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "12px 14px",
+                  borderRadius: "16px",
+                  background: "#fff",
+                  border: "1.5px solid #fed7aa",
+                },
+              },
+              createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "18px",
+                    fontWeight: 600,
+                    color: "#64748b",
+                  },
+                },
+                "Calculate your APS on Baseform"
+              ),
+              createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "18px",
+                    fontWeight: 700,
+                    color: "#f97316",
+                  },
+                },
+                siteUrl
+              )
+            )
           )
         )
       ),
