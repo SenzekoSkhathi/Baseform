@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminGuard } from "@/lib/admin/auth";
+import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
 function parseCursor(value: string | null): string | null {
@@ -81,8 +82,25 @@ export async function PATCH(req: Request) {
   }
 
   const admin = createAdminClient();
+  const { data: before, error: existingError } = await admin
+    .from("profiles")
+    .select("id,full_name,tier,created_at,email")
+    .eq("id", String(userId))
+    .maybeSingle();
+
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
   const { error } = await admin.from("profiles").update({ tier }).eq("id", String(userId));
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
+    entityType: "user",
+    entityKey: String(userId),
+    action: "update",
+    beforeData: before ?? null,
+    afterData: { ...(before ?? {}), tier },
+  });
+
   return NextResponse.json({ success: true });
 }

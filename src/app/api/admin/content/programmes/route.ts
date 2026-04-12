@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminGuard } from "@/lib/admin/auth";
+import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
 const SELECT_COLUMNS = "id,name,university_id,aps_minimum,field_of_study,qualification_type,duration_years,additional_requirements";
@@ -39,6 +40,20 @@ export async function POST(req: Request) {
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
+    entityType: "programme",
+    entityKey: name,
+    action: "create",
+    beforeData: null,
+    afterData: {
+      ...body,
+      name,
+      university_id: universityId,
+      aps_minimum: apsMinimum,
+    },
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -64,9 +79,26 @@ export async function PATCH(req: Request) {
   }
 
   const admin = createAdminClient();
+  const { data: before, error: existingError } = await admin
+    .from("faculties")
+    .select(SELECT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
   const { error } = await admin.from("faculties").update(changes).eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
+    entityType: "programme",
+    entityKey: String(before?.name ?? id),
+    action: "update",
+    beforeData: before ?? null,
+    afterData: { ...(before ?? {}), ...changes },
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -78,8 +110,24 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   const admin = createAdminClient();
+  const { data: existing, error: existingError } = await admin
+    .from("faculties")
+    .select(SELECT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
   const { error } = await admin.from("faculties").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
+    entityType: "programme",
+    entityKey: String(existing?.name ?? id),
+    action: "delete",
+    beforeData: existing ?? null,
+    afterData: null,
+  });
 
   return NextResponse.json({ success: true });
 }
