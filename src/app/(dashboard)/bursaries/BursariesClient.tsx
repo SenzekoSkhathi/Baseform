@@ -313,9 +313,6 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
             ) : (
               activeList.map((bursary) => {
                 const tracked = trackedMap[bursary.id];
-                const deadlineDays = daysToDeadline(bursary.deadline);
-                const deadlineLabel = formatDateLabel(bursary.deadline);
-                const urgent = typeof deadlineDays === "number" && deadlineDays <= 14;
 
                 return (
                   <article key={bursary.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -343,14 +340,6 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                       )}
                     </div>
 
-                    {bursary.description && (
-                      <p className="mt-2 line-clamp-2 text-sm text-gray-600">{bursary.description}</p>
-                    )}
-
-                    {bursary.eligibility && (
-                      <p className="mt-1 line-clamp-2 text-xs text-gray-500">{bursary.eligibility}</p>
-                    )}
-
                     <div className="mt-3 flex flex-wrap gap-2">
                       {bursary.minAps !== null && (
                         <span className="rounded-lg bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700">Min APS: {bursary.minAps}</span>
@@ -364,22 +353,13 @@ export default function BursariesClient({ bursaries, aps, province, initialTrack
                       {bursary.sourceCategory && (
                         <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">{bursary.sourceCategory}</span>
                       )}
-                      <span className={[
-                        "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
-                        urgent ? "bg-red-50 text-red-600" : "bg-gray-50 text-gray-600",
-                      ].join(" ")}>
-                        Deadline: {deadlineLabel}
-                      </span>
                       <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">{bursary.provinces}</span>
                       {bursary.needsBased && (
                         <span className="rounded-lg bg-purple-50 px-2.5 py-1 text-[11px] font-semibold text-purple-700">Needs-based</span>
                       )}
-                      {tracked && (
-                        <span className={[
-                          "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
-                          tracked.status === "applied" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700",
-                        ].join(" ")}>
-                          {tracked.status === "applied" ? "Applied" : "Saved"}
+                      {tracked?.status === "saved" && (
+                        <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                          Saved
                         </span>
                       )}
                     </div>
