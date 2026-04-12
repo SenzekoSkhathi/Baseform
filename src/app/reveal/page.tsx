@@ -62,6 +62,9 @@ function RevealContent() {
         grade: onboarding?.gradeYear ?? "",
         school: onboarding?.schoolName ?? "",
         subjects: subjectNames.join("|"),
+        universities: String(stats?.universitiesCount ?? 0),
+        programmes: String(stats?.programmesCount ?? 0),
+        funding: String(stats?.bursariesCount ?? 0),
       });
 
       const response = await fetch(`/api/share/card-image?${shareParams}`);

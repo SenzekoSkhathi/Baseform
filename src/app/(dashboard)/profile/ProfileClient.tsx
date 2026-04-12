@@ -92,6 +92,8 @@ function ShareButton({
   grade,
   school,
   subjects,
+  province,
+  fieldOfInterest,
 }: {
   aps: number;
   rating: string;
@@ -99,12 +101,51 @@ function ShareButton({
   grade: string;
   school: string;
   subjects: string[];
+  province: string;
+  fieldOfInterest: string;
 }) {
   const [state, setState] = useState<"idle" | "loading">("idle");
+  const supabase = createClient();
 
   async function handleShare() {
     setState("loading");
     try {
+      let universitiesQualified = 0;
+      let programmesQualified = 0;
+      let fundingAvailable = 0;
+
+      try {
+        let programmesQuery = supabase
+          .from("faculties")
+          .select("id, university_id", { count: "exact" })
+          .lte("aps_minimum", aps);
+
+        if (fieldOfInterest && fieldOfInterest !== "Not sure yet") {
+          programmesQuery = programmesQuery.eq("field_of_study", fieldOfInterest);
+        }
+
+        const { data: qualifyingFaculties, count: programmesCount } = await programmesQuery;
+        programmesQualified = programmesCount ?? 0;
+        universitiesQualified = new Set((qualifyingFaculties ?? []).map((f) => f.university_id)).size;
+
+        let bursariesQuery = supabase
+          .from("bursaries")
+          .select("id", { count: "exact" })
+          .lte("minimum_aps", aps)
+          .eq("is_active", true);
+
+        if (province) {
+          bursariesQuery = bursariesQuery.or(
+            `provinces_eligible.cs.{"${province}"},provinces_eligible.cs.{"All"}`
+          );
+        }
+
+        const { count: bursariesCount } = await bursariesQuery;
+        fundingAvailable = bursariesCount ?? 0;
+      } catch {
+        // Keep share flow resilient even if stats queries fail.
+      }
+
       const params = new URLSearchParams({
         aps: String(aps),
         rating,
@@ -112,6 +153,9 @@ function ShareButton({
         grade,
         school,
         subjects: subjects.slice(0, 12).join("|"),
+        universities: String(universitiesQualified),
+        programmes: String(programmesQualified),
+        funding: String(fundingAvailable),
       });
 
       const response = await fetch(`/api/share/card-image?${params}`);
@@ -582,6 +626,8 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
               grade={displayProfile?.grade_year || ""}
               school={displayProfile?.school_name || ""}
               subjects={subjects.map((subject) => subject.subjectName)}
+              province={displayProfile?.province || ""}
+              fieldOfInterest={displayProfile?.field_of_interest || ""}
             />
             <InviteGuardianButton hasGuardianEmail={!!displayProfile?.guardian_email} />
           </div>

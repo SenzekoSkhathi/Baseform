@@ -25,6 +25,28 @@ function sanitizeSubjects(value: string | null): string[] {
     .map((item) => item.slice(0, 28));
 }
 
+function hashText(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function learnerMessage(fullName: string, aps: number, universities: number, programmes: number): string {
+  const firstName = fullName.split(" ")[0] || "Learner";
+  const bank = [
+    `${firstName}, your ${aps} APS gives you a strong start. Keep applying while deadlines are still open.",
+    `${firstName}, you currently match ${universities} universities and ${programmes} programmes. Stay consistent and build on this.",
+    `${firstName}, this profile shows real momentum. Keep your academics focused and your opportunities grow.",
+    `${firstName}, your APS report is a great baseline. Continue improving key subjects to unlock even more options.",
+    `${firstName}, your preparation is paying off. Keep going and turn these opportunities into offers.",
+  ];
+
+  const idx = hashText(`${fullName}-${aps}-${universities}-${programmes}`) % bank.length;
+  return bank[idx];
+}
+
 /** GET /api/share/card-image - Generates an APS card as an image */
 export async function GET(request: Request) {
   try {
@@ -35,16 +57,12 @@ export async function GET(request: Request) {
     const grade = sanitizeText(searchParams.get("grade"), "Grade not specified");
     const school = sanitizeText(searchParams.get("school"), "School not specified");
     const subjects = sanitizeSubjects(searchParams.get("subjects"));
+    const universitiesQualified = clampNumeric(searchParams.get("universities"), 0);
+    const programmesQualified = clampNumeric(searchParams.get("programmes"), 0);
+    const fundingAvailable = clampNumeric(searchParams.get("funding"), 0);
     const siteUrl = "https://baseformapplications.com";
-
-    const motivation =
-      aps >= 35
-        ? "Excellent academic standing. Keep applying with confidence."
-        : aps >= 28
-        ? "Strong progress. Stay consistent and keep building momentum."
-        : aps >= 21
-        ? "Solid foundation. Focused effort will open more opportunities."
-        : "Every assessment matters. Keep improving one step at a time.";
+    const logoUrl = new URL("/logo.svg", request.url).toString();
+    const motivation = learnerMessage(fullName, aps, universitiesQualified, programmesQualified);
 
     return new ImageResponse(
       createElement(
@@ -75,11 +93,22 @@ export async function GET(request: Request) {
               boxSizing: "border-box",
             },
           },
+          createElement("img", {
+            src: logoUrl,
+            width: 210,
+            height: 58,
+            alt: "Baseform",
+            style: {
+              alignSelf: "center",
+              objectFit: "contain",
+            },
+          }),
           createElement(
             "div",
             {
               style: {
-                fontSize: "36px",
+                marginTop: "10px",
+                fontSize: "34px",
                 fontWeight: 800,
                 letterSpacing: "1px",
                 color: "#f97316",
@@ -319,46 +348,130 @@ export async function GET(request: Request) {
                     color: "#475569",
                   },
                 },
-                "Recommended next steps"
+                "Opportunity snapshot"
               ),
               createElement(
                 "div",
                 {
                   style: {
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
+                    gap: "12px",
+                    width: "100%",
                   },
                 },
                 createElement(
                   "div",
                   {
                     style: {
-                      fontSize: "19px",
-                      color: "#475569",
+                      flex: 1,
+                      borderRadius: "16px",
+                      border: "1.5px solid #e2e8f0",
+                      background: "#ffffff",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
                     },
                   },
-                  "1. Finalise your programme shortlist"
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "16px",
+                        color: "#64748b",
+                        fontWeight: 600,
+                      },
+                    },
+                    "Universities"
+                  ),
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "34px",
+                        color: "#0f172a",
+                        fontWeight: 800,
+                        lineHeight: 1,
+                      },
+                    },
+                    String(universitiesQualified)
+                  )
                 ),
                 createElement(
                   "div",
                   {
                     style: {
-                      fontSize: "19px",
-                      color: "#475569",
+                      flex: 1,
+                      borderRadius: "16px",
+                      border: "1.5px solid #e2e8f0",
+                      background: "#ffffff",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
                     },
                   },
-                  "2. Track university and bursary deadlines"
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "16px",
+                        color: "#64748b",
+                        fontWeight: 600,
+                      },
+                    },
+                    "Programmes"
+                  ),
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "34px",
+                        color: "#0f172a",
+                        fontWeight: 800,
+                        lineHeight: 1,
+                      },
+                    },
+                    String(programmesQualified)
+                  )
                 ),
                 createElement(
                   "div",
                   {
                     style: {
-                      fontSize: "19px",
-                      color: "#475569",
+                      flex: 1,
+                      borderRadius: "16px",
+                      border: "1.5px solid #e2e8f0",
+                      background: "#ffffff",
+                      padding: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
                     },
                   },
-                  "3. Keep improving subjects with low APS impact"
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "16px",
+                        color: "#64748b",
+                        fontWeight: 600,
+                      },
+                    },
+                    "Funding"
+                  ),
+                  createElement(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "34px",
+                        color: "#0f172a",
+                        fontWeight: 800,
+                        lineHeight: 1,
+                      },
+                    },
+                    String(fundingAvailable)
+                  )
                 )
               )
             ),
