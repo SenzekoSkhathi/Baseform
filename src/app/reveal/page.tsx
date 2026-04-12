@@ -46,11 +46,22 @@ function RevealContent() {
   async function shareApsCard() {
     setSharing(true);
     try {
+      const raw = localStorage.getItem("bf_onboarding");
+      const onboarding = raw ? JSON.parse(raw) : null;
+      const subjectNames = Array.isArray(onboarding?.subjects)
+        ? onboarding.subjects
+            .map((s: { name?: string }) => (typeof s?.name === "string" ? s.name.trim() : ""))
+            .filter((subject: string) => subject.length > 0)
+            .slice(0, 12)
+        : [];
+
       const shareParams = new URLSearchParams({
         aps: String(aps),
         rating,
-        submitted: "0",
-        pending: "0",
+        fullName: name,
+        grade: onboarding?.gradeYear ?? "",
+        school: onboarding?.schoolName ?? "",
+        subjects: subjectNames.join("|"),
       });
 
       const response = await fetch(`/api/share/card-image?${shareParams}`);
@@ -62,13 +73,13 @@ function RevealContent() {
       if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: "Here is my APS Card from Baseform.",
+          text: `I calculated my APS on Baseform. Calculate yours here: ${window.location.origin}`,
           files: [file],
         });
       } else if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: "Sharing files is not supported on this browser. Try opening on mobile Chrome/Safari.",
+          text: `Sharing files is not supported on this browser. Calculate your APS on Baseform: ${window.location.origin}`,
         });
       } else {
         // Keep a graceful fallback for browsers without Web Share API.

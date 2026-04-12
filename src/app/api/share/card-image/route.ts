@@ -15,14 +15,35 @@ function sanitizeText(value: string | null, fallback: string): string {
   return cleaned.length > 0 ? cleaned.slice(0, 40) : fallback;
 }
 
+function sanitizeSubjects(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .slice(0, 12)
+    .map((item) => item.slice(0, 28));
+}
+
 /** GET /api/share/card-image - Generates an APS card as an image */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const aps = clampNumeric(searchParams.get("aps"), 0);
     const rating = sanitizeText(searchParams.get("rating"), "N/A");
-    const submitted = clampNumeric(searchParams.get("submitted"), 0);
-    const pending = clampNumeric(searchParams.get("pending"), 0);
+    const fullName = sanitizeText(searchParams.get("fullName"), "A Baseform Student");
+    const grade = sanitizeText(searchParams.get("grade"), "Grade not specified");
+    const school = sanitizeText(searchParams.get("school"), "School not specified");
+    const subjects = sanitizeSubjects(searchParams.get("subjects"));
+
+    const motivation =
+      aps >= 35
+        ? "Excellent academic standing. Keep applying with confidence."
+        : aps >= 28
+        ? "Strong progress. Stay consistent and keep building momentum."
+        : aps >= 21
+        ? "Solid foundation. Focused effort will open more opportunities."
+        : "Every assessment matters. Keep improving one step at a time.";
 
     return new ImageResponse(
       createElement(
@@ -33,7 +54,7 @@ export async function GET(request: Request) {
             height: "1350px",
             display: "flex",
             background: "linear-gradient(145deg, #fff7ed 0%, #fffbeb 100%)",
-            padding: "70px",
+              padding: "56px",
             boxSizing: "border-box",
             fontFamily: "ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
           },
@@ -44,13 +65,12 @@ export async function GET(request: Request) {
             style: {
               width: "100%",
               height: "100%",
-              borderRadius: "56px",
-              border: "4px solid #fed7aa",
+              borderRadius: "44px",
+              border: "3px solid #fed7aa",
               background: "#ffffff",
               display: "flex",
               flexDirection: "column",
-              alignItems: "center",
-              padding: "72px 70px 48px",
+              padding: "56px 56px 44px",
               boxSizing: "border-box",
             },
           },
@@ -58,10 +78,11 @@ export async function GET(request: Request) {
             "div",
             {
               style: {
-                fontSize: "42px",
+                fontSize: "36px",
                 fontWeight: 800,
                 letterSpacing: "1px",
                 color: "#f97316",
+                textAlign: "center",
               },
             },
             "BASEFORM APS CARD"
@@ -70,34 +91,73 @@ export async function GET(request: Request) {
             "div",
             {
               style: {
-                marginTop: "10px",
-                fontSize: "32px",
+                marginTop: "8px",
+                fontSize: "28px",
                 fontWeight: 600,
                 color: "#64748b",
+                textAlign: "center",
               },
             },
-            "Your Opportunity Report"
+            "Academic Opportunity Report"
           ),
           createElement(
             "div",
             {
               style: {
-                marginTop: "48px",
-                width: "460px",
-                height: "460px",
-                borderRadius: "48px",
-                background: "linear-gradient(135deg, #fb923c 0%, #f97316 100%)",
+                marginTop: "22px",
+                width: "100%",
+                borderRadius: "22px",
+                border: "2px solid #fed7aa",
+                background: "#fff7ed",
+                padding: "18px 22px",
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
+                gap: "8px",
+                boxSizing: "border-box",
               },
             },
             createElement(
               "div",
               {
                 style: {
-                  fontSize: "180px",
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  color: "#334155",
+                },
+              },
+              fullName
+            ),
+            createElement(
+              "div",
+              {
+                style: {
+                  fontSize: "19px",
+                  color: "#64748b",
+                },
+              },
+              `${grade} • ${school}`
+            )
+          ),
+          createElement(
+            "div",
+            {
+              style: {
+                marginTop: "24px",
+                width: "100%",
+                borderRadius: "30px",
+                background: "linear-gradient(135deg, #fb923c 0%, #f97316 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "36px 38px",
+                boxSizing: "border-box",
+              },
+            },
+            createElement(
+              "div",
+              {
+                style: {
+                  fontSize: "120px",
                   fontWeight: 900,
                   color: "#ffffff",
                   lineHeight: 1,
@@ -109,92 +169,52 @@ export async function GET(request: Request) {
               "div",
               {
                 style: {
-                  marginTop: "10px",
-                  fontSize: "44px",
+                  fontSize: "34px",
                   fontWeight: 700,
                   color: "#ffedd5",
                   letterSpacing: "1px",
                 },
               },
-              "APS SCORE"
+              "APS SCORE (OUT OF 42)"
+            ),
+            createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  borderRadius: "999px",
+                  background: "rgba(255,255,255,0.22)",
+                  padding: "8px 20px",
+                  fontSize: "28px",
+                  fontWeight: 700,
+                  color: "#ffffff",
+                },
+              },
+              rating
             )
           ),
           createElement(
             "div",
             {
               style: {
-                marginTop: "78px",
+                marginTop: "24px",
                 width: "100%",
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px",
+                gap: "12px",
               },
             },
             createElement(
               "div",
               {
                 style: {
-                  fontSize: "32px",
+                  fontSize: "24px",
                   fontWeight: 600,
                   color: "#64748b",
                   width: "100%",
                 },
               },
-              "Rating"
-            ),
-            createElement(
-              "div",
-              {
-                style: {
-                  fontSize: "56px",
-                  fontWeight: 800,
-                  color: "#0f172a",
-                  width: "100%",
-                },
-              },
-              rating
-            ),
-            createElement("div", {
-              style: {
-                marginTop: "16px",
-                width: "100%",
-                height: "3px",
-                background: "#e2e8f0",
-              },
-            }),
-            createElement(
-              "div",
-              {
-                style: {
-                  marginTop: "18px",
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                },
-              },
-              createElement(
-                "div",
-                {
-                  style: {
-                    fontSize: "32px",
-                    fontWeight: 600,
-                    color: "#64748b",
-                  },
-                },
-                "Applications Submitted"
-              ),
-              createElement(
-                "div",
-                {
-                  style: {
-                    fontSize: "56px",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                  },
-                },
-                String(submitted)
-              )
+              "Subjects"
             ),
             createElement(
               "div",
@@ -202,32 +222,43 @@ export async function GET(request: Request) {
                 style: {
                   width: "100%",
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
                 },
               },
-              createElement(
-                "div",
-                {
-                  style: {
-                    fontSize: "32px",
-                    fontWeight: 600,
-                    color: "#64748b",
-                  },
-                },
-                "Applications In Progress"
-              ),
-              createElement(
-                "div",
-                {
-                  style: {
-                    fontSize: "56px",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                  },
-                },
-                String(pending)
-              )
+              ...(subjects.length > 0
+                ? subjects.map((subject, index) =>
+                    createElement(
+                      "div",
+                      {
+                        key: `${subject}-${index}`,
+                        style: {
+                          borderRadius: "999px",
+                          border: "1.5px solid #e2e8f0",
+                          background: "#f8fafc",
+                          padding: "8px 14px",
+                          fontSize: "20px",
+                          fontWeight: 500,
+                          color: "#334155",
+                          display: "flex",
+                        },
+                      },
+                      subject
+                    )
+                  )
+                : [
+                    createElement(
+                      "div",
+                      {
+                        key: "empty-subjects",
+                        style: {
+                          fontSize: "20px",
+                          color: "#94a3b8",
+                        },
+                      },
+                      "No subjects listed"
+                    ),
+                  ])
             )
           ),
           createElement(
@@ -235,13 +266,13 @@ export async function GET(request: Request) {
             {
               style: {
                 marginTop: "auto",
-                fontSize: "28px",
+                fontSize: "22px",
                 fontWeight: 600,
-                color: "#94a3b8",
+                color: "#64748b",
                 textAlign: "center",
               },
             },
-            "Calculated from your best 6 subjects (excluding Life Orientation)"
+            motivation
           )
         )
       ),

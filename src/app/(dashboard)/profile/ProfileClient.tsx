@@ -85,7 +85,21 @@ function formatTierName(tier?: string | null): string {
   return "Free";
 }
 
-function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; fullName: string }) {
+function ShareButton({
+  aps,
+  rating,
+  fullName,
+  grade,
+  school,
+  subjects,
+}: {
+  aps: number;
+  rating: string;
+  fullName: string;
+  grade: string;
+  school: string;
+  subjects: string[];
+}) {
   const [state, setState] = useState<"idle" | "loading">("idle");
 
   async function handleShare() {
@@ -94,8 +108,10 @@ function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; f
       const params = new URLSearchParams({
         aps: String(aps),
         rating,
-        submitted: "0",
-        pending: "0",
+        fullName,
+        grade,
+        school,
+        subjects: subjects.slice(0, 12).join("|"),
       });
 
       const response = await fetch(`/api/share/card-image?${params}`);
@@ -108,13 +124,13 @@ function ShareButton({ aps, rating, fullName }: { aps: number; rating: string; f
       if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: "Here is my APS Card from Baseform.",
+          text: `I calculated my APS on Baseform. Calculate yours here: ${window.location.origin}`,
           files: [file],
         });
       } else if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: "Sharing files is not supported on this browser. Try opening on mobile Chrome/Safari.",
+          text: `Sharing files is not supported on this browser. Calculate your APS on Baseform: ${window.location.origin}`,
         });
       } else {
         const url = window.URL.createObjectURL(blob);
@@ -559,7 +575,14 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
 
           {/* Share APS card + Invite guardian */}
           <div className="mt-4 flex flex-wrap gap-2">
-            <ShareButton aps={aps} rating={rating} fullName={displayProfile?.full_name || ""} />
+            <ShareButton
+              aps={aps}
+              rating={rating}
+              fullName={displayProfile?.full_name || ""}
+              grade={displayProfile?.grade_year || ""}
+              school={displayProfile?.school_name || ""}
+              subjects={subjects.map((subject) => subject.subjectName)}
+            />
             <InviteGuardianButton hasGuardianEmail={!!displayProfile?.guardian_email} />
           </div>
 
