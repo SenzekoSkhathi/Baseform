@@ -3,14 +3,14 @@ import { requireAdminGuard } from "@/lib/admin/auth";
 import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
-const SELECT_COLUMNS = "id,name,sponsor,minimum_aps,amount_min,amount_max,closing_date,website,provinces_eligible,fields_of_study,is_active";
+const SELECT_COLUMNS = "id,title,provider,description,minimum_aps,amount_per_year,closing_date,application_url,provinces_eligible,fields_of_study,is_active";
 
 export async function GET() {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const admin = createAdminClient();
-  const { data, error } = await admin.from("bursaries").select(SELECT_COLUMNS).order("name");
+  const { data, error } = await admin.from("bursaries").select(SELECT_COLUMNS).order("title");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
@@ -21,10 +21,10 @@ export async function POST(req: Request) {
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const body = await req.json();
-  const name = String(body?.name ?? "").trim();
+  const title = String(body?.title ?? "").trim();
   const minimumAps = Number(body?.minimum_aps ?? 0);
 
-  if (!name) return NextResponse.json({ error: "Bursary name is required" }, { status: 400 });
+  if (!title) return NextResponse.json({ error: "Bursary title is required" }, { status: 400 });
   if (!Number.isFinite(minimumAps) || minimumAps < 0) {
     return NextResponse.json({ error: "minimum_aps must be a non-negative number" }, { status: 400 });
   }
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { error } = await admin.from("bursaries").insert({
     ...body,
-    name,
+    title,
     minimum_aps: minimumAps,
   });
 
@@ -40,12 +40,12 @@ export async function POST(req: Request) {
 
   void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
     entityType: "bursary",
-    entityKey: name,
+    entityKey: title,
     action: "create",
     beforeData: null,
     afterData: {
       ...body,
-      name,
+      title,
       minimum_aps: minimumAps,
     },
   });
@@ -60,10 +60,10 @@ export async function PATCH(req: Request) {
   const { id, ...changes } = await req.json();
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  if ("name" in changes) {
-    const name = String(changes.name ?? "").trim();
-    if (!name) return NextResponse.json({ error: "Bursary name is required" }, { status: 400 });
-    changes.name = name;
+  if ("title" in changes) {
+    const title = String(changes.title ?? "").trim();
+    if (!title) return NextResponse.json({ error: "Bursary title is required" }, { status: 400 });
+    changes.title = title;
   }
 
   if ("minimum_aps" in changes) {
@@ -89,7 +89,7 @@ export async function PATCH(req: Request) {
 
   void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
     entityType: "bursary",
-    entityKey: String(before?.name ?? id),
+    entityKey: String(before?.title ?? id),
     action: "update",
     beforeData: before ?? null,
     afterData: { ...(before ?? {}), ...changes },
@@ -119,7 +119,7 @@ export async function DELETE(req: Request) {
 
   void recordAdminContentAudit(admin, { userId: guard.userId, email: guard.email }, {
     entityType: "bursary",
-    entityKey: String(existing?.name ?? id),
+    entityKey: String(existing?.title ?? id),
     action: "delete",
     beforeData: existing ?? null,
     afterData: null,

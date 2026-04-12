@@ -1,16 +1,16 @@
 -- Create bursaries table and enable RLS for admin-managed bursary content.
 -- This table tracks bursary opportunities that admins can manage and students can discover.
+-- Columns match the seed migration (20260410_bursaries_seed.sql) expectations.
 
 CREATE TABLE IF NOT EXISTS public.bursaries (
   id bigserial PRIMARY KEY,
-  name text NOT NULL UNIQUE,
-  sponsor text,
+  title text NOT NULL UNIQUE,
+  provider text,
   description text,
+  amount_per_year numeric,
   minimum_aps numeric DEFAULT 0,
-  amount_min numeric,
-  amount_max numeric,
   closing_date date,
-  website text,
+  application_url text,
   provinces_eligible text[] DEFAULT '{}',
   fields_of_study text[] DEFAULT '{}',
   requires_financial_need boolean DEFAULT false,

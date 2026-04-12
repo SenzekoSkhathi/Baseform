@@ -73,7 +73,7 @@ discover.get("/bursaries", async (ctx) => {
     .select("*", { count: "exact" })
     .lte("minimum_aps", aps)
     .eq("is_active", true)
-    .order("amount_max", { ascending: false });
+    .order("amount_per_year", { ascending: false });
 
   if (province) {
     query = query.or(
