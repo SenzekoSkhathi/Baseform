@@ -1,9 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, GraduationCap, Trophy, Clock, CheckCircle } from "lucide-react";
 import Logo from "@/components/ui/Logo";
+import {
+  DEFAULT_HOME_FEATURES,
+  DEFAULT_HOME_STATS,
+  DEFAULT_HOME_SUBTITLE,
+  type HomeStat,
+} from "@/lib/site-config/defaults";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -16,20 +23,64 @@ const fadeUp: Variants = {
   }),
 };
 
-const STATS = [
-  { icon: GraduationCap, value: "26+", label: "Universities", color: "text-orange-500" },
-  { icon: Trophy, value: "R2M+", label: "Bursaries tracked", color: "text-amber-500" },
-  { icon: Clock, value: "24/7", label: "Planning support", color: "text-emerald-500" },
-];
-
-const FEATURES = [
-  "Instant APS score calculator",
-  "Match to unis and bursaries you qualify for",
-  "Track every application in one timeline",
-  "Deadline reminders before it is too late",
-];
+const ICON_BY_KEY = {
+  "graduation-cap": GraduationCap,
+  trophy: Trophy,
+  clock: Clock,
+} as const;
 
 export default function Home() {
+  const [subtitle, setSubtitle] = useState(DEFAULT_HOME_SUBTITLE);
+  const [features, setFeatures] = useState(DEFAULT_HOME_FEATURES);
+  const [stats, setStats] = useState<HomeStat[]>(DEFAULT_HOME_STATS);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadSiteConfig() {
+      try {
+        const res = await fetch("/api/site-config", { signal: controller.signal });
+        if (!res.ok) return;
+
+        const payload = await res.json();
+
+        if (typeof payload?.homeSubtitle === "string" && payload.homeSubtitle.trim()) {
+          setSubtitle(payload.homeSubtitle);
+        }
+
+        if (Array.isArray(payload?.homeFeatures)) {
+          const parsed = payload.homeFeatures
+            .map((value: unknown) => String(value ?? "").trim())
+            .filter(Boolean);
+          if (parsed.length > 0) setFeatures(parsed);
+        }
+
+        if (Array.isArray(payload?.homeStats)) {
+          const parsed = payload.homeStats
+            .map((entry: unknown) => {
+              const row = entry as Record<string, unknown>;
+              const iconRaw = String(row.icon ?? "");
+              if (!(iconRaw in ICON_BY_KEY)) return null;
+              return {
+                value: String(row.value ?? "").trim(),
+                label: String(row.label ?? "").trim(),
+                icon: iconRaw as keyof typeof ICON_BY_KEY,
+                color: String(row.color ?? "text-orange-500"),
+              };
+            })
+            .filter((item): item is HomeStat => Boolean(item?.value && item?.label));
+
+          if (parsed.length > 0) setStats(parsed);
+        }
+      } catch {
+        // Keep defaults when config fetch fails.
+      }
+    }
+
+    void loadSiteConfig();
+    return () => controller.abort();
+  }, []);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#fff9f2] text-slate-900">
       <div className="pointer-events-none absolute inset-0">
@@ -86,8 +137,7 @@ export default function Home() {
               animate="show"
               className="mt-5 max-w-xl text-sm leading-relaxed text-slate-600 sm:mt-6 sm:text-lg"
             >
-              Baseform helps you calculate APS, find matching universities and bursaries,
-              and manage your whole application journey in one powerful dashboard.
+              {subtitle}
             </motion.p>
 
             <motion.div
@@ -121,13 +171,16 @@ export default function Home() {
               animate="show"
               className="mt-5 grid grid-cols-3 gap-2 sm:gap-3 lg:hidden"
             >
-              {STATS.map(({ icon: Icon, value, label, color }) => (
+              {stats.map(({ icon, value, label, color }) => {
+                const Icon = ICON_BY_KEY[icon];
+                return (
                 <div key={`mobile-${label}`} className="rounded-2xl border border-orange-100 bg-white/90 p-2.5 text-center shadow-sm">
                   <Icon size={14} className={`${color} mx-auto`} />
                   <p className="mt-1 text-sm font-black leading-none text-slate-900">{value}</p>
                   <p className="mt-1 text-[10px] leading-tight text-slate-500">{label}</p>
                 </div>
-              ))}
+                );
+              })}
             </motion.div>
 
             <motion.p
@@ -152,19 +205,22 @@ export default function Home() {
               <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Application command center</p>
 
               <div className="mt-4 grid grid-cols-3 gap-2.5 sm:gap-3">
-                {STATS.map(({ icon: Icon, value, label, color }) => (
+                {stats.map(({ icon, value, label, color }) => {
+                  const Icon = ICON_BY_KEY[icon];
+                  return (
                   <div key={label} className="rounded-2xl border border-orange-100 bg-white p-3 text-center">
                     <Icon size={17} className={`${color} mx-auto`} />
                     <p className="mt-1.5 text-lg font-black leading-none text-slate-900">{value}</p>
                     <p className="mt-1 text-[11px] leading-tight text-slate-500">{label}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="mt-5 rounded-2xl bg-orange-50/90 p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-orange-700">What you get</p>
                 <div className="mt-3 grid gap-2">
-                  {FEATURES.map((feature, i) => (
+                  {features.map((feature, i) => (
                     <motion.div
                       key={feature}
                       initial={{ opacity: 0, x: -10 }}

@@ -1,28 +1,64 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/components/ui/Logo";
+import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 
 type PlanId = "essential" | "pro" | "ultra";
 
-const PLAN_COPY: Record<PlanId, { name: string; price: string }> = {
+const DEFAULT_PLAN_COPY: Record<PlanId, { name: string; price: string }> = {
   essential: { name: "Essential", price: "R59 / month" },
   pro: { name: "Pro", price: "R129 / month" },
   ultra: { name: "Ultra", price: "R249 / month" },
 };
+
+function toPlanCopy(rows: PublicPlan[]): Record<PlanId, { name: string; price: string }> {
+  const copy: Record<PlanId, { name: string; price: string }> = { ...DEFAULT_PLAN_COPY };
+
+  for (const row of rows) {
+    if (row.slug === "essential" || row.slug === "pro" || row.slug === "ultra") {
+      copy[row.slug] = {
+        name: row.name,
+        price: `${row.price} ${row.period}`,
+      };
+    }
+  }
+
+  return copy;
+}
 
 export default function PaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [planCopy, setPlanCopy] = useState<Record<PlanId, { name: string; price: string }>>(DEFAULT_PLAN_COPY);
 
   const plan = useMemo(() => {
     const raw = (searchParams.get("plan") ?? "essential") as PlanId;
-    return raw in PLAN_COPY ? raw : "essential";
-  }, [searchParams]);
+    return raw in planCopy ? raw : "essential";
+  }, [planCopy, searchParams]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadConfig() {
+      try {
+        const res = await fetch("/api/site-config", { signal: controller.signal });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const plans = Array.isArray(payload?.plans) ? (payload.plans as PublicPlan[]) : DEFAULT_PLANS;
+        setPlanCopy(toPlanCopy(plans));
+      } catch {
+        // Keep defaults when config fetch fails.
+      }
+    }
+
+    void loadConfig();
+    return () => controller.abort();
+  }, []);
 
   async function handleCompletePayment() {
     setLoading(true);
@@ -60,7 +96,7 @@ export default function PaymentPage() {
         <div className="space-y-1 mb-8">
           <h2 className="text-2xl font-bold text-gray-900">Complete your payment</h2>
           <p className="text-gray-500 text-sm">
-            You selected the <span className="font-semibold text-gray-700">{PLAN_COPY[plan].name}</span> plan ({PLAN_COPY[plan].price}).
+            You selected the <span className="font-semibold text-gray-700">{planCopy[plan].name}</span> plan ({planCopy[plan].price}).
           </p>
         </div>
 

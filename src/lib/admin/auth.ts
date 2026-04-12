@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hasAdminAccess } from "@/lib/admin/access";
 
 export type AdminGuardResult =
-  | { ok: true; userId: string }
+  | { ok: true; userId: string; email: string | null }
   | { ok: false; status: 401 | 403; error: string };
 
 export async function requireAdminGuard(): Promise<AdminGuardResult> {
@@ -23,5 +23,5 @@ export async function requireAdminGuard(): Promise<AdminGuardResult> {
     return { ok: false, status: 403, error: "Forbidden" };
   }
 
-  return { ok: true, userId: user.id };
+  return { ok: true, userId: user.id, email: user.email ?? null };
 }

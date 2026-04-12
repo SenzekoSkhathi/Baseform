@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Lock, Zap, ChevronLeft } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 
 type PlanId = "free" | "essential" | "pro" | "ultra";
 
@@ -19,74 +20,68 @@ type Plan = {
   recommended: boolean;
 };
 
-const PLANS: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: "R0",
-    period: "/month",
-    tagline: "Get started",
-    features: [
-      "APS score calculator",
-      "See matched universities",
-      "Track up to 3 applications",
-    ],
-    available: true,
-    recommended: false,
-  },
-  {
-    id: "essential",
-    name: "Essential",
-    price: "R59",
-    period: "/month",
-    tagline: "Most popular",
-    features: [
-      "Everything in Free",
-      "Unlimited application tracking",
-      "Bursary matching & discovery",
-      "Document vault (upload & store)",
-      "AI Coach guidance",
-      "Deadline reminders",
-    ],
-    available: true,
-    recommended: true,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "R129",
-    period: "/month",
-    tagline: "Coming soon",
-    features: [
-      "Everything in Essential",
-      "Auto-fill application forms",
-      "Email status monitoring",
-      "Priority support",
-    ],
-    available: false,
-    recommended: false,
-  },
-  {
-    id: "ultra",
-    name: "Ultra",
-    price: "R249",
-    period: "/month",
-    tagline: "Coming soon",
-    features: [
-      "Everything in Pro",
-      "WhatsApp guidance bot",
-      "Personal application advisor",
-      "Application review & feedback",
-    ],
-    available: false,
-    recommended: false,
-  },
-];
+function toPlanId(value: string): PlanId {
+  if (value === "free" || value === "essential" || value === "pro" || value === "ultra") {
+    return value;
+  }
+  return "essential";
+}
+
+function mapPlans(rows: PublicPlan[]): Plan[] {
+  return rows.map((plan) => ({
+    id: toPlanId(plan.slug),
+    name: plan.name,
+    price: plan.price,
+    period: plan.period,
+    tagline: plan.tagline,
+    features: plan.features,
+    available: plan.available,
+    recommended: plan.recommended,
+  }));
+}
 
 export default function PlansPage() {
   const router = useRouter();
+  const [plans, setPlans] = useState<Plan[]>(() => mapPlans(DEFAULT_PLANS));
   const [selected, setSelected] = useState<PlanId>("essential");
   const [loading, setLoading] = useState(false);
+
+  const selectedPlan = useMemo(
+    () => plans.find((p) => p.id === selected) ?? plans[0],
+    [plans, selected]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadPlanConfig() {
+      try {
+        const res = await fetch("/api/site-config", { signal: controller.signal });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const incoming = Array.isArray(payload?.plans)
+          ? mapPlans(payload.plans as PublicPlan[])
+          : [];
+        if (incoming.length === 0) return;
+
+        setPlans(incoming);
+
+        setSelected((prev) => {
+          const stillExists = incoming.some((p) => p.id === prev);
+          if (stillExists) return prev;
+          const recommended = incoming.find((p) => p.recommended && p.available)?.id;
+          const available = incoming.find((p) => p.available)?.id;
+          return recommended ?? available ?? incoming[0].id;
+        });
+      } catch {
+        // Keep defaults when config fetch fails.
+      }
+    }
+
+    void loadPlanConfig();
+
+    return () => controller.abort();
+  }, []);
 
   async function handleContinue() {
     setLoading(true);
@@ -151,12 +146,10 @@ export default function PlansPage() {
 
             <div className="mt-6 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Selected plan</p>
-              <p className="mt-1 text-xl font-black text-slate-900">
-                {PLANS.find((p) => p.id === selected)?.name}
-              </p>
+              <p className="mt-1 text-xl font-black text-slate-900">{selectedPlan?.name}</p>
               <p className="text-sm text-slate-500">
-                {PLANS.find((p) => p.id === selected)?.price}
-                {PLANS.find((p) => p.id === selected)?.period}
+                {selectedPlan?.price}
+                {selectedPlan?.period}
               </p>
             </div>
           </div>
@@ -164,7 +157,7 @@ export default function PlansPage() {
 
         <section className="mt-6 lg:col-span-8 lg:mt-0">
           <div className="grid gap-3 sm:grid-cols-2">
-            {PLANS.map((plan) => {
+            {plans.map((plan) => {
               const isSelected = selected === plan.id;
               const isLocked = !plan.available;
 
@@ -248,7 +241,7 @@ export default function PlansPage() {
             >
               {loading
                 ? "Setting up your account..."
-                : `Continue with ${PLANS.find((p) => p.id === selected)?.name}`}
+                : `Continue with ${selectedPlan?.name ?? "selected plan"}`}
             </button>
 
             <p className="mt-3 text-center text-xs text-slate-500">
