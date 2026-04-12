@@ -1,13 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminGuard } from "@/lib/admin/auth";
-import { isProtectedSiteSettingKey, recordAdminContentAudit } from "@/lib/admin/contentAdmin";
+import { isProtectedSiteSettingKey, isValidSiteSettingKey, recordAdminContentAudit } from "@/lib/admin/contentAdmin";
 import { NextResponse } from "next/server";
 
 const SELECT_COLUMNS = "key,value,description,updated_at";
-
-function validateKey(key: string): boolean {
-  return /^[a-z0-9][a-z0-9_-]{1,63}$/.test(key);
-}
 
 export async function GET() {
   const guard = await requireAdminGuard();
@@ -30,7 +26,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const key = String(body?.key ?? "").trim();
 
-  if (!validateKey(key)) {
+  if (!isValidSiteSettingKey(key)) {
     return NextResponse.json({ error: "Invalid key format" }, { status: 400 });
   }
 
@@ -64,7 +60,7 @@ export async function PATCH(req: Request) {
   const { key, ...changes } = await req.json();
   const settingKey = String(key ?? "").trim();
 
-  if (!validateKey(settingKey)) {
+  if (!isValidSiteSettingKey(settingKey)) {
     return NextResponse.json({ error: "Invalid key format" }, { status: 400 });
   }
 
@@ -108,7 +104,7 @@ export async function DELETE(req: Request) {
   const { key } = await req.json();
   const settingKey = String(key ?? "").trim();
 
-  if (!validateKey(settingKey)) {
+  if (!isValidSiteSettingKey(settingKey)) {
     return NextResponse.json({ error: "Invalid key format" }, { status: 400 });
   }
 

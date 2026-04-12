@@ -7,6 +7,8 @@ export const PROTECTED_SITE_SETTING_KEYS = new Set([
   "admin_alert_thresholds",
 ]);
 
+const SITE_SETTING_KEY_REGEX = /^[a-z0-9][a-z0-9_-]{1,63}$/;
+
 export type AdminContentActor = {
   userId: string;
   email?: string | null;
@@ -184,4 +186,8 @@ export function csvRowsToRecords(text: string): Array<Record<string, string>> {
 
 export function isProtectedSiteSettingKey(key: string): boolean {
   return PROTECTED_SITE_SETTING_KEYS.has(key);
+}
+
+export function isValidSiteSettingKey(key: string): boolean {
+  return SITE_SETTING_KEY_REGEX.test(key);
 }
