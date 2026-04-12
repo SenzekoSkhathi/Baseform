@@ -105,6 +105,69 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((row) => row.some((cell) => cell.trim() !== ""));
 }
 
+export function parseCsvRowsWithLineNumbers(text: string): Array<{ lineNumber: number; cells: string[] }> {
+  const rows: Array<{ lineNumber: number; cells: string[] }> = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
+  let inQuotes = false;
+  let rowStartLine = 1;
+  let lineNumber = 1;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (inQuotes) {
+      if (char === '"' && next === '"') {
+        currentCell += '"';
+        index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        currentCell += char;
+        if (char === "\n") {
+          lineNumber += 1;
+        }
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    if (char === ",") {
+      currentRow.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+
+    if (char === "\n") {
+      currentRow.push(currentCell);
+      rows.push({ lineNumber: rowStartLine, cells: currentRow });
+      currentRow = [];
+      currentCell = "";
+      lineNumber += 1;
+      rowStartLine = lineNumber;
+      continue;
+    }
+
+    if (char === "\r") {
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0 || text.endsWith(",")) {
+    currentRow.push(currentCell);
+    rows.push({ lineNumber: rowStartLine, cells: currentRow });
+  }
+
+  return rows.filter((row) => row.cells.some((cell) => cell.trim() !== ""));
+}
+
 export function csvRowsToRecords(text: string): Array<Record<string, string>> {
   const rows = parseCsv(text);
   if (rows.length === 0) return [];
