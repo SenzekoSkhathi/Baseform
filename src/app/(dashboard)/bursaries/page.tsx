@@ -54,13 +54,18 @@ export default async function BursariesPage() {
     bursaries = [];
   }
 
-  let initialTracked: { bursary_id: string; bursary_name: string; status: "saved" | "applied"; updated_at: string }[] = [];
+  let initialTracked: { bursary_id: string; bursary_name: string; status: "saved"; updated_at: string }[] = [];
   try {
     const { data: tracked } = await supabase
       .from("bursary_applications")
       .select("bursary_id, bursary_name, status, updated_at")
       .eq("student_id", user.id);
-    initialTracked = (tracked ?? []) as unknown as typeof initialTracked;
+    initialTracked = (tracked ?? []).map((row) => ({
+      bursary_id: String((row as { bursary_id?: unknown }).bursary_id ?? ""),
+      bursary_name: String((row as { bursary_name?: unknown }).bursary_name ?? "Bursary"),
+      status: "saved" as const,
+      updated_at: String((row as { updated_at?: unknown }).updated_at ?? new Date().toISOString()),
+    }));
   } catch {
     initialTracked = [];
   }
