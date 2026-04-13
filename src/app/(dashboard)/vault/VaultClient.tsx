@@ -1,10 +1,14 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ChevronLeft,
   FolderOpen,
   Upload,
+  Camera,
+  ArrowUp,
+  ArrowDown,
+  Eye,
   FileText,
   Trash2,
   Download,
@@ -60,13 +64,211 @@ function fileDisplayName(raw: string): string {
   return withoutTimestamp.replace(/_/g, " ");
 }
 
+type ReaderKind = "pdf" | "image" | "text" | "office" | "unsupported";
+
+function extensionFromName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return "";
+  return name.slice(dot + 1).toLowerCase();
+}
+
+function readerKindForFile(file: VaultFile): ReaderKind {
+  const ext = extensionFromName(file.name);
+  const mime = file.mimeType.toLowerCase();
+
+  if (mime.includes("pdf") || ext === "pdf") return "pdf";
+  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "image";
+  if (mime.startsWith("text/") || ["txt", "md", "csv", "json"].includes(ext)) return "text";
+  if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) return "office";
+
+  return "unsupported";
+}
+
+function clampByte(value: number): number {
+  if (value < 0) return 0;
+  if (value > 255) return 255;
+  return Math.round(value);
+}
+
+function detectDocumentBounds(gray: Uint8ClampedArray, width: number, height: number) {
+  const cornerSample = Math.max(8, Math.round(Math.min(width, height) * 0.04));
+  const sampleStep = 2;
+
+  const read = (x: number, y: number) => gray[y * width + x];
+  let sum = 0;
+  let count = 0;
+
+  for (let y = 0; y < cornerSample; y += sampleStep) {
+    for (let x = 0; x < cornerSample; x += sampleStep) {
+      sum += read(x, y);
+      sum += read(width - 1 - x, y);
+      sum += read(x, height - 1 - y);
+      sum += read(width - 1 - x, height - 1 - y);
+      count += 4;
+    }
+  }
+
+  const background = count > 0 ? sum / count : 240;
+  const delta = 18;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  let matches = 0;
+
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const pixel = read(x, y);
+      if (Math.abs(pixel - background) <= delta) continue;
+
+      matches += 1;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (matches < 80 || maxX <= minX || maxY <= minY) {
+    return { x: 0, y: 0, width, height };
+  }
+
+  const detectedWidth = maxX - minX + 1;
+  const detectedHeight = maxY - minY + 1;
+  const detectedArea = detectedWidth * detectedHeight;
+  const fullArea = width * height;
+
+  // Fallback when detection is unreliable (too small/too large relative to frame).
+  if (detectedArea < fullArea * 0.18 || detectedArea > fullArea * 0.98) {
+    return { x: 0, y: 0, width, height };
+  }
+
+  const pad = Math.max(10, Math.round(Math.min(width, height) * 0.02));
+  const x = Math.max(0, minX - pad);
+  const y = Math.max(0, minY - pad);
+  const w = Math.min(width - x, detectedWidth + pad * 2);
+  const h = Math.min(height - y, detectedHeight + pad * 2);
+
+  return { x, y, width: w, height: h };
+}
+
+async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: number; height: number }> {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not read one of the selected images."));
+      img.src = objectUrl;
+    });
+
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Could not process image.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const source = context.getImageData(0, 0, width, height);
+    const rgba = source.data;
+    const gray = new Uint8ClampedArray(width * height);
+
+    for (let i = 0, p = 0; i < rgba.length; i += 4, p += 1) {
+      gray[p] = clampByte(rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114);
+    }
+
+    const bounds = detectDocumentBounds(gray, width, height);
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = bounds.width;
+    outputCanvas.height = bounds.height;
+    const outputContext = outputCanvas.getContext("2d", { willReadFrequently: true });
+    if (!outputContext) throw new Error("Could not process image.");
+
+    const output = outputContext.createImageData(bounds.width, bounds.height);
+    const outputRgba = output.data;
+
+    for (let y = 0; y < bounds.height; y += 1) {
+      for (let x = 0; x < bounds.width; x += 1) {
+        const sourceIndex = (bounds.y + y) * width + (bounds.x + x);
+        const targetIndex = (y * bounds.width + x) * 4;
+        const base = gray[sourceIndex];
+
+        // Scanner-style cleanup: grayscale + boosted contrast with brighter whites.
+        let enhanced = clampByte((base - 128) * 1.45 + 128 + 6);
+        if (enhanced > 222) enhanced = 255;
+
+        outputRgba[targetIndex] = enhanced;
+        outputRgba[targetIndex + 1] = enhanced;
+        outputRgba[targetIndex + 2] = enhanced;
+        outputRgba[targetIndex + 3] = 255;
+      }
+    }
+
+    outputContext.putImageData(output, 0, 0);
+
+    return {
+      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.9),
+      width: bounds.width,
+      height: bounds.height,
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function buildPdfFromImages(images: File[]): Promise<Blob> {
+  if (!images.length) throw new Error("No images selected.");
+
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 24;
+
+  for (let index = 0; index < images.length; index += 1) {
+    if (index > 0) pdf.addPage("a4", "portrait");
+
+    const image = await loadImageForPdf(images[index]);
+    const maxWidth = pageWidth - margin * 2;
+    const maxHeight = pageHeight - margin * 2;
+    const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+    const renderWidth = image.width * scale;
+    const renderHeight = image.height * scale;
+    const x = (pageWidth - renderWidth) / 2;
+    const y = (pageHeight - renderHeight) / 2;
+
+    pdf.addImage(image.dataUrl, "JPEG", x, y, renderWidth, renderHeight, undefined, "FAST");
+  }
+
+  return pdf.output("blob");
+}
+
 type Props = {
   initialFiles: VaultFile[];
+};
+
+type ScanDraftPage = {
+  id: string;
+  file: File;
+  previewUrl: string;
 };
 
 export default function VaultClient({ initialFiles }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scannerInputRef = useRef<HTMLInputElement>(null);
+  const scanDraftPagesRef = useRef<ScanDraftPage[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const [files, setFiles] = useState<VaultFile[]>(initialFiles);
@@ -77,6 +279,35 @@ export default function VaultClient({ initialFiles }: Props) {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [scannerConverting, setScannerConverting] = useState(false);
+  const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
+  const [showScanReview, setShowScanReview] = useState(false);
+  const [readerFile, setReaderFile] = useState<VaultFile | null>(null);
+  const [readerKind, setReaderKind] = useState<ReaderKind>("unsupported");
+  const [readerUrl, setReaderUrl] = useState<string | null>(null);
+  const [readerText, setReaderText] = useState<string | null>(null);
+  const [readerLoading, setReaderLoading] = useState(false);
+  const [readerError, setReaderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    scanDraftPagesRef.current = scanDraftPages;
+  }, [scanDraftPages]);
+
+  useEffect(() => {
+    return () => {
+      scanDraftPagesRef.current.forEach((page) => URL.revokeObjectURL(page.previewUrl));
+    };
+  }, []);
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -86,13 +317,10 @@ export default function VaultClient({ initialFiles }: Props) {
     router.push("/dashboard");
   }
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  async function uploadFileToVault(file: File, successLabel?: string) {
     if (file.size > MAX_SIZE_BYTES) {
       setUploadError(`File too large — maximum size is ${MAX_SIZE_MB} MB.`);
-      return;
+      return false;
     }
 
     setUploadError(null);
@@ -109,14 +337,11 @@ export default function VaultClient({ initialFiles }: Props) {
     if (!res.ok) {
       setUploadError(json.error ?? "Upload failed. Please try again.");
       setUploading(false);
-      // Reset input so the same file can be re-selected
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      return false;
     }
 
-    setUploadSuccess(`${file.name} uploaded successfully.`);
+    setUploadSuccess(`${successLabel ?? file.name} uploaded successfully.`);
     setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
 
     // Refresh file list
     startTransition(async () => {
@@ -126,6 +351,107 @@ export default function VaultClient({ initialFiles }: Props) {
         setFiles(updated);
       }
     });
+
+    return true;
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    await uploadFileToVault(file);
+
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleScanClick() {
+    if (!isMobileViewport) return;
+    scannerInputRef.current?.click();
+  }
+
+  function clearScanDraft() {
+    setScanDraftPages((prev) => {
+      prev.forEach((page) => URL.revokeObjectURL(page.previewUrl));
+      return [];
+    });
+  }
+
+  function removeScanDraftPage(pageId: string) {
+    setScanDraftPages((prev) => {
+      const page = prev.find((item) => item.id === pageId);
+      if (page) URL.revokeObjectURL(page.previewUrl);
+      return prev.filter((item) => item.id !== pageId);
+    });
+  }
+
+  function moveScanDraftPage(pageId: string, direction: "up" | "down") {
+    setScanDraftPages((prev) => {
+      const currentIndex = prev.findIndex((item) => item.id === pageId);
+      if (currentIndex < 0) return prev;
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
+  async function handleScanImagesSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+
+    if (selected.length === 0) {
+      setUploadError("Select at least one image to scan.");
+      if (scannerInputRef.current) scannerInputRef.current.value = "";
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
+    const newPages: ScanDraftPage[] = selected.map((file, index) => ({
+      id: `${Date.now()}-${index}-${file.name}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setScanDraftPages((prev) => [...prev, ...newPages]);
+    setShowScanReview(true);
+
+    if (scannerInputRef.current) scannerInputRef.current.value = "";
+  }
+
+  async function handleCreatePdfFromDraft() {
+    if (!scanDraftPages.length) {
+      setUploadError("Add at least one scanned page.");
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
+    setScannerConverting(true);
+
+    try {
+      const filesForPdf = scanDraftPages.map((page) => page.file);
+      const pdfBlob = await buildPdfFromImages(filesForPdf);
+      const pdfFile = new File(
+        [pdfBlob],
+        `${uploadCategory}-scan-${Date.now()}.pdf`,
+        { type: "application/pdf" }
+      );
+
+      const pageLabel = `${filesForPdf.length} scanned page${filesForPdf.length > 1 ? "s" : ""} PDF`;
+      const uploaded = await uploadFileToVault(pdfFile, pageLabel);
+      if (uploaded) {
+        clearScanDraft();
+        setShowScanReview(false);
+      }
+    } catch {
+      setUploadError("Could not create PDF from your images. Please try again.");
+    } finally {
+      setScannerConverting(false);
+    }
   }
 
   async function handleDownload(path: string) {
@@ -133,6 +459,51 @@ export default function VaultClient({ initialFiles }: Props) {
     const json = await res.json();
     if (!res.ok || !json.url) return;
     window.open(json.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function openReader(file: VaultFile) {
+    setReaderFile(file);
+    setReaderKind(readerKindForFile(file));
+    setReaderUrl(null);
+    setReaderText(null);
+    setReaderError(null);
+    setReaderLoading(true);
+
+    try {
+      const res = await fetch(`/api/vault/download?path=${encodeURIComponent(file.path)}`);
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setReaderError("Could not open this document right now.");
+        setReaderLoading(false);
+        return;
+      }
+
+      const signedUrl = json.url as string;
+      const kind = readerKindForFile(file);
+      setReaderKind(kind);
+      setReaderUrl(signedUrl);
+
+      if (kind === "text") {
+        const textRes = await fetch(signedUrl);
+        if (!textRes.ok) {
+          setReaderError("Could not load text preview.");
+        } else {
+          setReaderText(await textRes.text());
+        }
+      }
+    } catch {
+      setReaderError("Could not open this document right now.");
+    } finally {
+      setReaderLoading(false);
+    }
+  }
+
+  function closeReader() {
+    setReaderFile(null);
+    setReaderUrl(null);
+    setReaderText(null);
+    setReaderError(null);
+    setReaderLoading(false);
   }
 
   async function handleDelete(path: string) {
@@ -154,6 +525,7 @@ export default function VaultClient({ initialFiles }: Props) {
 
   const filtered =
     activeCategory === "all" ? files : files.filter((f) => f.category === activeCategory);
+  const pendingScanCount = scanDraftPages.length;
 
   const countByCategory = Object.fromEntries(
     CATEGORIES.map((c) => [c.id, files.filter((f) => f.category === c.id).length])
@@ -184,18 +556,47 @@ export default function VaultClient({ initialFiles }: Props) {
                 Store and organise your application documents securely.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setShowUploadPanel((v) => !v);
-                setUploadError(null);
-                setUploadSuccess(null);
-              }}
-              className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
-            >
-              <Upload size={15} />
-              Upload
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {isMobileViewport && (
+                <button
+                  onClick={handleScanClick}
+                  disabled={uploading || scannerConverting}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                >
+                  <Camera size={15} />
+                  {scannerConverting ? "Scanning..." : "Scan to PDF"}
+                  {pendingScanCount > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                      {pendingScanCount}
+                    </span>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setShowUploadPanel((v) => !v);
+                  setUploadError(null);
+                  setUploadSuccess(null);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
+              >
+                <Upload size={15} />
+                Upload
+              </button>
+            </div>
           </div>
+
+          <input
+            ref={scannerInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={handleScanImagesSelect}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
@@ -210,6 +611,94 @@ export default function VaultClient({ initialFiles }: Props) {
             ))}
           </div>
         </header>
+
+        {isMobileViewport && showScanReview && (
+          <section className="mt-4 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-gray-900">Scan Preview</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  clearScanDraft();
+                  setShowScanReview(false);
+                }}
+                disabled={scannerConverting}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Clear
+              </button>
+            </div>
+
+            {scanDraftPages.length === 0 ? (
+              <p className="mt-3 text-xs text-gray-500">No pages yet. Tap Scan to PDF to capture pages.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {scanDraftPages.map((page, index) => (
+                  <div key={page.id} className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white p-2">
+                    <img
+                      src={page.previewUrl}
+                      alt={`Scanned page ${index + 1}`}
+                      className="h-14 w-14 shrink-0 rounded-lg border border-gray-200 object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-gray-800">Page {index + 1}</p>
+                      <p className="truncate text-[11px] text-gray-400">{page.file.name}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveScanDraftPage(page.id, "up")}
+                        disabled={index === 0 || scannerConverting}
+                        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+                        aria-label={`Move page ${index + 1} up`}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveScanDraftPage(page.id, "down")}
+                        disabled={index === scanDraftPages.length - 1 || scannerConverting}
+                        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+                        aria-label={`Move page ${index + 1} down`}
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeScanDraftPage(page.id)}
+                        disabled={scannerConverting}
+                        className="rounded-md p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                        aria-label={`Remove page ${index + 1}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={handleScanClick}
+                disabled={scannerConverting || uploading}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              >
+                <Camera size={13} />
+                Add pages
+              </button>
+              <button
+                type="button"
+                onClick={handleCreatePdfFromDraft}
+                disabled={!scanDraftPages.length || scannerConverting || uploading}
+                className="flex-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {scannerConverting ? "Creating PDF..." : `Create PDF (${scanDraftPages.length})`}
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Upload panel */}
         {showUploadPanel && (
@@ -252,8 +741,27 @@ export default function VaultClient({ initialFiles }: Props) {
                 />
               </div>
 
-              {uploading && (
-                <p className="text-xs font-medium text-orange-500">Uploading...</p>
+              {isMobileViewport && (
+                <button
+                  type="button"
+                  onClick={handleScanClick}
+                  disabled={uploading || scannerConverting}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                >
+                  <Camera size={14} />
+                  {scannerConverting ? "Converting images to PDF..." : "Scan document with camera (mobile)"}
+                  {pendingScanCount > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                      {pendingScanCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {(uploading || scannerConverting) && (
+                <p className="text-xs font-medium text-orange-500">
+                  {scannerConverting ? "Processing scan..." : "Uploading..."}
+                </p>
               )}
 
               {uploadError && (
@@ -345,6 +853,13 @@ export default function VaultClient({ initialFiles }: Props) {
 
                     <div className="flex shrink-0 items-center gap-1">
                       <button
+                        onClick={() => openReader(file)}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        title="Open"
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
                         onClick={() => handleDownload(file.path)}
                         className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                         title="Download"
@@ -366,6 +881,75 @@ export default function VaultClient({ initialFiles }: Props) {
             </div>
           )}
         </section>
+
+        {readerFile && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 md:items-center md:p-6">
+            <div className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl bg-white md:h-[86vh] md:rounded-3xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 md:px-5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-gray-900">{fileDisplayName(readerFile.name)}</p>
+                  <p className="truncate text-[11px] text-gray-400">{formatSize(readerFile.size)} · {readerFile.mimeType}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(readerFile.path)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                  >
+                    <Download size={13} />
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeReader}
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+                    aria-label="Close reader"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 bg-gray-50">
+                {readerLoading ? (
+                  <div className="flex h-full items-center justify-center text-sm font-medium text-gray-500">Loading document...</div>
+                ) : readerError ? (
+                  <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-600">{readerError}</div>
+                ) : readerKind === "pdf" && readerUrl ? (
+                  <iframe
+                    src={readerUrl}
+                    className="h-full w-full border-0"
+                    title="PDF reader"
+                  />
+                ) : readerKind === "image" && readerUrl ? (
+                  <div className="flex h-full items-center justify-center p-4">
+                    <img src={readerUrl} alt={fileDisplayName(readerFile.name)} className="max-h-full max-w-full rounded-xl border border-gray-200 object-contain" />
+                  </div>
+                ) : readerKind === "text" ? (
+                  <pre className="h-full overflow-auto whitespace-pre-wrap p-4 text-xs text-gray-700">{readerText ?? "No text content found."}</pre>
+                ) : readerKind === "office" && readerUrl ? (
+                  <iframe
+                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(readerUrl)}`}
+                    className="h-full w-full border-0"
+                    title="Office document reader"
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                    <p className="text-sm font-semibold text-gray-700">This file type cannot be previewed here yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(readerFile.path)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                    >
+                      <Download size={14} />
+                      Download file
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

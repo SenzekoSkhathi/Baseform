@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(path, 60); // valid for 60 seconds
+    .createSignedUrl(path, 900); // valid for 15 minutes
 
   if (error || !data) return NextResponse.json({ error: error?.message ?? "Failed" }, { status: 500 });
   return NextResponse.json({ url: data.signedUrl });
