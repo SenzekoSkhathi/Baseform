@@ -162,6 +162,5 @@ export default function PwaInstallButton() {
         </div>
       )}
     </>
-    </div>
   );
 }
