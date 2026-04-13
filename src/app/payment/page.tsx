@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/components/ui/Logo";
 import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { ESSENTIAL_BILLING_OPTIONS, normalizeBillingTermMonths, type BillingTermMonths } from "@/lib/billing-options";
 
 type PlanId = "essential" | "pro" | "ultra";
 
 const DEFAULT_PLAN_COPY: Record<PlanId, { name: string; price: string }> = {
-  essential: { name: "Essential", price: "R59 / month" },
+  essential: { name: "Essential", price: "R89.99 / 3 months use" },
   pro: { name: "Pro", price: "R129 / month" },
   ultra: { name: "Ultra", price: "R249 / month" },
 };
@@ -29,6 +30,10 @@ function toPlanCopy(rows: PublicPlan[]): Record<PlanId, { name: string; price: s
   return copy;
 }
 
+function getEssentialOption(months: BillingTermMonths | null) {
+  return ESSENTIAL_BILLING_OPTIONS.find((option) => option.months === months) ?? ESSENTIAL_BILLING_OPTIONS[0];
+}
+
 export default function PaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +41,13 @@ export default function PaymentPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [planCopy, setPlanCopy] = useState<Record<PlanId, { name: string; price: string }>>(DEFAULT_PLAN_COPY);
+
+  const term = useMemo(() => {
+    if (plan !== "essential") return null;
+    return normalizeBillingTermMonths(searchParams.get("term")) ?? 3;
+  }, [plan, searchParams]);
+
+  const essentialOption = useMemo(() => getEssentialOption(term), [term]);
 
   const plan = useMemo(() => {
     const raw = (searchParams.get("plan") ?? "essential") as PlanId;
@@ -79,7 +91,7 @@ export default function PaymentPage() {
         const res = await fetch("/api/payments/payfast/verify-return", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ plan }),
+          body: JSON.stringify({ plan, term }),
         });
 
         const payload = (await res.json().catch(() => null)) as { ok?: boolean; pending?: boolean } | null;
@@ -126,7 +138,7 @@ export default function PaymentPage() {
     const res = await fetch("/api/payments/payfast/initiate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan }),
+      body: JSON.stringify({ plan, term }),
     });
 
     const payload = (await res.json().catch(() => null)) as
@@ -160,6 +172,7 @@ export default function PaymentPage() {
   }
 
   const payfastSandbox = process.env.NEXT_PUBLIC_PAYFAST_SANDBOX === "true";
+  const selectedPlanCopy = planCopy[plan];
 
   return (
     <main className="min-h-screen w-full bg-gray-50 flex items-center justify-center px-4">
@@ -169,7 +182,15 @@ export default function PaymentPage() {
         <div className="space-y-1 mb-8">
           <h2 className="text-2xl font-bold text-gray-900">Complete your payment</h2>
           <p className="text-gray-500 text-sm">
-            You selected the <span className="font-semibold text-gray-700">{planCopy[plan].name}</span> plan ({planCopy[plan].price}).
+            You selected the <span className="font-semibold text-gray-700">{selectedPlanCopy.name}</span> plan
+            {plan === "essential" && term ? (
+              <>
+                {' '}
+                ({essentialOption.price} for {essentialOption.label}).
+              </>
+            ) : (
+              <> ({selectedPlanCopy.price}).</>
+            )}
           </p>
         </div>
 

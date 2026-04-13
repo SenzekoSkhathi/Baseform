@@ -42,8 +42,8 @@ export const DEFAULT_PLANS: PublicPlan[] = [
     id: "essential",
     slug: "essential",
     name: "Essential",
-    price: "R59",
-    period: "/month",
+    price: "R89.99",
+    period: "/3 months use",
     tagline: "Most popular",
     features: [
       "Everything in Free",

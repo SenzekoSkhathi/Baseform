@@ -131,7 +131,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("profiles")
-    .select("notification_prefs, preferences, full_name, phone, province, field_of_interest")
+    .select("tier, notification_prefs, preferences, full_name, phone, province, field_of_interest")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -145,13 +145,18 @@ export async function GET() {
     : fromLegacyPrefs;
 
   const account = toUiAccount(data as {
+    tier?: unknown;
     full_name?: unknown;
     phone?: unknown;
     province?: unknown;
     field_of_interest?: unknown;
   } | null);
 
-  return NextResponse.json({ preferences, account });
+  return NextResponse.json({
+    preferences,
+    account,
+    tier: typeof (data as { tier?: unknown } | null)?.tier === "string" ? (data as { tier?: string }).tier : "free",
+  });
 }
 
 export async function PATCH(req: Request) {

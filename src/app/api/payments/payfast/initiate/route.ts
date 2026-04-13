@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
 import {
+  getEssentialBillingOption,
+  normalizeBillingTermMonths,
+  type BillingTermMonths,
+} from "@/lib/billing-options";
+import {
   createPayFastSignature,
   getBaseUrl,
   getPayFastConfig,
@@ -20,8 +25,9 @@ function findPlan(planId: PlanId) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as { plan?: string } | null;
+  const body = (await req.json().catch(() => null)) as { plan?: string; term?: string | number } | null;
   const planId = String(body?.plan ?? "").trim().toLowerCase();
+  const term = normalizeBillingTermMonths(body?.term);
 
   if (!isAllowedPlan(planId)) {
     return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 });
@@ -36,6 +42,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Selected plan is not available yet." }, { status: 400 });
   }
 
+  if (planId === "essential" && !term) {
+    return NextResponse.json({ error: "Please choose a billing term for Essential." }, { status: 400 });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -48,23 +58,29 @@ export async function POST(req: NextRequest) {
 
   const config = getPayFastConfig();
   const baseUrl = getBaseUrl(req);
-  const mPaymentId = `${user.id}:${planId}`;
+  const selectedOption = planId === "essential" ? getEssentialBillingOption(term as BillingTermMonths) : undefined;
+  const amount = planId === "essential" ? selectedOption?.price ?? plan.price : plan.price;
+  const mPaymentId = `${user.id}:${planId}${term ? `:${term}` : ""}`;
 
   const fields: Record<string, string> = {
     merchant_id: config.merchantId,
     merchant_key: config.merchantKey,
-    return_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}&status=success`,
-    cancel_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}&status=cancelled`,
+    return_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=success`,
+    cancel_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=cancelled`,
     notify_url: `${baseUrl}/api/payments/payfast/notify`,
     name_first: user.user_metadata?.full_name ? String(user.user_metadata.full_name).split(" ")[0] : "Baseform",
     name_last: user.user_metadata?.full_name ? String(user.user_metadata.full_name).split(" ").slice(1).join(" ") : "Student",
     email_address: user.email ?? "",
     m_payment_id: mPaymentId,
-    amount: toPayFastAmount(plan.price),
-    item_name: `${plan.name} Plan`,
-    item_description: `Baseform ${plan.name} subscription`,
+    amount: toPayFastAmount(amount),
+    item_name: `${plan.name} Plan${term ? ` - ${term} months` : ""}`,
+    item_description:
+      planId === "essential"
+        ? `Baseform Essential subscription for ${selectedOption?.label ?? "selected term"}`
+        : `Baseform ${plan.name} subscription`,
     custom_str1: planId,
     custom_str2: user.id,
+    custom_str3: term ? String(term) : "",
   };
 
   const signature = createPayFastSignature(fields, config.passphrase);

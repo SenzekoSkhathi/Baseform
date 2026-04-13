@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Prefs = {
   deadlineAlerts: boolean;
@@ -403,6 +404,26 @@ export default function SettingsClient() {
             >
               Cancel
             </button>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-black text-gray-900">Billing</h2>
+          <p className="mt-0.5 text-xs text-gray-500">View your subscription and upgrade when needed.</p>
+
+          <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Subscription</p>
+            <p className="mt-1 text-sm font-bold text-gray-900">Manage billing and plan changes</p>
+            <p className="mt-1 text-xs text-gray-600">
+              Open the billing page to see your active plan and move between Free, Essential, Pro, and Ultra.
+            </p>
+
+            <Link
+              href="/settings/billing"
+              className="mt-3 inline-flex items-center justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600"
+            >
+              Open billing
+            </Link>
           </div>
         </section>
 

@@ -105,6 +105,11 @@ export default function PlansPage() {
       return;
     }
 
+    if (selected === "essential") {
+      router.push("/plans/essential");
+      return;
+    }
+
     router.push(`/payment?plan=${selected}`);
   }
 
@@ -163,7 +168,14 @@ export default function PlansPage() {
               return (
                 <button
                   key={plan.id}
-                  onClick={() => plan.available && setSelected(plan.id)}
+                  onClick={() => {
+                    if (!plan.available) return;
+                    if (plan.id === "essential") {
+                      router.push("/plans/essential");
+                      return;
+                    }
+                    setSelected(plan.id);
+                  }}
                   disabled={isLocked}
                   className={`w-full text-left rounded-3xl border p-4 transition-all sm:p-5 ${
                     isLocked
