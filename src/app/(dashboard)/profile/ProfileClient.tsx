@@ -59,6 +59,7 @@ type Props = {
   aps: number;
   subjects: Subject[];
   email: string;
+  userId: string;
 };
 
 function MarkBadge({ mark }: { mark: number }) {
@@ -261,7 +262,7 @@ function InviteGuardianButton({ hasGuardianEmail }: { hasGuardianEmail: boolean 
   );
 }
 
-export default function ProfileClient({ profile, aps, subjects, email }: Props) {
+export default function ProfileClient({ profile, aps, subjects, email, userId }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const autoConnectTriggeredRef = useRef(false);
@@ -376,6 +377,9 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
     : null;
   const [gmailScanMsg, setGmailScanMsg] = useState<string | null>(null);
   const [gmailBanner, setGmailBanner] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [showGmailConnectReminder, setShowGmailConnectReminder] = useState(false);
+
+  const gmailAutoRedirectSeenKey = `bf_gmail_autoredirect_seen_${userId}`;
 
   async function refreshGmailStatus() {
     try {
@@ -429,16 +433,48 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
     if (gmailStatus.has_connection) return;
     if (searchParams.get("gmail")) return;
 
+    const autoRedirectAlreadySeen = window.localStorage.getItem(gmailAutoRedirectSeenKey) === "1";
+    if (autoRedirectAlreadySeen) {
+      setShowGmailConnectReminder(true);
+      return;
+    }
+
+    window.localStorage.setItem(gmailAutoRedirectSeenKey, "1");
+
+    autoConnectTriggeredRef.current = true;
+
     const timer = window.setTimeout(() => {
-      autoConnectTriggeredRef.current = true;
       void handleConnectGmail();
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [gmailStatus, isLoginEmailGmail, searchParams]);
+  }, [gmailAutoRedirectSeenKey, gmailStatus, isLoginEmailGmail, searchParams]);
+
+  useEffect(() => {
+    if (!isLoginEmailGmail || gmailStatus === null) {
+      setShowGmailConnectReminder(false);
+      return;
+    }
+    if (autoConnectTriggeredRef.current) {
+      setShowGmailConnectReminder(false);
+      return;
+    }
+    if (gmailStatus.connected || gmailStatus.has_connection || gmailStatus.inactive) {
+      setShowGmailConnectReminder(false);
+      return;
+    }
+    if (searchParams.get("gmail")) {
+      setShowGmailConnectReminder(false);
+      return;
+    }
+
+    const autoRedirectAlreadySeen = window.localStorage.getItem(gmailAutoRedirectSeenKey) === "1";
+    setShowGmailConnectReminder(autoRedirectAlreadySeen);
+  }, [gmailAutoRedirectSeenKey, gmailStatus, isLoginEmailGmail, searchParams]);
 
   async function handleConnectGmail() {
     setGmailLoading(true);
+    setShowGmailConnectReminder(false);
     try {
       const res = await fetch("/api/email/connect");
       const data = await res.json();
@@ -644,6 +680,26 @@ export default function ProfileClient({ profile, aps, subjects, email }: Props) 
               aria-live="polite"
             >
               {gmailBanner.message}
+            </div>
+          )}
+
+          {showGmailConnectReminder && (
+            <div
+              className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 sm:flex-row sm:items-center sm:justify-between"
+              role="status"
+              aria-live="polite"
+            >
+              <p>
+                We noticed you have not connected Gmail yet. Connect it to track application updates from your inbox.
+              </p>
+              <button
+                type="button"
+                onClick={handleConnectGmail}
+                disabled={gmailLoading}
+                className="inline-flex items-center justify-center rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              >
+                {gmailLoading ? "Redirecting..." : "Connect Gmail"}
+              </button>
             </div>
           )}
         </header>

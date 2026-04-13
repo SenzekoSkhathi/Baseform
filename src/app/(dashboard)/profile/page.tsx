@@ -41,6 +41,7 @@ export default async function ProfilePage() {
       aps={aps}
       subjects={studentSubjects}
       email={user.email ?? ""}
+      userId={user.id}
     />
   );
 }
