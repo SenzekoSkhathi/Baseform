@@ -39,6 +39,7 @@ type Category = (typeof CATEGORIES)[number]["id"];
 
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+const MAX_SCAN_PAGES = 12;
 
 function categoryMeta(id: Category) {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
@@ -172,7 +173,8 @@ async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: nu
       img.src = objectUrl;
     });
 
-    const maxSide = 1800;
+    // Keep scan pages lightweight for lower-memory phones.
+    const maxSide = 1400;
     const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
     const width = Math.max(1, Math.round(image.width * scale));
     const height = Math.max(1, Math.round(image.height * scale));
@@ -226,7 +228,7 @@ async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: nu
     outputContext.putImageData(output, 0, 0);
 
     return {
-      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.9),
+      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.82),
       width: bounds.width,
       height: bounds.height,
     };
@@ -433,6 +435,14 @@ export default function VaultClient({ initialFiles }: Props) {
 
     setUploadError(null);
     setUploadSuccess(null);
+
+    const nextTotal = scanDraftPages.length + selected.length;
+    if (nextTotal > MAX_SCAN_PAGES) {
+      setUploadError(`Scan limit reached. Please keep each scan PDF to ${MAX_SCAN_PAGES} pages or fewer.`);
+      if (scannerInputRef.current) scannerInputRef.current.value = "";
+      return;
+    }
+
     const newPages: ScanDraftPage[] = selected.map((file, index) => ({
       id: `${Date.now()}-${index}-${file.name}`,
       file,
@@ -617,7 +627,6 @@ export default function VaultClient({ initialFiles }: Props) {
             type="file"
             accept="image/*"
             capture="environment"
-            multiple
             onChange={handleScanImagesSelect}
             className="hidden"
             tabIndex={-1}
@@ -712,7 +721,7 @@ export default function VaultClient({ initialFiles }: Props) {
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
               >
                 <Camera size={13} />
-                Add pages
+                Add page
               </button>
               <button
                 type="button"
