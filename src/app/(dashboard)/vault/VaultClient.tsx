@@ -39,7 +39,7 @@ type Category = (typeof CATEGORIES)[number]["id"];
 
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
-const MAX_SCAN_PAGES = 12;
+const MAX_SCAN_PAGES = 8;
 
 function categoryMeta(id: Category) {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
@@ -174,7 +174,7 @@ async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: nu
     });
 
     // Keep scan pages lightweight for lower-memory phones.
-    const maxSide = 1400;
+    const maxSide = 1100;
     const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
     const width = Math.max(1, Math.round(image.width * scale));
     const height = Math.max(1, Math.round(image.height * scale));
@@ -228,7 +228,7 @@ async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: nu
     outputContext.putImageData(output, 0, 0);
 
     return {
-      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.82),
+      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.75),
       width: bounds.width,
       height: bounds.height,
     };
@@ -273,6 +273,52 @@ type ScanDraftPage = {
   file: File;
   previewUrl: string;
 };
+
+async function normalizeScanImageFile(input: File): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not read captured image."));
+      img.src = objectUrl;
+    });
+
+    const maxSide = 1280;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not process captured image.");
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Could not compress captured image."));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.74);
+    });
+
+    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
+    return new File([blob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export default function VaultClient({ initialFiles }: Props) {
   const router = useRouter();
@@ -443,15 +489,21 @@ export default function VaultClient({ initialFiles }: Props) {
       return;
     }
 
-    const newPages: ScanDraftPage[] = selected.map((file, index) => ({
-      id: `${Date.now()}-${index}-${file.name}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
+    try {
+      const normalizedFiles = await Promise.all(selected.map((file) => normalizeScanImageFile(file)));
 
-    setScanDraftPages((prev) => [...prev, ...newPages]);
-    setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
-    setShowScanReview(true);
+      const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
+        id: `${Date.now()}-${index}-${file.name}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+
+      setScanDraftPages((prev) => [...prev, ...newPages]);
+      setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
+      setShowScanReview(true);
+    } catch {
+      setUploadError("Your phone is low on memory while scanning. Close other apps and retry with one page at a time.");
+    }
 
     if (scannerInputRef.current) scannerInputRef.current.value = "";
   }
