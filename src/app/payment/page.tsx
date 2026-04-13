@@ -42,17 +42,17 @@ export default function PaymentPage() {
   const [notice, setNotice] = useState("");
   const [planCopy, setPlanCopy] = useState<Record<PlanId, { name: string; price: string }>>(DEFAULT_PLAN_COPY);
 
+  const plan = useMemo(() => {
+    const raw = (searchParams.get("plan") ?? "essential") as PlanId;
+    return raw in planCopy ? raw : "essential";
+  }, [planCopy, searchParams]);
+
   const term = useMemo(() => {
     if (plan !== "essential") return null;
     return normalizeBillingTermMonths(searchParams.get("term")) ?? 3;
   }, [plan, searchParams]);
 
   const essentialOption = useMemo(() => getEssentialOption(term), [term]);
-
-  const plan = useMemo(() => {
-    const raw = (searchParams.get("plan") ?? "essential") as PlanId;
-    return raw in planCopy ? raw : "essential";
-  }, [planCopy, searchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
