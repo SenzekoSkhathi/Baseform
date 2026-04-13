@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy, Send } from "lucide-react";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
@@ -287,6 +288,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
   const [displayProfile, setDisplayProfile] = useState(profile);
 
   const firstName = displayProfile?.full_name?.split(" ")[0] ?? "Student";
+  const isFreePlan = String(displayProfile?.tier ?? "free").trim().toLowerCase() === "free";
   const isLoginEmailGmail = email.trim().toLowerCase().endsWith("@gmail.com");
   const rating = apsRating(aps);
 
@@ -416,6 +418,9 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
     } else if (result === "error") {
       setGmailBanner({ type: "error", message: "Could not connect Gmail. Please try again." });
       router.replace("/profile");
+    } else if (result === "locked") {
+      setGmailBanner({ type: "warning", message: "Connect Gmail is available on paid plans only." });
+      router.replace("/profile");
     }
   }, [router, searchParams]);
 
@@ -428,6 +433,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
   useEffect(() => {
     if (autoConnectTriggeredRef.current) return;
     if (!isLoginEmailGmail) return;
+    if (isFreePlan) return;
     if (gmailStatus === null) return;
     if (gmailStatus.connected) return;
     if (gmailStatus.has_connection) return;
@@ -448,10 +454,10 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [gmailAutoRedirectSeenKey, gmailStatus, isLoginEmailGmail, searchParams]);
+  }, [gmailAutoRedirectSeenKey, gmailStatus, isFreePlan, isLoginEmailGmail, searchParams]);
 
   useEffect(() => {
-    if (!isLoginEmailGmail || gmailStatus === null) {
+    if (!isLoginEmailGmail || gmailStatus === null || isFreePlan) {
       setShowGmailConnectReminder(false);
       return;
     }
@@ -470,9 +476,14 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
 
     const autoRedirectAlreadySeen = window.localStorage.getItem(gmailAutoRedirectSeenKey) === "1";
     setShowGmailConnectReminder(autoRedirectAlreadySeen);
-  }, [gmailAutoRedirectSeenKey, gmailStatus, isLoginEmailGmail, searchParams]);
+  }, [gmailAutoRedirectSeenKey, gmailStatus, isFreePlan, isLoginEmailGmail, searchParams]);
 
   async function handleConnectGmail() {
+    if (isFreePlan) {
+      setGmailBanner({ type: "warning", message: "Connect Gmail is available on paid plans. Upgrade to continue." });
+      return;
+    }
+
     setGmailLoading(true);
     setShowGmailConnectReminder(false);
     try {
@@ -491,6 +502,11 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
   }
 
   async function handleScanNow() {
+    if (isFreePlan) {
+      setGmailBanner({ type: "warning", message: "Email tracking is available on paid plans. Upgrade to continue." });
+      return;
+    }
+
     setGmailLoading(true);
     setGmailScanMsg(null);
     const res = await fetch("/api/email/scan", { method: "POST" });
@@ -902,7 +918,23 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
                 )}
               </div>
 
-              {gmailStatus === null ? (
+              {isFreePlan ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                    <p className="font-semibold">Connect Gmail is locked on Free.</p>
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      Upgrade to Essential or above to unlock inbox tracking and automatic application status updates.
+                    </p>
+                  </div>
+                  <Link
+                    href="/settings/billing"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 hover:bg-amber-50"
+                  >
+                    <Zap size={14} />
+                    Upgrade to unlock
+                  </Link>
+                </div>
+              ) : gmailStatus === null ? (
                 <div className="h-8 animate-pulse rounded-xl bg-gray-100" />
               ) : gmailStatus.connected ? (
                 <div className="space-y-2">

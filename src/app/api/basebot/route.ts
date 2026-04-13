@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS } from "@/lib/aps/calculator";
+import { isFreePlanTier } from "@/lib/access/tiers";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
@@ -10,6 +11,16 @@ export async function POST(req: NextRequest) {
 
   if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profileTier } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (isFreePlanTier(profileTier?.tier)) {
+    return Response.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
   }
 
   const { message } = (await req.json()) as { message: string };

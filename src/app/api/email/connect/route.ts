@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isFreePlanTier } from "@/lib/access/tiers";
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -10,6 +11,16 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (isFreePlanTier(profile?.tier)) {
+    return NextResponse.json({ error: "Connect Gmail is available on paid plans only." }, { status: 403 });
+  }
 
   const clientId    = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = new URL("/api/email/callback", req.url).toString();

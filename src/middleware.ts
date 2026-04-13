@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isFreePlanTier } from "@/lib/access/tiers";
 
 const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin"];
 const AUTH_PAGES = ["/login", "/signup"];
@@ -36,6 +37,7 @@ export async function middleware(request: NextRequest) {
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
   const isAdminRoute = pathname.startsWith("/admin");
+  const isBaseBotRoute = pathname.startsWith("/basebot");
   const isRootPage = pathname === "/";
 
   // Not logged in, trying to access protected route
@@ -66,6 +68,18 @@ export async function middleware(request: NextRequest) {
 
     if (tier !== "admin" && appRole !== "admin" && appTier !== "admin") {
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
+  if (isBaseBotRoute && user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tier")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (isFreePlanTier(profile?.tier)) {
+      return NextResponse.redirect(new URL("/settings/billing?upgrade=ai", request.url));
     }
   }
 

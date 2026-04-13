@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isFreePlanTier } from "@/lib/access/tiers";
+
+async function isFreeUser(userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", userId)
+    .maybeSingle();
+  return isFreePlanTier(profile?.tier);
+}
 
 // GET /api/basebot/threads — fetch all threads for the logged-in user
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isFreeUser(user.id)) {
+    return NextResponse.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("basebot_threads")
@@ -23,6 +37,9 @@ export async function PUT(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isFreeUser(user.id)) {
+    return NextResponse.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
+  }
 
   const body = await req.json() as {
     id: string;
@@ -54,6 +71,9 @@ export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isFreeUser(user.id)) {
+    return NextResponse.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
+  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Thread id required" }, { status: 400 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isFreePlanTier } from "@/lib/access/tiers";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
@@ -7,6 +8,16 @@ export async function POST() {
   const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (isFreePlanTier(profile?.tier)) {
+    return NextResponse.json({ error: "Connect Gmail is available on paid plans only." }, { status: 403 });
+  }
 
   const res = await fetch(`${BACKEND_URL}/email/scan`, {
     method: "POST",

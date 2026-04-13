@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/sender";
+import { isFreePlanTier } from "@/lib/access/tiers";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
   const html = `<!DOCTYPE html>
@@ -182,9 +183,13 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("full_name, email")
+    .select("full_name, email, tier")
     .eq("id", state)
     .maybeSingle();
+
+  if (isFreePlanTier(profile?.tier)) {
+    return NextResponse.redirect(`${redirectBase}/profile?gmail=locked`);
+  }
 
   if (!emailAddress) {
     emailAddress = profile?.email?.trim() ?? "";
