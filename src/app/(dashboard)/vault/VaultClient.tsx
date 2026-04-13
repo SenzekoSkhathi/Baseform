@@ -388,6 +388,56 @@ async function getImageDimensions(file: File): Promise<{ width: number; height: 
   }
 }
 
+async function rotateScanImageFile(input: File, direction: "left" | "right"): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image for rotation."));
+      img.src = objectUrl;
+    });
+
+    const rotateRight = direction === "right";
+    const canvas = document.createElement("canvas");
+    canvas.width = image.height;
+    canvas.height = image.width;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not rotate image.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate((rotateRight ? 90 : -90) * (Math.PI / 180));
+    context.drawImage(image, -image.width / 2, -image.height / 2);
+
+    const rotatedBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Could not encode rotated image."));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.84);
+    });
+
+    const normalizedBlob = await imageCompression(new File([rotatedBlob], input.name, { type: "image/jpeg" }), {
+      ...SCAN_IMAGE_COMPRESSION_OPTIONS,
+      maxSizeMB: 0.45,
+    });
+
+    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
+    return new File([normalizedBlob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 
 async function autoRotateScanImageFile(input: File): Promise<File> {
   const { width, height } = await getImageDimensions(input);
