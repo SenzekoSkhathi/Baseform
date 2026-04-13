@@ -72,6 +72,14 @@ function extensionFromName(name: string): string {
   return name.slice(dot + 1).toLowerCase();
 }
 
+function sanitizeDocumentName(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .slice(0, 90);
+}
+
 function readerKindForFile(file: VaultFile): ReaderKind {
   const ext = extensionFromName(file.name);
   const mime = file.mimeType.toLowerCase();
@@ -283,6 +291,8 @@ export default function VaultClient({ initialFiles }: Props) {
   const [scannerConverting, setScannerConverting] = useState(false);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
+  const [uploadNameInput, setUploadNameInput] = useState("");
+  const [scanOutputName, setScanOutputName] = useState("");
   const [readerFile, setReaderFile] = useState<VaultFile | null>(null);
   const [readerKind, setReaderKind] = useState<ReaderKind>("unsupported");
   const [readerUrl, setReaderUrl] = useState<string | null>(null);
@@ -356,10 +366,23 @@ export default function VaultClient({ initialFiles }: Props) {
   }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
 
-    await uploadFileToVault(file);
+    let fileToUpload = selectedFile;
+    const customName = sanitizeDocumentName(uploadNameInput);
+    if (customName) {
+      const ext = extensionFromName(selectedFile.name);
+      const base = customName.replace(/\.[^.]+$/, "");
+      const finalName = ext ? `${base}.${ext}` : base;
+      fileToUpload = new File([selectedFile], finalName, {
+        type: selectedFile.type,
+        lastModified: selectedFile.lastModified,
+      });
+    }
+
+    await uploadFileToVault(fileToUpload);
+    setUploadNameInput("");
 
     // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -417,6 +440,7 @@ export default function VaultClient({ initialFiles }: Props) {
     }));
 
     setScanDraftPages((prev) => [...prev, ...newPages]);
+    setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
     setShowScanReview(true);
 
     if (scannerInputRef.current) scannerInputRef.current.value = "";
@@ -435,9 +459,10 @@ export default function VaultClient({ initialFiles }: Props) {
     try {
       const filesForPdf = scanDraftPages.map((page) => page.file);
       const pdfBlob = await buildPdfFromImages(filesForPdf);
+      const safeBaseName = sanitizeDocumentName(scanOutputName || `${uploadCategory}-scan`) || `${uploadCategory}-scan`;
       const pdfFile = new File(
         [pdfBlob],
-        `${uploadCategory}-scan-${Date.now()}.pdf`,
+        `${safeBaseName}-${Date.now()}.pdf`,
         { type: "application/pdf" }
       );
 
@@ -445,6 +470,7 @@ export default function VaultClient({ initialFiles }: Props) {
       const uploaded = await uploadFileToVault(pdfFile, pageLabel);
       if (uploaded) {
         clearScanDraft();
+        setScanOutputName("");
         setShowScanReview(false);
       }
     } catch {
@@ -549,41 +575,41 @@ export default function VaultClient({ initialFiles }: Props) {
             Back
           </button>
 
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h1 className="text-3xl font-black tracking-tight text-gray-900">Document Vault</h1>
-              <p className="mt-1 text-sm font-medium text-gray-500">
+              <p className="text-sm font-medium text-gray-500">
                 Store and organise your application documents securely.
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {isMobileViewport && (
-                <button
-                  onClick={handleScanClick}
-                  disabled={uploading || scannerConverting}
-                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-                >
-                  <Camera size={15} />
-                  {scannerConverting ? "Scanning..." : "Scan to PDF"}
-                  {pendingScanCount > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
-                      {pendingScanCount}
-                    </span>
-                  )}
-                </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:max-w-sm">
+            <button
+              onClick={handleScanClick}
+              disabled={uploading || scannerConverting || !isMobileViewport}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              title={isMobileViewport ? "Scan document" : "Document scanner is available on mobile"}
+            >
+              <Camera size={15} />
+              {scannerConverting ? "Scanning..." : "Scanner"}
+              {pendingScanCount > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                  {pendingScanCount}
+                </span>
               )}
-              <button
-                onClick={() => {
-                  setShowUploadPanel((v) => !v);
-                  setUploadError(null);
-                  setUploadSuccess(null);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
-              >
-                <Upload size={15} />
-                Upload
-              </button>
-            </div>
+            </button>
+            <button
+              onClick={() => {
+                setShowUploadPanel((v) => !v);
+                setUploadError(null);
+                setUploadSuccess(null);
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
+            >
+              <Upload size={15} />
+              Upload
+            </button>
           </div>
 
           <input
@@ -598,18 +624,6 @@ export default function VaultClient({ initialFiles }: Props) {
             aria-hidden="true"
           />
 
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
-              <p className="text-xs text-gray-400">Total documents</p>
-              <p className="mt-0.5 text-2xl font-black text-gray-900">{files.length}</p>
-            </div>
-            {CATEGORIES.slice(0, 2).map((cat) => (
-              <div key={cat.id} className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
-                <p className="text-xs text-gray-400">{cat.label}</p>
-                <p className="mt-0.5 text-2xl font-black text-gray-900">{countByCategory[cat.id] ?? 0}</p>
-              </div>
-            ))}
-          </div>
         </header>
 
         {isMobileViewport && showScanReview && (
@@ -678,6 +692,18 @@ export default function VaultClient({ initialFiles }: Props) {
               </div>
             )}
 
+            <div className="mt-3">
+              <label className="text-xs font-medium text-gray-500">PDF name</label>
+              <input
+                type="text"
+                value={scanOutputName}
+                onChange={(e) => setScanOutputName(e.target.value)}
+                placeholder="e.g. Grade 11 Report"
+                disabled={scannerConverting}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 disabled:opacity-60"
+              />
+            </div>
+
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
@@ -725,6 +751,19 @@ export default function VaultClient({ initialFiles }: Props) {
                     <option key={c.id} value={c.id}>{c.label}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-500">
+                  Document name <span className="text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={uploadNameInput}
+                  onChange={(e) => setUploadNameInput(e.target.value)}
+                  placeholder="e.g. My certified ID"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                />
               </div>
 
               <div>
