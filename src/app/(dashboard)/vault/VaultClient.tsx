@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
+import Cropper, { type Area } from "react-easy-crop";
 
 export type VaultFile = {
   path: string;
@@ -74,6 +75,13 @@ function fileDisplayName(raw: string): string {
 
 type ReaderKind = "pdf" | "image" | "text" | "office" | "unsupported";
 
+type FileTypeMeta = {
+  label: string;
+  iconBg: string;
+  iconText: string;
+  chip: string;
+};
+
 function extensionFromName(name: string): string {
   const dot = name.lastIndexOf(".");
   if (dot < 0) return "";
@@ -88,6 +96,13 @@ function sanitizeDocumentName(value: string): string {
     .slice(0, 90);
 }
 
+function categoryChipClasses(active: boolean): string {
+  return [
+    "shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
+    active ? "border-orange-200 bg-orange-500 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+  ].join(" ");
+}
+
 function readerKindForFile(file: VaultFile): ReaderKind {
   const ext = extensionFromName(file.name);
   const mime = file.mimeType.toLowerCase();
@@ -98,6 +113,48 @@ function readerKindForFile(file: VaultFile): ReaderKind {
   if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) return "office";
 
   return "unsupported";
+}
+
+function fileTypeMeta(file: VaultFile): FileTypeMeta {
+  const kind = readerKindForFile(file);
+
+  switch (kind) {
+    case "pdf":
+      return {
+        label: "PDF",
+        iconBg: "bg-red-50",
+        iconText: "text-red-500",
+        chip: "border-red-100 bg-red-50 text-red-700",
+      };
+    case "office":
+      return {
+        label: "Word",
+        iconBg: "bg-blue-50",
+        iconText: "text-blue-600",
+        chip: "border-blue-100 bg-blue-50 text-blue-700",
+      };
+    case "image":
+      return {
+        label: "Image",
+        iconBg: "bg-emerald-50",
+        iconText: "text-emerald-600",
+        chip: "border-emerald-100 bg-emerald-50 text-emerald-700",
+      };
+    case "text":
+      return {
+        label: "Text",
+        iconBg: "bg-gray-100",
+        iconText: "text-gray-600",
+        chip: "border-gray-200 bg-gray-50 text-gray-700",
+      };
+    default:
+      return {
+        label: "File",
+        iconBg: "bg-amber-50",
+        iconText: "text-amber-500",
+        chip: "border-amber-100 bg-amber-50 text-amber-700",
+      };
+  }
 }
 
 function clampByte(value: number): number {
@@ -284,6 +341,9 @@ type ScanDraftPage = {
   id: string;
   file: File;
   previewUrl: string;
+  fallbackFile: File | null;
+  fallbackPreviewUrl: string | null;
+  isTextEnhanced: boolean;
 };
 
 async function normalizeScanImageFile(input: File): Promise<File> {
@@ -294,6 +354,324 @@ async function normalizeScanImageFile(input: File): Promise<File> {
     type: "image/jpeg",
     lastModified: Date.now(),
   });
+}
+
+async function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image."));
+      img.src = objectUrl;
+    });
+
+    return { width: image.width, height: image.height };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function sampleBilinear(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  channelOffset: number
+): number {
+  const x0 = Math.max(0, Math.min(width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const x1 = Math.max(0, Math.min(width - 1, x0 + 1));
+  const y1 = Math.max(0, Math.min(height - 1, y0 + 1));
+
+  const fx = x - x0;
+  const fy = y - y0;
+
+  const i00 = (y0 * width + x0) * 4 + channelOffset;
+  const i10 = (y0 * width + x1) * 4 + channelOffset;
+  const i01 = (y1 * width + x0) * 4 + channelOffset;
+  const i11 = (y1 * width + x1) * 4 + channelOffset;
+
+  const top = data[i00] * (1 - fx) + data[i10] * fx;
+  const bottom = data[i01] * (1 - fx) + data[i11] * fx;
+  return top * (1 - fy) + bottom * fy;
+}
+
+function applyHorizontalPerspectiveCorrection(
+  sourceCanvas: HTMLCanvasElement,
+  perspective: number
+): HTMLCanvasElement {
+  if (Math.abs(perspective) < 0.001) return sourceCanvas;
+
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+  const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  if (!sourceContext) return sourceCanvas;
+
+  const sourceImage = sourceContext.getImageData(0, 0, width, height);
+  const input = sourceImage.data;
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = width;
+  outputCanvas.height = height;
+
+  const outputContext = outputCanvas.getContext("2d", { willReadFrequently: true });
+  if (!outputContext) return sourceCanvas;
+
+  const outputImage = outputContext.createImageData(width, height);
+  const output = outputImage.data;
+
+  const insetMax = Math.round(width * 0.22 * Math.min(1, Math.abs(perspective)));
+  const topInset = perspective > 0 ? insetMax : 0;
+  const bottomInset = perspective < 0 ? insetMax : 0;
+
+  for (let y = 0; y < height; y += 1) {
+    const t = height <= 1 ? 0 : y / (height - 1);
+    const left = topInset * (1 - t) + bottomInset * t;
+    const right = (width - 1 - topInset) * (1 - t) + (width - 1 - bottomInset) * t;
+    const span = Math.max(1, right - left);
+
+    for (let x = 0; x < width; x += 1) {
+      const ratio = width <= 1 ? 0 : x / (width - 1);
+      const sourceX = left + ratio * span;
+      const targetIndex = (y * width + x) * 4;
+
+      output[targetIndex] = clampByte(sampleBilinear(input, width, height, sourceX, y, 0));
+      output[targetIndex + 1] = clampByte(sampleBilinear(input, width, height, sourceX, y, 1));
+      output[targetIndex + 2] = clampByte(sampleBilinear(input, width, height, sourceX, y, 2));
+      output[targetIndex + 3] = 255;
+    }
+  }
+
+  outputContext.putImageData(outputImage, 0, 0);
+  return outputCanvas;
+}
+
+async function rotateScanImageFile(input: File, direction: "left" | "right"): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image for rotation."));
+      img.src = objectUrl;
+    });
+
+    const rotateRight = direction === "right";
+    const canvas = document.createElement("canvas");
+    canvas.width = image.height;
+    canvas.height = image.width;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not rotate image.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate((rotateRight ? 90 : -90) * (Math.PI / 180));
+    context.drawImage(image, -image.width / 2, -image.height / 2);
+
+    const rotatedBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Could not encode rotated image."));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.82);
+    });
+
+    const normalizedBlob = await imageCompression(new File([rotatedBlob], input.name, { type: "image/jpeg" }), {
+      ...SCAN_IMAGE_COMPRESSION_OPTIONS,
+      maxSizeMB: 0.45,
+    });
+
+    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
+    return new File([normalizedBlob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function autoRotateScanImageFile(input: File): Promise<File> {
+  const { width, height } = await getImageDimensions(input);
+  if (width <= height * 1.08) return input;
+  return rotateScanImageFile(input, "right");
+}
+
+async function enhanceTextScanImageFile(input: File): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image for text enhancement."));
+      img.src = objectUrl;
+    });
+
+    const width = image.width;
+    const height = image.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Could not process image.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const source = context.getImageData(0, 0, width, height);
+    const rgba = source.data;
+
+    for (let i = 0; i < rgba.length; i += 4) {
+      const gray = clampByte(rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114);
+      let enhanced = clampByte((gray - 128) * 1.55 + 128 + 8);
+      if (enhanced > 218) enhanced = 255;
+
+      rgba[i] = enhanced;
+      rgba[i + 1] = enhanced;
+      rgba[i + 2] = enhanced;
+      rgba[i + 3] = 255;
+    }
+
+    context.putImageData(source, 0, 0);
+
+    const enhancedBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Could not encode enhanced image."));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.82);
+    });
+
+    const normalizedBlob = await imageCompression(new File([enhancedBlob], input.name, { type: "image/jpeg" }), {
+      ...SCAN_IMAGE_COMPRESSION_OPTIONS,
+      maxSizeMB: 0.45,
+    });
+
+    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
+    return new File([normalizedBlob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function cropScanImageFile(input: File, area: Area, perspective = 0): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image for cropping."));
+      img.src = objectUrl;
+    });
+
+    const cropX = Math.max(0, Math.round(area.x));
+    const cropY = Math.max(0, Math.round(area.y));
+    const cropWidth = Math.max(1, Math.round(area.width));
+    const cropHeight = Math.max(1, Math.round(area.height));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Could not crop image.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, cropWidth, cropHeight);
+    context.drawImage(
+      image,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      cropWidth,
+      cropHeight
+    );
+
+    const perspectiveCanvas = applyHorizontalPerspectiveCorrection(canvas, perspective);
+
+    const croppedBlob = await new Promise<Blob>((resolve, reject) => {
+      perspectiveCanvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Could not encode cropped image."));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.8);
+    });
+
+    const normalizedBlob = await imageCompression(new File([croppedBlob], input.name, { type: "image/jpeg" }), {
+      ...SCAN_IMAGE_COMPRESSION_OPTIONS,
+      maxSizeMB: 0.45,
+    });
+
+    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
+    return new File([normalizedBlob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function smartCropScanImageFile(input: File): Promise<File> {
+  const objectUrl = URL.createObjectURL(input);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not load image for smart crop."));
+      img.src = objectUrl;
+    });
+
+    const width = image.width;
+    const height = image.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Could not process image for smart crop.");
+    context.drawImage(image, 0, 0, width, height);
+
+    const source = context.getImageData(0, 0, width, height);
+    const rgba = source.data;
+    const gray = new Uint8ClampedArray(width * height);
+
+    for (let i = 0, p = 0; i < rgba.length; i += 4, p += 1) {
+      gray[p] = clampByte(rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114);
+    }
+
+    const bounds = detectDocumentBounds(gray, width, height);
+    return cropScanImageFile(input, {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export default function VaultClient({ initialFiles }: Props) {
@@ -320,6 +698,14 @@ export default function VaultClient({ initialFiles }: Props) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
+  const [editingScanPageId, setEditingScanPageId] = useState<string | null>(null);
+  const [cropEditorPageId, setCropEditorPageId] = useState<string | null>(null);
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropAreaPixels, setCropAreaPixels] = useState<Area | null>(null);
+  const [cropPerspective, setCropPerspective] = useState(0);
+  const [showCropCompare, setShowCropCompare] = useState(false);
+  const [autoRotateScans, setAutoRotateScans] = useState(true);
   const [uploadNameInput, setUploadNameInput] = useState("");
   const [scanOutputName, setScanOutputName] = useState("");
   const [readerFile, setReaderFile] = useState<VaultFile | null>(null);
@@ -348,7 +734,10 @@ export default function VaultClient({ initialFiles }: Props) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
         cameraStreamRef.current = null;
       }
-      scanDraftPagesRef.current.forEach((page) => URL.revokeObjectURL(page.previewUrl));
+      scanDraftPagesRef.current.forEach((page) => {
+        URL.revokeObjectURL(page.previewUrl);
+        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
+      });
     };
   }, []);
 
@@ -484,13 +873,17 @@ export default function VaultClient({ initialFiles }: Props) {
       // Process one file at a time to avoid memory spikes on low-memory mobile browsers.
       for (const file of selected) {
         const normalized = await normalizeScanImageFile(file);
-        normalizedFiles.push(normalized);
+        const oriented = autoRotateScans ? await autoRotateScanImageFile(normalized) : normalized;
+        normalizedFiles.push(oriented);
       }
 
       const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
         id: `${Date.now()}-${index}-${file.name}`,
         file,
         previewUrl: URL.createObjectURL(file),
+        fallbackFile: null,
+        fallbackPreviewUrl: null,
+        isTextEnhanced: false,
       }));
 
       setScanDraftPages((prev) => [...prev, ...newPages]);
@@ -560,15 +953,28 @@ export default function VaultClient({ initialFiles }: Props) {
 
   function clearScanDraft() {
     setScanDraftPages((prev) => {
-      prev.forEach((page) => URL.revokeObjectURL(page.previewUrl));
+      prev.forEach((page) => {
+        URL.revokeObjectURL(page.previewUrl);
+        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
+      });
       return [];
     });
+    setEditingScanPageId(null);
+    setCropEditorPageId(null);
+    setCropAreaPixels(null);
+    setCropZoom(1);
+    setCropPosition({ x: 0, y: 0 });
+    setCropPerspective(0);
+    setShowCropCompare(false);
   }
 
   function removeScanDraftPage(pageId: string) {
     setScanDraftPages((prev) => {
       const page = prev.find((item) => item.id === pageId);
-      if (page) URL.revokeObjectURL(page.previewUrl);
+      if (page) {
+        URL.revokeObjectURL(page.previewUrl);
+        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
+      }
       return prev.filter((item) => item.id !== pageId);
     });
   }
@@ -585,6 +991,143 @@ export default function VaultClient({ initialFiles }: Props) {
       next.splice(targetIndex, 0, moved);
       return next;
     });
+  }
+
+  function replaceScanDraftPageFile(pageId: string, nextFile: File) {
+    setScanDraftPages((prev) => {
+      const next = prev.map((page) => {
+        if (page.id !== pageId) return page;
+        URL.revokeObjectURL(page.previewUrl);
+        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
+        return {
+          ...page,
+          file: nextFile,
+          previewUrl: URL.createObjectURL(nextFile),
+          fallbackFile: null,
+          fallbackPreviewUrl: null,
+          isTextEnhanced: false,
+        };
+      });
+      return next;
+    });
+  }
+
+  async function toggleTextEnhancement(pageId: string) {
+    const page = scanDraftPages.find((item) => item.id === pageId);
+    if (!page) return;
+
+    setUploadError(null);
+    setEditingScanPageId(pageId);
+
+    try {
+      if (page.isTextEnhanced && page.fallbackFile) {
+        setScanDraftPages((prev) => {
+          return prev.map((item) => {
+            if (item.id !== pageId) return item;
+            URL.revokeObjectURL(item.previewUrl);
+            return {
+              ...item,
+              file: page.fallbackFile as File,
+              previewUrl: item.fallbackPreviewUrl ?? URL.createObjectURL(page.fallbackFile as File),
+              fallbackFile: null,
+              fallbackPreviewUrl: null,
+              isTextEnhanced: false,
+            };
+          });
+        });
+      } else {
+        const enhanced = await enhanceTextScanImageFile(page.file);
+        setScanDraftPages((prev) => {
+          return prev.map((item) => {
+            if (item.id !== pageId) return item;
+            const originalPreview = item.previewUrl;
+            return {
+              ...item,
+              file: enhanced,
+              previewUrl: URL.createObjectURL(enhanced),
+              fallbackFile: page.file,
+              fallbackPreviewUrl: originalPreview,
+              isTextEnhanced: true,
+            };
+          });
+        });
+      }
+    } catch {
+      setUploadError("Could not enhance text on this page.");
+    } finally {
+      setEditingScanPageId(null);
+    }
+  }
+
+  async function handleSmartCropPage(pageId: string) {
+    const page = scanDraftPages.find((item) => item.id === pageId);
+    if (!page) return;
+
+    setUploadError(null);
+    setEditingScanPageId(pageId);
+
+    try {
+      const cropped = await smartCropScanImageFile(page.file);
+      replaceScanDraftPageFile(pageId, cropped);
+    } catch {
+      setUploadError("Smart crop failed for this page. Try manual crop.");
+    } finally {
+      setEditingScanPageId(null);
+    }
+  }
+
+  function openCropEditor(pageId: string) {
+    setUploadError(null);
+    setCropEditorPageId(pageId);
+    setCropAreaPixels(null);
+    setCropZoom(1);
+    setCropPosition({ x: 0, y: 0 });
+    setCropPerspective(0);
+    setShowCropCompare(false);
+  }
+
+  async function handleRotatePage(pageId: string, direction: "left" | "right") {
+    const page = scanDraftPages.find((item) => item.id === pageId);
+    if (!page) return;
+
+    setUploadError(null);
+    setEditingScanPageId(pageId);
+
+    try {
+      const rotated = await rotateScanImageFile(page.file, direction);
+      replaceScanDraftPageFile(pageId, rotated);
+    } catch {
+      setUploadError("Could not rotate this image. Please try again.");
+    } finally {
+      setEditingScanPageId(null);
+    }
+  }
+
+  async function applyManualCrop() {
+    if (!cropEditorPageId || !cropAreaPixels) return;
+
+    const page = scanDraftPages.find((item) => item.id === cropEditorPageId);
+    if (!page) {
+      setCropEditorPageId(null);
+      return;
+    }
+
+    setEditingScanPageId(cropEditorPageId);
+
+    try {
+      const cropped = await cropScanImageFile(page.file, cropAreaPixels, cropPerspective);
+      replaceScanDraftPageFile(cropEditorPageId, cropped);
+      setCropEditorPageId(null);
+      setCropAreaPixels(null);
+      setCropZoom(1);
+      setCropPosition({ x: 0, y: 0 });
+      setCropPerspective(0);
+      setShowCropCompare(false);
+    } catch {
+      setUploadError("Could not crop this image. Please try again.");
+    } finally {
+      setEditingScanPageId(null);
+    }
   }
 
   async function handleScanImagesSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -837,18 +1380,75 @@ export default function VaultClient({ initialFiles }: Props) {
           <section className="mt-4 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold text-gray-900">Scan Preview</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAutoRotateScans((prev) => !prev)}
+                  disabled={scannerConverting}
+                  className={[
+                    "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-60",
+                    autoRotateScans
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Auto-rotate: {autoRotateScans ? "On" : "Off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearScanDraft();
+                    setShowScanReview(false);
+                  }}
+                  disabled={scannerConverting}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
               <button
                 type="button"
-                onClick={() => {
-                  clearScanDraft();
-                  setShowScanReview(false);
-                }}
-                disabled={scannerConverting}
-                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-60"
+                onClick={() => setUploadCategory("id-document")}
+                className={categoryChipClasses(uploadCategory === "id-document")}
               >
-                Clear
+                ID Document
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadCategory("matric-transcript")}
+                className={categoryChipClasses(uploadCategory === "matric-transcript")}
+              >
+                Matric Transcript
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadCategory("proof-of-address")}
+                className={categoryChipClasses(uploadCategory === "proof-of-address")}
+              >
+                Proof of Address
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadCategory("motivational-letter")}
+                className={categoryChipClasses(uploadCategory === "motivational-letter")}
+              >
+                Motivational Letter
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadCategory("other")}
+                className={categoryChipClasses(uploadCategory === "other")}
+              >
+                Other
               </button>
             </div>
+
+            <p className="mt-2 text-[11px] text-gray-500">
+              Saving as: <span className="font-semibold text-gray-700">{categoryMeta(uploadCategory).label}</span>
+            </p>
 
             {scanDraftPages.length === 0 ? (
               <p className="mt-3 text-xs text-gray-500">No pages yet. Tap Scan to PDF to capture pages.</p>
@@ -864,6 +1464,57 @@ export default function VaultClient({ initialFiles }: Props) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-semibold text-gray-800">Page {index + 1}</p>
                       <p className="truncate text-[11px] text-gray-400">{page.file.name}</p>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleTextEnhancement(page.id)}
+                          disabled={scannerConverting || editingScanPageId === page.id}
+                          className={[
+                            "rounded-md border px-2 py-1 text-[10px] font-bold disabled:opacity-50",
+                            page.isTextEnhanced
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              : "border-emerald-100 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-100",
+                          ].join(" ")}
+                        >
+                          {editingScanPageId === page.id
+                            ? "Working..."
+                            : page.isTextEnhanced
+                              ? "Original"
+                              : "Enhance text"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRotatePage(page.id, "left")}
+                          disabled={scannerConverting || editingScanPageId === page.id}
+                          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Rotate left
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRotatePage(page.id, "right")}
+                          disabled={scannerConverting || editingScanPageId === page.id}
+                          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Rotate right
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openCropEditor(page.id)}
+                          disabled={scannerConverting || editingScanPageId === page.id}
+                          className="rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                        >
+                          Crop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSmartCropPage(page.id)}
+                          disabled={scannerConverting || editingScanPageId === page.id}
+                          className="rounded-md border border-orange-100 bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                        >
+                          {editingScanPageId === page.id ? "Working..." : "Smart crop"}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -949,15 +1600,18 @@ export default function VaultClient({ initialFiles }: Props) {
             <div className="mt-4 space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-500">Document category</label>
-                <select
-                  value={uploadCategory}
-                  onChange={(e) => setUploadCategory(e.target.value as Category)}
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
-                >
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                   {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setUploadCategory(c.id)}
+                      className={categoryChipClasses(uploadCategory === c.id)}
+                    >
+                      {c.label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
 
               <div>
@@ -1074,14 +1728,24 @@ export default function VaultClient({ initialFiles }: Props) {
             <div className="space-y-2">
               {filtered.map((file) => {
                 const meta = categoryMeta(file.category);
+                const typeMeta = fileTypeMeta(file);
                 const isDeleting = deletingPath === file.path;
                 return (
                   <div
                     key={file.path}
-                    className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openReader(file)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void openReader(file);
+                      }
+                    }}
+                    className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 transition-colors hover:bg-gray-50"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50">
-                      <FileText size={18} className="text-orange-400" />
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${typeMeta.iconBg}`}>
+                      <FileText size={18} className={typeMeta.iconText} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1092,19 +1756,19 @@ export default function VaultClient({ initialFiles }: Props) {
                         <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${meta.color}`}>
                           {meta.label}
                         </span>
+                        <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${typeMeta.chip}`}>
+                          {typeMeta.label}
+                        </span>
                         <span className="text-[11px] text-gray-400">{formatSize(file.size)}</span>
                         <span className="text-[11px] text-gray-400">{formatDate(file.createdAt)}</span>
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        onClick={() => openReader(file)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                        title="Open"
-                      >
-                        <Eye size={15} />
-                      </button>
+                    <div
+                      className="flex shrink-0 items-center gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
                       <button
                         onClick={() => handleDownload(file.path)}
                         className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
@@ -1196,6 +1860,128 @@ export default function VaultClient({ initialFiles }: Props) {
             </div>
           </div>
         )}
+
+        {cropEditorPageId && (() => {
+          const cropPage = scanDraftPages.find((page) => page.id === cropEditorPageId);
+          if (!cropPage) return null;
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 md:items-center md:p-6">
+              <div className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white md:h-[86vh] md:rounded-3xl">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 md:px-5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-gray-900">Crop scanned page</p>
+                    <p className="truncate text-[11px] text-gray-400">Adjust the frame, then apply crop.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCropEditorPageId(null);
+                      setCropPerspective(0);
+                      setShowCropCompare(false);
+                    }}
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+                    aria-label="Close crop editor"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {cropPage.isTextEnhanced && cropPage.fallbackPreviewUrl && (
+                  <div className="flex items-center justify-end border-b border-gray-100 px-4 py-2 md:px-5">
+                    <button
+                      type="button"
+                      onClick={() => setShowCropCompare((prev) => !prev)}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      {showCropCompare ? "Hide compare" : "Show compare"}
+                    </button>
+                  </div>
+                )}
+
+                {showCropCompare && cropPage.fallbackPreviewUrl && (
+                  <div className="grid grid-cols-2 gap-2 border-b border-gray-100 bg-gray-50 p-3 md:p-4">
+                    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                      <p className="border-b border-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Original</p>
+                      <img src={cropPage.fallbackPreviewUrl} alt="Original scan" className="h-28 w-full object-cover md:h-36" />
+                    </div>
+                    <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                      <p className="border-b border-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Enhanced</p>
+                      <img src={cropPage.previewUrl} alt="Enhanced scan" className="h-28 w-full object-cover md:h-36" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="relative min-h-0 flex-1 bg-black">
+                  <Cropper
+                    image={cropPage.previewUrl}
+                    crop={cropPosition}
+                    zoom={cropZoom}
+                    aspect={undefined}
+                    onCropChange={setCropPosition}
+                    onZoomChange={setCropZoom}
+                    onCropComplete={(_, areaPixels) => setCropAreaPixels(areaPixels)}
+                    showGrid
+                    objectFit="contain"
+                  />
+                </div>
+
+                <div className="space-y-3 border-t border-gray-100 px-4 py-3 md:px-5">
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-600">Zoom</label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.01}
+                      value={cropZoom}
+                      onChange={(e) => setCropZoom(Number(e.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-600">Perspective correction</label>
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.01}
+                      value={cropPerspective}
+                      onChange={(e) => setCropPerspective(Number(e.target.value))}
+                      className="mt-1 w-full"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500">
+                      Move left/right to correct keystone distortion before saving.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCropEditorPageId(null);
+                        setCropPerspective(0);
+                        setShowCropCompare(false);
+                      }}
+                      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyManualCrop}
+                      disabled={!cropAreaPixels || editingScanPageId === cropEditorPageId}
+                      className="flex-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60"
+                    >
+                      {editingScanPageId === cropEditorPageId ? "Applying..." : "Apply crop"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
