@@ -96,12 +96,11 @@ export default function PlansPage() {
       return;
     }
 
-    await supabase
-      .from("profiles")
-      .update({ tier: selected })
-      .eq("id", user.id);
-
     if (selected === "free") {
+      await supabase
+        .from("profiles")
+        .update({ tier: "free" })
+        .eq("id", user.id);
       router.push("/dashboard");
       return;
     }

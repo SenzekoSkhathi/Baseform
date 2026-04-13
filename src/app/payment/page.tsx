@@ -34,6 +34,7 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [planCopy, setPlanCopy] = useState<Record<PlanId, { name: string; price: string }>>(DEFAULT_PLAN_COPY);
 
   const plan = useMemo(() => {
@@ -60,9 +61,57 @@ export default function PaymentPage() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const status = searchParams.get("status");
+    if (!status) return;
+
+    if (status === "cancelled") {
+      setNotice("Payment was cancelled. You can try again whenever you are ready.");
+      return;
+    }
+
+    if (status !== "success") return;
+
+    let isMounted = true;
+    async function verifyReturn() {
+      setNotice("Payment received. Verifying your plan upgrade...");
+      try {
+        const res = await fetch("/api/payments/payfast/verify-return", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan }),
+        });
+
+        const payload = (await res.json().catch(() => null)) as { ok?: boolean; pending?: boolean } | null;
+        if (!isMounted) return;
+
+        if (res.ok && payload?.ok) {
+          router.push("/dashboard");
+          return;
+        }
+
+        if (payload?.pending) {
+          setNotice("We are still confirming your payment with PayFast. Please refresh in a few moments.");
+          return;
+        }
+
+        setError("We could not verify your payment yet. Please refresh or contact support.");
+      } catch {
+        if (!isMounted) return;
+        setError("Verification failed. Please refresh and try again.");
+      }
+    }
+
+    void verifyReturn();
+    return () => {
+      isMounted = false;
+    };
+  }, [plan, router, searchParams]);
+
   async function handleCompletePayment() {
     setLoading(true);
     setError("");
+    setNotice("");
 
     const supabase = createClient();
     const {
@@ -74,19 +123,43 @@ export default function PaymentPage() {
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ tier: plan })
-      .eq("id", user.id);
+    const res = await fetch("/api/payments/payfast/initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
 
-    if (updateError) {
-      setError("Could not confirm your plan. Please try again.");
+    const payload = (await res.json().catch(() => null)) as
+      | {
+          error?: string;
+          processUrl?: string;
+          fields?: Record<string, string>;
+        }
+      | null;
+
+    if (!res.ok || !payload?.processUrl || !payload.fields) {
+      setError(payload?.error ?? "Could not start payment. Please try again.");
       setLoading(false);
       return;
     }
 
-    router.push("/dashboard");
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = payload.processUrl;
+
+    for (const [key, value] of Object.entries(payload.fields)) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
   }
+
+  const payfastSandbox = process.env.NEXT_PUBLIC_PAYFAST_SANDBOX === "true";
 
   return (
     <main className="min-h-screen w-full bg-gray-50 flex items-center justify-center px-4">
@@ -101,9 +174,11 @@ export default function PaymentPage() {
         </div>
 
         <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800">
-          Payment provider integration can be connected here. For now, use the button below to complete this flow and continue.
+          You will be redirected to PayFast to complete your payment securely.
+          {payfastSandbox ? " Sandbox mode is currently enabled." : ""}
         </div>
 
+        {notice && <p className="mt-4 text-sm text-emerald-700 bg-emerald-50 px-4 py-3 rounded-xl">{notice}</p>}
         {error && <p className="mt-4 text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
 
         <button
