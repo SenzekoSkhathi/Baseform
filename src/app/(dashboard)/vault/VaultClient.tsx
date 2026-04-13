@@ -324,6 +324,8 @@ export default function VaultClient({ initialFiles }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scannerInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const scanDraftPagesRef = useRef<ScanDraftPage[]>([]);
   const [isPending, startTransition] = useTransition();
 
@@ -337,6 +339,9 @@ export default function VaultClient({ initialFiles }: Props) {
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [scannerConverting, setScannerConverting] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
   const [uploadNameInput, setUploadNameInput] = useState("");
@@ -363,6 +368,10 @@ export default function VaultClient({ initialFiles }: Props) {
 
   useEffect(() => {
     return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+      }
       scanDraftPagesRef.current.forEach((page) => URL.revokeObjectURL(page.previewUrl));
     };
   }, []);
@@ -436,9 +445,134 @@ export default function VaultClient({ initialFiles }: Props) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function handleScanClick() {
+  function stopCameraStream() {
+    if (!cameraStreamRef.current) return;
+    cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+  }
+
+  async function openInAppCamera() {
     if (!isMobileViewport) return;
-    scannerInputRef.current?.click();
+
+    setCameraError(null);
+    setCameraLoading(true);
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera streaming is not available on this browser.");
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      setCameraOpen(true);
+      cameraStreamRef.current = stream;
+
+      const video = cameraVideoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        await video.play().catch(() => undefined);
+      }
+    } catch {
+      setCameraError("Could not open camera stream. Using image picker instead.");
+      scannerInputRef.current?.click();
+    } finally {
+      setCameraLoading(false);
+    }
+  }
+
+  function closeInAppCamera() {
+    setCameraOpen(false);
+    setCameraError(null);
+    stopCameraStream();
+  }
+
+  async function addScanDraftFiles(selected: File[]) {
+    if (selected.length === 0) return;
+
+    const nextTotal = scanDraftPages.length + selected.length;
+    if (nextTotal > MAX_SCAN_PAGES) {
+      setUploadError(`Scan limit reached. Please keep each scan PDF to ${MAX_SCAN_PAGES} pages or fewer.`);
+      return;
+    }
+
+    try {
+      const normalizedFiles = await Promise.all(selected.map((file) => normalizeScanImageFile(file)));
+
+      const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
+        id: `${Date.now()}-${index}-${file.name}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+
+      setScanDraftPages((prev) => [...prev, ...newPages]);
+      setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
+      setShowScanReview(true);
+    } catch {
+      setUploadError("Your phone is low on memory while scanning. Close other apps and retry with one page at a time.");
+    }
+  }
+
+  async function captureFromInAppCamera() {
+    const video = cameraVideoRef.current;
+    if (!video) return;
+
+    const sourceWidth = video.videoWidth;
+    const sourceHeight = video.videoHeight;
+    if (!sourceWidth || !sourceHeight) {
+      setCameraError("Camera is still starting. Try again in a moment.");
+      return;
+    }
+
+    setCameraLoading(true);
+    try {
+      const maxSide = 1280;
+      const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+      const width = Math.max(1, Math.round(sourceWidth * scale));
+      const height = Math.max(1, Math.round(sourceHeight * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not capture camera frame.");
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (!result) {
+            reject(new Error("Could not encode camera frame."));
+            return;
+          }
+          resolve(result);
+        }, "image/jpeg", 0.74);
+      });
+
+      const file = new File([blob], `scan-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      });
+
+      await addScanDraftFiles([file]);
+      setCameraError(null);
+    } catch {
+      setCameraError("Capture failed due to low memory. Close apps and try again.");
+    } finally {
+      setCameraLoading(false);
+    }
+  }
+
+  function handleScanClick() {
+    void openInAppCamera();
   }
 
   function clearScanDraft() {
@@ -481,29 +615,7 @@ export default function VaultClient({ initialFiles }: Props) {
 
     setUploadError(null);
     setUploadSuccess(null);
-
-    const nextTotal = scanDraftPages.length + selected.length;
-    if (nextTotal > MAX_SCAN_PAGES) {
-      setUploadError(`Scan limit reached. Please keep each scan PDF to ${MAX_SCAN_PAGES} pages or fewer.`);
-      if (scannerInputRef.current) scannerInputRef.current.value = "";
-      return;
-    }
-
-    try {
-      const normalizedFiles = await Promise.all(selected.map((file) => normalizeScanImageFile(file)));
-
-      const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
-        id: `${Date.now()}-${index}-${file.name}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-
-      setScanDraftPages((prev) => [...prev, ...newPages]);
-      setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
-      setShowScanReview(true);
-    } catch {
-      setUploadError("Your phone is low on memory while scanning. Close other apps and retry with one page at a time.");
-    }
+    await addScanDraftFiles(selected);
 
     if (scannerInputRef.current) scannerInputRef.current.value = "";
   }
@@ -678,7 +790,6 @@ export default function VaultClient({ initialFiles }: Props) {
             ref={scannerInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handleScanImagesSelect}
             className="hidden"
             tabIndex={-1}
@@ -686,6 +797,57 @@ export default function VaultClient({ initialFiles }: Props) {
           />
 
         </header>
+
+        {cameraOpen && (
+          <section className="mt-4 overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-blue-50 px-4 py-3">
+              <p className="text-sm font-bold text-gray-900">Camera Scanner</p>
+              <button
+                type="button"
+                onClick={closeInAppCamera}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                aria-label="Close camera"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="bg-black p-2">
+              <video
+                ref={cameraVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-64 w-full rounded-xl object-cover"
+              />
+            </div>
+
+            <div className="space-y-2 px-4 py-3">
+              {cameraError && (
+                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{cameraError}</p>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={captureFromInAppCamera}
+                  disabled={cameraLoading || scannerConverting || uploading}
+                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  <Camera size={14} />
+                  {cameraLoading ? "Capturing..." : "Capture page"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scannerInputRef.current?.click()}
+                  disabled={cameraLoading || scannerConverting || uploading}
+                  className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  Gallery
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {isMobileViewport && showScanReview && (
           <section className="mt-4 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
