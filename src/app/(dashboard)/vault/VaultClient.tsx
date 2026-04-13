@@ -17,6 +17,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import imageCompression from "browser-image-compression";
 
 export type VaultFile = {
   path: string;
@@ -40,6 +41,12 @@ type Category = (typeof CATEGORIES)[number]["id"];
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 const MAX_SCAN_PAGES = 8;
+const SCAN_IMAGE_COMPRESSION_OPTIONS = {
+  maxSizeMB: 0.55,
+  maxWidthOrHeight: 1280,
+  useWebWorker: true,
+  initialQuality: 0.74,
+} as const;
 
 function categoryMeta(id: Category) {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
@@ -162,7 +169,7 @@ function detectDocumentBounds(gray: Uint8ClampedArray, width: number, height: nu
   return { x, y, width: w, height: h };
 }
 
-async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: number; height: number }> {
+async function loadImageForPdf(file: File): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   const objectUrl = URL.createObjectURL(file);
 
   try {
@@ -228,7 +235,7 @@ async function loadImageForPdf(file: File): Promise<{ dataUrl: string; width: nu
     outputContext.putImageData(output, 0, 0);
 
     return {
-      dataUrl: outputCanvas.toDataURL("image/jpeg", 0.75),
+      canvas: outputCanvas,
       width: bounds.width,
       height: bounds.height,
     };
@@ -258,7 +265,12 @@ async function buildPdfFromImages(images: File[]): Promise<Blob> {
     const x = (pageWidth - renderWidth) / 2;
     const y = (pageHeight - renderHeight) / 2;
 
-    pdf.addImage(image.dataUrl, "JPEG", x, y, renderWidth, renderHeight, undefined, "FAST");
+    // Pass canvas directly to avoid huge Base64 strings in JS memory.
+    pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "FAST");
+
+    // Release backing pixels as soon as page has been added.
+    image.canvas.width = 1;
+    image.canvas.height = 1;
   }
 
   return pdf.output("blob");
@@ -275,49 +287,13 @@ type ScanDraftPage = {
 };
 
 async function normalizeScanImageFile(input: File): Promise<File> {
-  const objectUrl = URL.createObjectURL(input);
+  const compressedBlob = await imageCompression(input, SCAN_IMAGE_COMPRESSION_OPTIONS);
+  const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
 
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Could not read captured image."));
-      img.src = objectUrl;
-    });
-
-    const maxSide = 1280;
-    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * scale));
-    const height = Math.max(1, Math.round(image.height * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not process captured image.");
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
-
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((result) => {
-        if (!result) {
-          reject(new Error("Could not compress captured image."));
-          return;
-        }
-        resolve(result);
-      }, "image/jpeg", 0.74);
-    });
-
-    const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
-    return new File([blob], `${baseName}.jpg`, {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    });
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  return new File([compressedBlob], `${baseName}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
 }
 
 export default function VaultClient({ initialFiles }: Props) {
@@ -465,8 +441,8 @@ export default function VaultClient({ initialFiles }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
         },
         audio: false,
       });
@@ -503,7 +479,13 @@ export default function VaultClient({ initialFiles }: Props) {
     }
 
     try {
-      const normalizedFiles = await Promise.all(selected.map((file) => normalizeScanImageFile(file)));
+      const normalizedFiles: File[] = [];
+
+      // Process one file at a time to avoid memory spikes on low-memory mobile browsers.
+      for (const file of selected) {
+        const normalized = await normalizeScanImageFile(file);
+        normalizedFiles.push(normalized);
+      }
 
       const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
         id: `${Date.now()}-${index}-${file.name}`,
@@ -572,7 +554,8 @@ export default function VaultClient({ initialFiles }: Props) {
   }
 
   function handleScanClick() {
-    void openInAppCamera();
+    setCameraError(null);
+    scannerInputRef.current?.click();
   }
 
   function clearScanDraft() {
@@ -790,6 +773,7 @@ export default function VaultClient({ initialFiles }: Props) {
             ref={scannerInputRef}
             type="file"
             accept="image/*"
+            capture="environment"
             onChange={handleScanImagesSelect}
             className="hidden"
             tabIndex={-1}
