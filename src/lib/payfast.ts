@@ -19,10 +19,8 @@ export function getPayFastConfig(): PayFastConfig {
   const merchantId = String(process.env.PAYFAST_MERCHANT_ID ?? "").trim();
   const merchantKey = String(process.env.PAYFAST_MERCHANT_KEY ?? "").trim();
   const passphrase = String(process.env.PAYFAST_PASSPHRASE ?? "").trim();
-  const sandboxFlag = String(process.env.PAYFAST_SANDBOX ?? process.env.NEXT_PUBLIC_PAYFAST_SANDBOX ?? "true").toLowerCase();
-  const mode = sandboxFlag === "true"
-    ? "sandbox"
-    : "live";
+  const sandboxRaw = process.env.PAYFAST_SANDBOX || process.env.NEXT_PUBLIC_PAYFAST_SANDBOX || "true";
+  const mode = String(sandboxRaw).toLowerCase() === "false" ? "live" : "sandbox";
 
   if (!merchantId || !merchantKey) {
     throw new Error("Missing PayFast env vars: PAYFAST_MERCHANT_ID and PAYFAST_MERCHANT_KEY are required.");
