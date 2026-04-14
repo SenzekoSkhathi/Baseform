@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calculateAPS, apsRating } from "@/lib/aps/calculator";
+import { calculateAPS, apsRating, markToApsPoint } from "@/lib/aps/calculator";
 import ShareCardClient from "./ShareCardClient";
 
 export default async function SharePage({
@@ -19,18 +19,31 @@ export default async function SharePage({
 
   if (!profile) notFound();
 
-  const { data: subjects } = await admin
+  const { data: rawSubjects } = await admin
     .from("student_subjects")
     .select("subject_name, mark")
     .eq("profile_id", profile.id);
 
-  const subjectNames = (subjects ?? [])
-    .map((s) => s.subject_name?.trim())
-    .filter((name): name is string => Boolean(name));
-
-  const aps = subjects?.length
-    ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
+  const aps = rawSubjects?.length
+    ? calculateAPS(rawSubjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
+
+  // Count qualifying programmes (subject to the student's APS)
+  const { count: programmeCount } = await admin
+    .from("faculties")
+    .select("*", { count: "exact", head: true })
+    .lte("aps_minimum", aps);
+
+  // Build subject entries with APS point contribution
+  const subjects = (rawSubjects ?? [])
+    .filter((s) => s.subject_name && !s.subject_name.toLowerCase().includes("life orientation"))
+    .map((s) => ({
+      name: s.subject_name as string,
+      mark: s.mark as number,
+      apsPoints: markToApsPoint(s.mark),
+    }))
+    .sort((a, b) => b.apsPoints - a.apsPoints)
+    .slice(0, 6); // best 6 (matching APS calculation)
 
   const fullName = (profile.full_name ?? "").trim() || "A student";
 
@@ -41,7 +54,8 @@ export default async function SharePage({
       rating={apsRating(aps)}
       school={profile.school_name ?? null}
       gradeYear={profile.grade_year ?? null}
-      subjects={subjectNames}
+      subjects={subjects}
+      programmeCount={programmeCount ?? 0}
       shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za"}/share/${token}`}
     />
   );

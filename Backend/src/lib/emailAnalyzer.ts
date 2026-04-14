@@ -3,7 +3,11 @@
  * Reads a university email and returns a structured application status.
  */
 
-import { anthropic, AI_MODEL } from "./ai.js";
+import { anthropic } from "./ai.js";
+
+// Haiku is ~50x cheaper than Sonnet and sufficient for structured email classification.
+// Never use the shared AI_MODEL constant here — email analysis must stay on Haiku.
+const EMAIL_MODEL = "claude-haiku-4-5-20251001";
 
 export type DetectedStatus =
   | "in_progress"
@@ -60,7 +64,7 @@ Return JSON in exactly this shape:
 }`.trim();
 
   const message = await anthropic.messages.create({
-    model: AI_MODEL,
+    model: EMAIL_MODEL,
     max_tokens: 200,
     system: SYSTEM,
     messages: [{ role: "user", content: userMessage }],

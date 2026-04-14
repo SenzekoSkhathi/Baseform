@@ -143,3 +143,107 @@ export async function getGmailUserEmail(accessToken: string): Promise<string> {
   const data = await res.json();
   return data.emailAddress ?? "";
 }
+
+/**
+ * Returns the current inbox historyId.
+ * Store this on first connection so subsequent scans only process new messages.
+ */
+export async function getProfileHistoryId(accessToken: string): Promise<string> {
+  const res = await fetch(`${GMAIL_BASE}/profile`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) throw new Error("Could not fetch Gmail profile for historyId");
+
+  const data = await res.json();
+  if (!data.historyId) throw new Error("Gmail profile missing historyId");
+  return String(data.historyId);
+}
+
+/**
+ * Fetches message IDs added to the inbox since `startHistoryId`.
+ * Returns the message IDs and the latest historyId to store for the next scan.
+ *
+ * Throws an error with `code: 404` if the historyId has expired (>30 days old)
+ * — the caller should fall back to a subject/domain search in that case.
+ */
+export async function getMessagesSinceHistory(
+  accessToken: string,
+  startHistoryId: string
+): Promise<{ messageIds: string[]; newHistoryId: string }> {
+  const messageIds: string[] = [];
+  let pageToken: string | undefined;
+  let newHistoryId = startHistoryId;
+
+  do {
+    const params = new URLSearchParams({
+      startHistoryId,
+      historyTypes: "messageAdded",
+      labelId: "INBOX",
+      maxResults: "500",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await fetch(`${GMAIL_BASE}/history?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (res.status === 404) {
+      const err: Error & { code?: number } = new Error("historyId expired — fall back to search");
+      err.code = 404;
+      throw err;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Gmail history fetch failed: ${text}`);
+    }
+
+    const data = await res.json();
+
+    // Always capture the latest historyId, even if history array is empty
+    if (data.historyId) newHistoryId = String(data.historyId);
+
+    for (const entry of data.history ?? []) {
+      for (const added of entry.messagesAdded ?? []) {
+        if (added.message?.id) messageIds.push(added.message.id);
+      }
+    }
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return { messageIds, newHistoryId };
+}
+
+/**
+ * Fetches only the From, Subject, and Date headers for a message.
+ * ~10x lighter than a full getMessage call — use this to filter before fetching bodies.
+ */
+export async function getMessageMetadata(
+  accessToken: string,
+  messageId: string
+): Promise<{ from: string; subject: string; internalDate: string | null }> {
+  // Gmail API accepts repeated metadataHeaders params — build the query string manually
+  const qs = `format=metadata&metadataHeaders=From&metadataHeaders=Subject`;
+
+  const res = await fetch(`${GMAIL_BASE}/messages/${messageId}?${qs}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gmail getMessageMetadata failed: ${text}`);
+  }
+
+  const data = await res.json();
+  const headers: { name: string; value: string }[] = data.payload?.headers ?? [];
+  const get = (name: string) =>
+    headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+  return {
+    from: get("From"),
+    subject: get("Subject"),
+    internalDate: data.internalDate ?? null,
+  };
+}

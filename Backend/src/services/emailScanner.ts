@@ -1,13 +1,29 @@
 /**
- * Email scanner — core orchestration.
+ * Email scanner — filter-first architecture.
  *
- * For a given user:
- * 1. Load their Gmail tokens (refresh if expired).
- * 2. Load their tracked applications and group by university.
- * 3. Build a targeted Gmail search query per university.
- * 4. Fetch matching emails, skip already-processed ones.
- * 5. Analyse each email with Claude.
- * 6. Update application statuses and write audit logs.
+ * Cost strategy:
+ * 1. Use Gmail's from: filter to select only emails sent by university domains.
+ *    Claude never sees newsletters, promotional emails, or anything off-domain.
+ * 2. Use historyId to only process messages added since the last scan.
+ *    On subsequent runs the scanner fetches metadata for new messages only,
+ *    skipping everything already processed.
+ * 3. Claude Haiku is used for analysis — ~50x cheaper than Sonnet, sufficient
+ *    for structured JSON classification of short email bodies.
+ *
+ * Flow per user:
+ *   a) Refresh OAuth token if needed.
+ *   b) Load tracked applications → collect university names + email domains.
+ *   c) If gmail_history_id is set:
+ *        - Fetch only new message IDs via History API.
+ *        - Fetch lightweight metadata (From header) for each.
+ *        - Keep only messages whose sender domain matches a tracked university.
+ *      If no historyId (first scan) or historyId expired:
+ *        - Build domain-based Gmail search query + newer_than window.
+ *        - Search returns pre-filtered message IDs at no Claude cost.
+ *   d) Fetch full body only for matching messages.
+ *   e) Call Claude Haiku once per matching message.
+ *   f) Update application statuses and write audit logs.
+ *   g) Store the new historyId for next run.
  */
 
 import { supabaseAdmin } from "../lib/supabase.js";
@@ -19,6 +35,9 @@ import {
   getMessage,
   extractEmailBody,
   getHeader,
+  getProfileHistoryId,
+  getMessagesSinceHistory,
+  getMessageMetadata,
 } from "./gmailClient.js";
 
 // Statuses we will auto-update (never downgrade beyond these ranks)
@@ -34,6 +53,12 @@ const STATUS_RANK: Record<string, number> = {
 /** Only upgrade status — never go backwards. */
 function isUpgrade(current: string, next: string): boolean {
   return (STATUS_RANK[next] ?? 0) > (STATUS_RANK[current] ?? 0);
+}
+
+/** Extract the bare domain from a From header, e.g. "UCT <no-reply@uct.ac.za>" → "uct.ac.za" */
+function extractSenderDomain(from: string): string {
+  const match = from.match(/@([\w.-]+)/);
+  return match ? match[1].toLowerCase() : "";
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
@@ -67,11 +92,14 @@ export async function scanUserEmails(userId: string): Promise<void> {
 
       await supabaseAdmin
         .from("email_connections")
-        .update({ access_token: accessToken, token_expiry: newExpiry.toISOString(), updated_at: new Date().toISOString() })
+        .update({
+          access_token: accessToken,
+          token_expiry: newExpiry.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", conn.id);
     } catch (err) {
       console.error(`[scanner] Token refresh failed for user ${userId}:`, err);
-      // Mark connection inactive if refresh token is revoked
       await supabaseAdmin
         .from("email_connections")
         .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -80,10 +108,10 @@ export async function scanUserEmails(userId: string): Promise<void> {
     }
   }
 
-  // 3. Load user's tracked applications with university details
+  // 3. Load tracked applications with university name + email_domain
   const { data: applications, error: appsErr } = await supabaseAdmin
     .from("applications")
-    .select("id, status, university_id, universities(id, name, abbreviation)")
+    .select("id, status, university_id, universities(id, name, abbreviation, email_domain)")
     .eq("student_id", userId);
 
   if (appsErr || !applications?.length) {
@@ -91,17 +119,27 @@ export async function scanUserEmails(userId: string): Promise<void> {
     return;
   }
 
-  // Group applications by university_id
   type AppRow = {
     id: string;
     status: string;
     university_id: string | number;
-    universities: { id: string | number; name: string; abbreviation: string | null } | null;
+    universities: {
+      id: string | number;
+      name: string;
+      abbreviation: string | null;
+      email_domain: string | null;
+    } | null;
   };
 
+  // Group by university, collecting domain and app list
   const byUniversity = new Map<
     string,
-    { name: string; abbreviation: string | null; apps: AppRow[] }
+    {
+      name: string;
+      abbreviation: string | null;
+      emailDomain: string | null;
+      apps: AppRow[];
+    }
   >();
 
   for (const app of applications as unknown as AppRow[]) {
@@ -110,13 +148,30 @@ export async function scanUserEmails(userId: string): Promise<void> {
       byUniversity.set(uniId, {
         name: app.universities?.name ?? uniId,
         abbreviation: app.universities?.abbreviation ?? null,
+        emailDomain: app.universities?.email_domain ?? null,
         apps: [],
       });
     }
     byUniversity.get(uniId)!.apps.push(app);
   }
 
-  // 4. Load already-processed message IDs for this user (to skip them)
+  // Build a domain → university mapping so we can match incoming emails
+  const domainToUni = new Map<
+    string,
+    { name: string; apps: AppRow[] }
+  >();
+  const unknownDomainUnis: { name: string; abbreviation: string | null; apps: AppRow[] }[] = [];
+
+  for (const [, uni] of byUniversity) {
+    if (uni.emailDomain) {
+      domainToUni.set(uni.emailDomain.toLowerCase(), { name: uni.name, apps: uni.apps });
+    } else {
+      // No domain in DB — will fall back to subject-based search later
+      unknownDomainUnis.push(uni);
+    }
+  }
+
+  // 4. Load already-processed message IDs (prevents duplicate analysis across history fallbacks)
   const { data: processedLogs } = await supabaseAdmin
     .from("email_scan_logs")
     .select("gmail_message_id")
@@ -126,102 +181,228 @@ export async function scanUserEmails(userId: string): Promise<void> {
     (processedLogs ?? []).map((l: { gmail_message_id: string }) => l.gmail_message_id)
   );
 
-  // 5. Scan per university
-  for (const [, { name, abbreviation, apps }] of byUniversity) {
-    const query = buildGmailQuery(name, abbreviation);
+  // 5. Collect candidate message IDs — via historyId or search fallback
+  const candidateMessages: { id: string; matchedDomain?: string }[] = [];
 
-    let messages;
+  const storedHistoryId: string | null = (conn as any).gmail_history_id ?? null;
+
+  if (storedHistoryId && domainToUni.size > 0) {
+    // ── Incremental path: historyId ──────────────────────────────────────────
     try {
-      messages = await searchMessages(accessToken, query, 30);
-    } catch (err) {
-      console.error(`[scanner] Gmail search error for "${name}":`, err);
-      continue;
-    }
+      const { messageIds, newHistoryId } = await getMessagesSinceHistory(
+        accessToken,
+        storedHistoryId
+      );
 
-    for (const msg of messages) {
-      if (processedIds.has(msg.id)) continue;
+      // Fetch lightweight metadata (From header only) for each new message
+      // Cap at 200 to avoid unbounded processing if inbox was dormant for a long time
+      const toCheck = messageIds.slice(0, 200).filter((id) => !processedIds.has(id));
 
-      let detail;
-      try {
-        detail = await getMessage(accessToken, msg.id);
-      } catch (err) {
-        console.error(`[scanner] Could not fetch message ${msg.id}:`, err);
-        continue;
-      }
-
-      const subject = getHeader(detail, "Subject");
-      const from    = getHeader(detail, "From");
-      const body    = extractEmailBody(detail.payload);
-      const emailDate = detail.internalDate
-        ? new Date(Number(detail.internalDate)).toISOString()
-        : null;
-
-      const analysis = await analyzeEmail(from, subject, body, name);
-
-      // Mark as processed regardless of result to avoid re-scanning
-      processedIds.add(msg.id);
-
-      if (analysis.status === "unknown" || analysis.confidence === "low") {
-        await writeLog(userId, null, msg.id, subject, from, emailDate, analysis.status, null, "skipped");
-        continue;
-      }
-
-      // Update all application rows for this university if it's an upgrade
-      for (const app of apps) {
-        if (!isUpgrade(app.status, analysis.status)) continue;
-
-        const { error: updateErr } = await supabaseAdmin
-          .from("applications")
-          .update({ status: analysis.status, updated_at: new Date().toISOString() })
-          .eq("id", app.id);
-
-        if (updateErr) {
-          console.error(`[scanner] Failed to update application ${app.id}:`, updateErr);
-          continue;
+      for (const msgId of toCheck) {
+        try {
+          const meta = await getMessageMetadata(accessToken, msgId);
+          const senderDomain = extractSenderDomain(meta.from);
+          if (domainToUni.has(senderDomain)) {
+            candidateMessages.push({ id: msgId, matchedDomain: senderDomain });
+          }
+        } catch (err) {
+          console.error(`[scanner] Metadata fetch error for ${msgId}:`, err);
         }
+      }
 
-        await writeLog(
-          userId,
-          app.id,
-          msg.id,
-          subject,
-          from,
-          emailDate,
-          analysis.status,
-          app.status,
-          "status_updated"
-        );
+      // Always save the latest historyId, even if no messages matched
+      await supabaseAdmin
+        .from("email_connections")
+        .update({ gmail_history_id: newHistoryId, updated_at: new Date().toISOString() })
+        .eq("id", conn.id);
 
-        console.log(
-          `[scanner] Updated app ${app.id} (${name}): ${app.status} → ${analysis.status}`
-        );
-
-        // Send guardian notification (fire-and-forget, don't block the scan)
-        sendGuardianNotification(userId, app.id, name, analysis.status).catch((err) =>
-          console.error(`[scanner] Guardian notify failed for app ${app.id}:`, err)
-        );
+    } catch (err: any) {
+      if (err?.code === 404) {
+        // historyId expired — fall through to the search path below
+        console.log(`[scanner] historyId expired for user ${userId}, falling back to search`);
+      } else {
+        throw err;
       }
     }
   }
 
-  // 6. Update last_scanned_at
+  // ── Search path: used when no historyId, historyId expired, or domains unknown ──
+
+  const needsSearch = candidateMessages.length === 0 || unknownDomainUnis.length > 0;
+
+  if (needsSearch) {
+    // Calculate newer_than window from last scan (min 24h, add 2h buffer)
+    const newerThanHours = conn.last_scanned_at
+      ? Math.max(24, Math.ceil((Date.now() - new Date(conn.last_scanned_at).getTime()) / 3_600_000) + 2)
+      : 168; // 7 days on first scan
+
+    // Domain-filtered search for universities we know
+    if (domainToUni.size > 0 && candidateMessages.length === 0) {
+      const domains = Array.from(domainToUni.keys());
+      const fromFilter = domains.map((d) => `@${d}`).join(" OR ");
+      const query = `from:(${fromFilter}) newer_than:${newerThanHours}h`;
+
+      try {
+        const messages = await searchMessages(accessToken, query, 50);
+        for (const msg of messages) {
+          if (!processedIds.has(msg.id)) {
+            candidateMessages.push({ id: msg.id });
+          }
+        }
+      } catch (err) {
+        console.error(`[scanner] Domain search failed for user ${userId}:`, err);
+      }
+    }
+
+    // Subject-based fallback for universities without a known domain
+    for (const uni of unknownDomainUnis) {
+      const query = buildSubjectQuery(uni.name, uni.abbreviation, newerThanHours);
+      try {
+        const messages = await searchMessages(accessToken, query, 20);
+        for (const msg of messages) {
+          if (!processedIds.has(msg.id)) {
+            candidateMessages.push({ id: msg.id });
+          }
+        }
+      } catch (err) {
+        console.error(`[scanner] Subject search error for "${uni.name}":`, err);
+      }
+    }
+
+    // On search path: capture a fresh historyId for future incremental scans
+    if (!storedHistoryId) {
+      try {
+        const freshHistoryId = await getProfileHistoryId(accessToken);
+        await supabaseAdmin
+          .from("email_connections")
+          .update({ gmail_history_id: freshHistoryId, updated_at: new Date().toISOString() })
+          .eq("id", conn.id);
+      } catch (err) {
+        console.error(`[scanner] Could not capture initial historyId for user ${userId}:`, err);
+      }
+    }
+  }
+
+  // 6. Analyse each candidate message with Claude Haiku
+  for (const candidate of candidateMessages) {
+    // Determine which university this message belongs to
+    let matchedUni: { name: string; apps: AppRow[] } | undefined;
+
+    if (candidate.matchedDomain) {
+      matchedUni = domainToUni.get(candidate.matchedDomain);
+    }
+
+    // Fetch full message detail
+    let detail;
+    try {
+      detail = await getMessage(accessToken, candidate.id);
+    } catch (err) {
+      console.error(`[scanner] Could not fetch message ${candidate.id}:`, err);
+      continue;
+    }
+
+    const subject  = getHeader(detail, "Subject");
+    const from     = getHeader(detail, "From");
+    const body     = extractEmailBody(detail.payload);
+    const emailDate = detail.internalDate
+      ? new Date(Number(detail.internalDate)).toISOString()
+      : null;
+
+    // If we don't have a matchedDomain yet, resolve university from From header
+    if (!matchedUni) {
+      const senderDomain = extractSenderDomain(from);
+      matchedUni = domainToUni.get(senderDomain);
+    }
+
+    // Final fallback: match against subject-based universities
+    if (!matchedUni) {
+      const subjectLower = subject.toLowerCase();
+      for (const uni of unknownDomainUnis) {
+        if (
+          subjectLower.includes(uni.name.toLowerCase()) ||
+          (uni.abbreviation && subjectLower.includes(uni.abbreviation.toLowerCase()))
+        ) {
+          matchedUni = { name: uni.name, apps: uni.apps };
+          break;
+        }
+      }
+    }
+
+    if (!matchedUni) {
+      // Email passed the domain filter but doesn't match any tracked university
+      // (e.g. from a shared institution domain not in our map) — skip silently
+      processedIds.add(candidate.id);
+      continue;
+    }
+
+    // Claude Haiku call — only reaches here for emails confirmed from a university
+    const analysis = await analyzeEmail(from, subject, body, matchedUni.name);
+    processedIds.add(candidate.id);
+
+    if (analysis.status === "unknown" || analysis.confidence === "low") {
+      await writeLog(userId, null, candidate.id, subject, from, emailDate, analysis.status, null, "skipped");
+      continue;
+    }
+
+    for (const app of matchedUni.apps) {
+      if (!isUpgrade(app.status, analysis.status)) continue;
+
+      const { error: updateErr } = await supabaseAdmin
+        .from("applications")
+        .update({ status: analysis.status, updated_at: new Date().toISOString() })
+        .eq("id", app.id);
+
+      if (updateErr) {
+        console.error(`[scanner] Failed to update application ${app.id}:`, updateErr);
+        continue;
+      }
+
+      await writeLog(
+        userId,
+        app.id,
+        candidate.id,
+        subject,
+        from,
+        emailDate,
+        analysis.status,
+        app.status,
+        "status_updated"
+      );
+
+      console.log(
+        `[scanner] Updated app ${app.id} (${matchedUni.name}): ${app.status} → ${analysis.status}`
+      );
+
+      sendGuardianNotification(userId, app.id, matchedUni.name, analysis.status).catch((err) =>
+        console.error(`[scanner] Guardian notify failed for app ${app.id}:`, err)
+      );
+    }
+  }
+
+  // 7. Update last_scanned_at
   await supabaseAdmin
     .from("email_connections")
     .update({ last_scanned_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", conn.id);
 
-  console.log(`[scanner] Scan complete for user ${userId}`);
+  console.log(
+    `[scanner] Scan complete for user ${userId} — ${candidateMessages.length} candidate(s) checked`
+  );
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildGmailQuery(name: string, abbreviation: string | null): string {
+/** Subject-based query used for universities without a known email domain. */
+function buildSubjectQuery(
+  name: string,
+  abbreviation: string | null,
+  newerThanHours: number
+): string {
   const terms: string[] = [`subject:"${name}"`];
   if (abbreviation && abbreviation.toLowerCase() !== name.toLowerCase()) {
     terms.push(`subject:"${abbreviation}"`);
   }
-  // Only look at emails from the last 90 days to keep scans fast
-  return `(${terms.join(" OR ")}) newer_than:90d`;
+  return `(${terms.join(" OR ")}) newer_than:${newerThanHours}h`;
 }
 
 async function sendGuardianNotification(
@@ -230,7 +411,6 @@ async function sendGuardianNotification(
   universityName: string,
   newStatus: string
 ): Promise<void> {
-  // Load student profile for guardian details
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("full_name, guardian_name, guardian_email, notification_prefs")
@@ -241,14 +421,11 @@ async function sendGuardianNotification(
     deadline_alerts?: unknown;
     status_updates?: unknown;
   } | null;
-  const allowsDeadlineAlerts = notificationPrefs?.deadline_alerts;
-  const allowsStatusUpdates = notificationPrefs?.status_updates;
-  if (typeof allowsDeadlineAlerts === "boolean" && !allowsDeadlineAlerts) return;
-  if (typeof allowsStatusUpdates === "boolean" && !allowsStatusUpdates) return;
+  if (typeof notificationPrefs?.deadline_alerts === "boolean" && !notificationPrefs.deadline_alerts) return;
+  if (typeof notificationPrefs?.status_updates === "boolean" && !notificationPrefs.status_updates) return;
 
   if (!profile?.guardian_email || !profile?.guardian_name) return;
 
-  // Dedup: only send once per application + status combination
   const refId = `${applicationId}_${newStatus}`;
   const { data: existing } = await supabaseAdmin
     .from("notification_sent_log")
@@ -260,7 +437,6 @@ async function sendGuardianNotification(
 
   if (existing) return;
 
-  // Load application details for closing date
   const { data: app } = await supabaseAdmin
     .from("applications")
     .select("faculties(name), universities(closing_date)")
@@ -269,7 +445,6 @@ async function sendGuardianNotification(
 
   const programmeName = (app as any)?.faculties?.name ?? "Programme";
   const closingDate   = (app as any)?.universities?.closing_date ?? null;
-
   const appUrl = `${process.env.FRONTEND_URL ?? "https://baseform.co.za"}/dashboard/detail`;
   const studentFirstName = (profile.full_name ?? "").split(" ")[0] || "your student";
 
@@ -292,7 +467,9 @@ async function sendGuardianNotification(
     email_address:     profile.guardian_email,
   });
 
-  console.log(`[scanner] Guardian email sent to ${profile.guardian_email} (app ${applicationId} → ${newStatus})`);
+  console.log(
+    `[scanner] Guardian email sent to ${profile.guardian_email} (app ${applicationId} → ${newStatus})`
+  );
 }
 
 async function writeLog(
