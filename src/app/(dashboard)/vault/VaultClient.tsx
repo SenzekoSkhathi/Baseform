@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
+import ScanEditor, { type ScanEditorSavePayload } from "./ScanEditor";
 
 export type VaultFile = {
   path: string;
@@ -40,8 +41,6 @@ type Category = (typeof CATEGORIES)[number]["id"];
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 const MAX_SCAN_PAGES = 8;
-const EDITOR_INPUT_PREFIX = "vault-editor-input:";
-const EDITOR_RESULT_KEY = "vault-editor-result";
 const SCAN_IMAGE_COMPRESSION_OPTIONS = {
   maxSizeMB: 0.55,
   maxWidthOrHeight: 1280,
@@ -101,20 +100,6 @@ function categoryChipClasses(active: boolean): string {
     "shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
     active ? "border-orange-200 bg-orange-500 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
   ].join(" ");
-}
-
-async function fileToDataUrl(file: File): Promise<string> {
-  return imageCompression.getDataUrlFromFile(file);
-}
-
-async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-
-  return new File([blob], fileName, {
-    type: blob.type || "image/jpeg",
-    lastModified: Date.now(),
-  });
 }
 
 function readerKindForFile(file: VaultFile): ReaderKind {
@@ -351,7 +336,7 @@ type Props = {
   initialFiles: VaultFile[];
 };
 
-type ScanDraftPage = {
+export type ScanDraftPage = {
   id: string;
   file: File;
   previewUrl: string;
@@ -469,7 +454,7 @@ export default function VaultClient({ initialFiles }: Props) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
-  const [editingScanPageId, setEditingScanPageId] = useState<string | null>(null);
+  const [editingPage, setEditingPage] = useState<ScanDraftPage | null>(null);
   const [autoRotateScans, setAutoRotateScans] = useState(true);
   const [uploadNameInput, setUploadNameInput] = useState("");
   const [scanOutputName, setScanOutputName] = useState("");
@@ -492,57 +477,6 @@ export default function VaultClient({ initialFiles }: Props) {
   useEffect(() => {
     scanDraftPagesRef.current = scanDraftPages;
   }, [scanDraftPages]);
-
-  useEffect(() => {
-    const applyEditorResult = async () => {
-      const raw = sessionStorage.getItem(EDITOR_RESULT_KEY);
-      if (!raw) return;
-
-      sessionStorage.removeItem(EDITOR_RESULT_KEY);
-
-      try {
-        const parsed = JSON.parse(raw) as {
-          pageId?: string;
-          dataUrl?: string;
-          fileName?: string;
-          isTextEnhanced?: boolean;
-          fallbackDataUrl?: string | null;
-          isEdited?: boolean;
-        };
-
-        if (!parsed.pageId || !parsed.dataUrl) return;
-
-        const editedFile = await dataUrlToFile(parsed.dataUrl, parsed.fileName || `scan-${Date.now()}.jpg`);
-        const fallbackFile = parsed.fallbackDataUrl
-          ? await dataUrlToFile(parsed.fallbackDataUrl, `original-${parsed.fileName || "scan"}`)
-          : null;
-
-        setScanDraftPages((prev) => {
-          return prev.map((page) => {
-            if (page.id !== parsed.pageId) return page;
-
-            URL.revokeObjectURL(page.previewUrl);
-            if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
-
-            const fallbackPreviewUrl = fallbackFile ? URL.createObjectURL(fallbackFile) : null;
-            return {
-              ...page,
-              file: editedFile,
-              previewUrl: URL.createObjectURL(editedFile),
-              fallbackFile,
-              fallbackPreviewUrl,
-              isTextEnhanced: Boolean(parsed.isTextEnhanced),
-              isEdited: Boolean(parsed.isEdited),
-            };
-          });
-        });
-      } catch {
-        // Ignore malformed editor payloads.
-      }
-    };
-
-    void applyEditorResult();
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -749,6 +683,10 @@ export default function VaultClient({ initialFiles }: Props) {
         }, "image/jpeg", 0.74);
       });
 
+      // Release canvas backing pixels immediately after encoding.
+      canvas.width = 1;
+      canvas.height = 1;
+
       const file = new File([blob], `scan-${Date.now()}.jpg`, {
         type: "image/jpeg",
         lastModified: Date.now(),
@@ -765,7 +703,11 @@ export default function VaultClient({ initialFiles }: Props) {
 
   function handleScanClick() {
     setCameraError(null);
-    scannerInputRef.current?.click();
+    if (isMobileViewport) {
+      void openInAppCamera();
+    } else {
+      scannerInputRef.current?.click();
+    }
   }
 
   function clearScanDraft() {
@@ -776,7 +718,7 @@ export default function VaultClient({ initialFiles }: Props) {
       });
       return [];
     });
-    setEditingScanPageId(null);
+    setEditingPage(null);
   }
 
   function removeScanDraftPage(pageId: string) {
@@ -804,34 +746,28 @@ export default function VaultClient({ initialFiles }: Props) {
     });
   }
 
-  async function openCropEditor(pageId: string) {
-    const page = scanDraftPages.find((item) => item.id === pageId);
-    if (!page) return;
-
-    setUploadError(null);
-    setEditingScanPageId(pageId);
-
-    try {
-      const dataUrl = await fileToDataUrl(page.file);
-      const fallbackDataUrl = page.fallbackFile ? await fileToDataUrl(page.fallbackFile) : null;
-
-      sessionStorage.setItem(
-        `${EDITOR_INPUT_PREFIX}${pageId}`,
-        JSON.stringify({
-          pageId,
-          dataUrl,
-          fileName: page.file.name,
-          isTextEnhanced: page.isTextEnhanced,
-          fallbackDataUrl,
-        })
-      );
-
-      router.push(`/vault/editor?pageId=${encodeURIComponent(pageId)}`);
-    } catch {
-      setUploadError("Could not open editor for this page.");
-    } finally {
-      setEditingScanPageId(null);
-    }
+  function handleEditorSave(payload: ScanEditorSavePayload) {
+    setScanDraftPages((prev) =>
+      prev.map((page) => {
+        if (page.id !== payload.pageId) return page;
+        URL.revokeObjectURL(page.previewUrl);
+        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
+        const previewUrl = URL.createObjectURL(payload.newFile);
+        const fallbackPreviewUrl = payload.fallbackFile
+          ? URL.createObjectURL(payload.fallbackFile)
+          : null;
+        return {
+          ...page,
+          file: payload.newFile,
+          previewUrl,
+          fallbackFile: payload.fallbackFile,
+          fallbackPreviewUrl,
+          isTextEnhanced: payload.isTextEnhanced,
+          isEdited: true,
+        };
+      }),
+    );
+    setEditingPage(null);
   }
 
   async function handleScanImagesSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -962,6 +898,7 @@ export default function VaultClient({ initialFiles }: Props) {
   );
 
   return (
+    <>
     <div className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_10%_8%,rgba(251,146,60,0.18),transparent_62%)]" />
@@ -1020,7 +957,6 @@ export default function VaultClient({ initialFiles }: Props) {
             ref={scannerInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handleScanImagesSelect}
             className="hidden"
             tabIndex={-1}
@@ -1171,11 +1107,11 @@ export default function VaultClient({ initialFiles }: Props) {
                       <div className="mt-1 flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => openCropEditor(page.id)}
-                          disabled={scannerConverting || editingScanPageId === page.id}
+                          onClick={() => setEditingPage(page)}
+                          disabled={scannerConverting}
                           className="rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
                         >
-                          {editingScanPageId === page.id ? "Opening..." : "Edit page"}
+                          Edit page
                         </button>
                         {page.isTextEnhanced && (
                           <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
@@ -1536,5 +1472,15 @@ export default function VaultClient({ initialFiles }: Props) {
 
       </div>
     </div>
+
+    {/* Inline editor — renders as a fixed overlay, no navigation, no base64 */}
+    {editingPage && (
+      <ScanEditor
+        page={editingPage}
+        onSave={handleEditorSave}
+        onClose={() => setEditingPage(null)}
+      />
+    )}
+    </>
   );
 }

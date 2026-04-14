@@ -278,6 +278,8 @@ export default function VaultEditorPage() {
       context.drawImage(image, -image.width / 2, -image.height / 2);
 
       const rotatedUrl = canvas.toDataURL("image/jpeg", 0.84);
+      canvas.width = 1;
+      canvas.height = 1;
       const normalized = await normalizeDataUrl(rotatedUrl, fileName);
 
       setImageDataUrl(normalized);
@@ -329,6 +331,8 @@ export default function VaultEditorPage() {
 
       context.putImageData(source, 0, 0);
       const enhancedUrl = canvas.toDataURL("image/jpeg", 0.84);
+      canvas.width = 1;
+      canvas.height = 1;
       const normalized = await normalizeDataUrl(enhancedUrl, fileName);
 
       setFallbackDataUrl(imageDataUrl);
@@ -382,6 +386,10 @@ export default function VaultEditorPage() {
       );
 
       const croppedUrl = cropCanvas.toDataURL("image/jpeg", 0.84);
+      canvas.width = 1;
+      canvas.height = 1;
+      cropCanvas.width = 1;
+      cropCanvas.height = 1;
       const normalized = await normalizeDataUrl(croppedUrl, fileName);
       setImageDataUrl(normalized);
       setFallbackDataUrl(null);
@@ -412,6 +420,12 @@ export default function VaultEditorPage() {
 
       const perspectiveCanvas = applyHorizontalPerspectiveCorrection(canvas, cropPerspective);
       const croppedUrl = perspectiveCanvas.toDataURL("image/jpeg", 0.84);
+      canvas.width = 1;
+      canvas.height = 1;
+      if (perspectiveCanvas !== canvas) {
+        perspectiveCanvas.width = 1;
+        perspectiveCanvas.height = 1;
+      }
       const normalized = await normalizeDataUrl(croppedUrl, fileName);
 
       setImageDataUrl(normalized);
