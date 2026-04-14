@@ -67,30 +67,67 @@ function detectDocumentBounds(
   width: number,
   height: number,
 ) {
-  const cs = Math.max(8, Math.round(Math.min(width, height) * 0.04));
-  const step = 2;
-  const read = (x: number, y: number) => gray[y * width + x];
-  let sum = 0,
-    n = 0;
-  for (let y = 0; y < cs; y += step) {
-    for (let x = 0; x < cs; x += step) {
-      sum +=
-        read(x, y) +
-        read(width - 1 - x, y) +
-        read(x, height - 1 - y) +
-        read(width - 1 - x, height - 1 - y);
-      n += 4;
+  // ── Background estimation ────────────────────────────────────────────────
+  // Sample the outermost 12-px border strip on all 4 sides and take the
+  // median.  A corner-average fails on dark or coloured table surfaces;
+  // the median is robust to document corners that overlap the border strip.
+  const BORDER = Math.max(12, Math.round(Math.min(width, height) * 0.03));
+  const bgSamples: number[] = [];
+  const bStep = 3;
+  for (let x = 0; x < width; x += bStep) {
+    for (let d = 0; d < BORDER; d++) {
+      bgSamples.push(gray[d * width + x]);
+      bgSamples.push(gray[(height - 1 - d) * width + x]);
     }
   }
-  const bg = n > 0 ? sum / n : 240;
-  let minX = width,
-    minY = height,
-    maxX = -1,
-    maxY = -1,
-    hits = 0;
-  for (let y = 0; y < height; y += 2) {
-    for (let x = 0; x < width; x += 2) {
-      if (Math.abs(read(x, y) - bg) <= 18) continue;
+  for (let y = 0; y < height; y += bStep) {
+    for (let d = 0; d < BORDER; d++) {
+      bgSamples.push(gray[y * width + d]);
+      bgSamples.push(gray[y * width + (width - 1 - d)]);
+    }
+  }
+  bgSamples.sort((a, b) => a - b);
+  const bg = bgSamples[Math.floor(bgSamples.length / 2)] ?? 240;
+
+  // ── Sobel gradient (2-px step for speed) ────────────────────────────────
+  const SS = 2; // sobel stride
+  const sw = Math.ceil(width / SS);
+  const sh = Math.ceil(height / SS);
+  const grad = new Float32Array(sw * sh);
+  const px = (x: number, y: number) =>
+    gray[
+      Math.min(height - 1, Math.max(0, y)) * width +
+        Math.min(width - 1, Math.max(0, x))
+    ];
+  for (let sy = 1; sy < sh - 1; sy++) {
+    for (let sx = 1; sx < sw - 1; sx++) {
+      const x = sx * SS, y = sy * SS;
+      const gx =
+        -px(x - SS, y - SS) + px(x + SS, y - SS) -
+        2 * px(x - SS, y)   + 2 * px(x + SS, y) -
+        px(x - SS, y + SS)  + px(x + SS, y + SS);
+      const gy =
+        -px(x - SS, y - SS) - 2 * px(x, y - SS) - px(x + SS, y - SS) +
+         px(x - SS, y + SS) + 2 * px(x, y + SS) + px(x + SS, y + SS);
+      grad[sy * sw + sx] = Math.sqrt(gx * gx + gy * gy);
+    }
+  }
+
+  // ── Bounding box ─────────────────────────────────────────────────────────
+  // A pixel counts as "document content" if it differs from bg OR sits on a
+  // strong edge (Sobel ≥ 22).  Using both signals handles: pale text on white
+  // paper (low gradient, high bg-diff) and document edges against a
+  // same-brightness background (high gradient, low bg-diff).
+  const BG_T = 28;   // background-difference threshold
+  const GRAD_T = 22; // gradient magnitude threshold
+  const step = 2;
+  let minX = width, minY = height, maxX = -1, maxY = -1, hits = 0;
+
+  for (let y = BORDER; y < height - BORDER; y += step) {
+    for (let x = BORDER; x < width - BORDER; x += step) {
+      const sy = Math.round(y / SS), sx = Math.round(x / SS);
+      const g = grad[Math.min(sh - 1, sy) * sw + Math.min(sw - 1, sx)] ?? 0;
+      if (Math.abs(gray[y * width + x] - bg) <= BG_T && g <= GRAD_T) continue;
       hits++;
       if (x < minX) minX = x;
       if (y < minY) minY = y;
@@ -98,20 +135,22 @@ function detectDocumentBounds(
       if (y > maxY) maxY = y;
     }
   }
-  if (hits < 80 || maxX <= minX || maxY <= minY)
+
+  if (hits < 60 || maxX <= minX || maxY <= minY)
     return { x: 0, y: 0, width, height };
-  const dw = maxX - minX + 1,
-    dh = maxY - minY + 1;
-  if (dw * dh < width * height * 0.18 || dw * dh > width * height * 0.98)
+
+  const dw = maxX - minX + 1, dh = maxY - minY + 1;
+  const area = dw * dh;
+  if (area < width * height * 0.12 || area > width * height * 0.98)
     return { x: 0, y: 0, width, height };
-  const pad = Math.max(10, Math.round(Math.min(width, height) * 0.02));
-  const x = Math.max(0, minX - pad),
-    y = Math.max(0, minY - pad);
+
+  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.025));
+  const rx = Math.max(0, minX - pad), ry = Math.max(0, minY - pad);
   return {
-    x,
-    y,
-    width: Math.min(width - x, dw + pad * 2),
-    height: Math.min(height - y, dh + pad * 2),
+    x: rx,
+    y: ry,
+    width: Math.min(width - rx, dw + pad * 2),
+    height: Math.min(height - ry, dh + pad * 2),
   };
 }
 
@@ -213,6 +252,8 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
   const [cropZoom, setCropZoom] = useState(1);
   const [cropAreaPx, setCropAreaPx] = useState<Area | null>(null);
   const [perspectiveVal, setPerspectiveVal] = useState(0);
+  // undefined = free aspect ratio
+  const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
 
   // Create initial ObjectURLs after mount and clean up on unmount.
   useEffect(() => {
@@ -277,6 +318,7 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
     setCropZoom(1);
     setCropAreaPx(null);
     setPerspectiveVal(0);
+    setCropAspect(undefined);
   }
 
   /** Wrap an async canvas operation with loading/error state. */
@@ -552,7 +594,7 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
           image={displayUrl}
           crop={cropPos}
           zoom={cropZoom}
-          aspect={undefined}
+          aspect={cropAspect}
           onCropChange={setCropPos}
           onZoomChange={setCropZoom}
           onCropComplete={(_, area) => setCropAreaPx(area)}
@@ -561,18 +603,51 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
         />
       </div>
 
-      {/* Sliders + apply */}
+      {/* Controls */}
       <div className="space-y-3 border-t border-gray-100 px-4 py-3">
         {processing && (
           <div className="flex items-center gap-2 text-xs font-semibold text-orange-600">
             <Loader2 size={12} className="animate-spin" />
-            Processing...
+            Processing…
           </div>
         )}
         {error && (
-          <div className="text-xs font-semibold text-red-600">{error}</div>
+          <p className="text-xs font-semibold text-red-600">{error}</p>
         )}
 
+        {/* Aspect-ratio presets */}
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold text-gray-600">Aspect ratio</p>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
+            {[
+              { label: "Free", value: undefined },
+              { label: "A4", value: 1 / Math.SQRT2 },
+              { label: "Square", value: 1 },
+              { label: "ID card", value: 85.6 / 54 },
+              { label: "4:3", value: 4 / 3 },
+            ].map(({ label, value }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  setCropAspect(value);
+                  setCropPos({ x: 0, y: 0 });
+                  setCropZoom(1);
+                }}
+                className={[
+                  "shrink-0 rounded-lg border px-3 py-1 text-[11px] font-bold",
+                  cropAspect === value
+                    ? "border-orange-300 bg-orange-100 text-orange-700"
+                    : "border-gray-200 bg-white text-gray-600",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Zoom slider */}
         <div>
           <label className="text-[11px] font-semibold text-gray-600">
             Zoom
@@ -584,10 +659,11 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
             step={0.01}
             value={cropZoom}
             onChange={(e) => setCropZoom(Number(e.target.value))}
-            className="mt-1 w-full"
+            className="mt-1 w-full accent-orange-500"
           />
         </div>
 
+        {/* Perspective slider */}
         <div>
           <label className="text-[11px] font-semibold text-gray-600">
             Perspective correction
@@ -599,18 +675,28 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
             step={0.01}
             value={perspectiveVal}
             onChange={(e) => setPerspectiveVal(Number(e.target.value))}
-            className="mt-1 w-full"
+            className="mt-1 w-full accent-orange-500"
           />
         </div>
 
-        <button
-          type="button"
-          onClick={handleApplyCrop}
-          disabled={!cropAreaPx || processing}
-          className="w-full rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
-        >
-          Apply crop
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={resetCropState}
+            disabled={processing}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 disabled:opacity-60"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleApplyCrop}
+            disabled={!cropAreaPx || processing}
+            className="flex-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+          >
+            Apply crop
+          </button>
+        </div>
       </div>
     </div>
   );
