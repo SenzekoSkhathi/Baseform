@@ -103,71 +103,94 @@ function RevealContent() {
   }
 
   useEffect(() => {
+    // Guard: APS must be a positive finite number before hitting the DB.
+    // Number("") === 0, Number("abc") === NaN — both would produce wrong counts.
+    if (!aps || !Number.isFinite(aps) || aps <= 0) {
+      setStats({ universitiesCount: 0, programmesCount: 0, bursariesCount: 0, nearestDeadlineDays: null });
+      return;
+    }
+
     async function fetchStats() {
       try {
-      const supabase = createClient();
+        const supabase = createClient();
 
-      const raw = localStorage.getItem("bf_onboarding");
-      const onboarding = raw ? JSON.parse(raw) : null;
-      const fieldOfInterest: string | null = onboarding?.fieldOfInterest ?? null;
+        const raw = localStorage.getItem("bf_onboarding");
+        const onboarding = raw ? JSON.parse(raw) : null;
+        const fieldOfInterest: string | null = onboarding?.fieldOfInterest ?? null;
+        const applyField = fieldOfInterest && fieldOfInterest !== "Not sure yet";
 
-      // Programmes the student qualifies for (filtered by field if provided)
-      let programmesQuery = supabase
-        .from("faculties")
-        .select("id, university_id", { count: "exact" })
-        .lte("aps_minimum", aps);
+        // Build the bursaries query inline (needs province filter)
+        let bursariesQuery = supabase
+          .from("bursaries")
+          .select("id", { count: "exact", head: true })
+          .lte("minimum_aps", aps)
+          .eq("is_active", true);
 
-      if (fieldOfInterest && fieldOfInterest !== "Not sure yet") {
-        programmesQuery = programmesQuery.eq("field_of_study", fieldOfInterest);
-      }
+        if (onboarding?.province) {
+          bursariesQuery = bursariesQuery.or(
+            `provinces_eligible.cs.{"${onboarding.province}"},provinces_eligible.cs.{"All"}`
+          );
+        }
 
-      const { data: qualifyingFaculties, count: programmesCount } =
-        await programmesQuery;
+        // Run all four queries in parallel:
+        //  1. programmes count  — head: true, no rows returned (fixes the count)
+        //  2. university IDs    — select only university_id with a high limit so
+        //                         the distinct set is complete even for high-APS
+        //                         students with 1000+ qualifying programmes
+        //  3. bursaries count   — head: true
+        //  4. nearest deadline  — single row
+        const [
+          { count: programmesCount },
+          { data: facForUnis },
+          { count: bursariesCount },
+          { data: deadlineRows },
+        ] = await Promise.all([
+          (() => {
+            let q = supabase
+              .from("faculties")
+              .select("id", { count: "exact", head: true })
+              .lte("aps_minimum", aps);
+            if (applyField) q = q.eq("field_of_study", fieldOfInterest!);
+            return q;
+          })(),
+          (() => {
+            let q = supabase
+              .from("faculties")
+              .select("university_id")
+              .lte("aps_minimum", aps)
+              .limit(5000); // SA has ~26 universities; all IDs appear well within 5000 rows
+            if (applyField) q = q.eq("field_of_study", fieldOfInterest!);
+            return q;
+          })(),
+          bursariesQuery,
+          supabase
+            .from("universities")
+            .select("closing_date")
+            .eq("is_active", true)
+            .not("closing_date", "is", null)
+            .gte("closing_date", new Date().toISOString().slice(0, 10))
+            .order("closing_date", { ascending: true })
+            .limit(1),
+        ]);
 
-      // Distinct universities
-      const uniqueUniIds = new Set(
-        (qualifyingFaculties ?? []).map((f) => f.university_id)
-      );
+        const uniqueUniIds = new Set((facForUnis ?? []).map((f) => f.university_id));
 
-      // Bursaries matched
-      let bursariesQuery = supabase
-        .from("bursaries")
-        .select("id", { count: "exact" })
-        .lte("minimum_aps", aps)
-        .eq("is_active", true);
+        let nearestDeadlineDays: number | null = null;
+        if (deadlineRows?.[0]?.closing_date) {
+          const deadline = new Date(deadlineRows[0].closing_date);
+          const today = new Date();
+          const diff = Math.ceil(
+            (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          nearestDeadlineDays = diff > 0 ? diff : 0;
+        }
 
-      if (onboarding?.province) {
-        bursariesQuery = bursariesQuery.or(
-          `provinces_eligible.cs.{"${onboarding.province}"},provinces_eligible.cs.{"All"}`
-        );
-      }
-
-      const { count: bursariesCount } = await bursariesQuery;
-
-      // Nearest application deadline from universities table
-      const { data: universities } = await supabase
-        .from("universities")
-        .select("closing_date")
-        .eq("is_active", true)
-        .order("closing_date", { ascending: true })
-        .limit(1);
-
-      let nearestDeadlineDays: number | null = null;
-      if (universities?.[0]?.closing_date) {
-        const deadline = new Date(universities[0].closing_date);
-        const today = new Date();
-        const diff = Math.ceil(
-          (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        nearestDeadlineDays = diff > 0 ? diff : 0;
-      }
-
-      setStats({
-        universitiesCount: uniqueUniIds.size,
-        programmesCount: programmesCount ?? 0,
-        bursariesCount: bursariesCount ?? 0,
-        nearestDeadlineDays,
-      });
+        setStats({
+          universitiesCount: uniqueUniIds.size,
+          programmesCount: programmesCount ?? 0,
+          bursariesCount: bursariesCount ?? 0,
+          nearestDeadlineDays,
+        });
       } catch {
         // If DB queries fail, show zeros rather than breaking the page
         setStats({ universitiesCount: 0, programmesCount: 0, bursariesCount: 0, nearestDeadlineDays: null });
