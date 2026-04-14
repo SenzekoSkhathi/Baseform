@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Check, CreditCard, Download, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, CreditCard, Download, ShieldCheck, Sparkles } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
@@ -68,15 +68,8 @@ export default async function BillingPage() {
   const latestPaid = paymentHistory.find((entry) => entry.status.toLowerCase() === "complete");
 
   return (
-    <main className="min-h-screen bg-[#fff9f2] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <div className="mx-auto max-w-5xl">
-        <Link
-          href="/settings"
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-        >
-          <ArrowLeft size={16} />
-          Back to settings
-        </Link>
+    <main>
+      <div>
 
         <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
