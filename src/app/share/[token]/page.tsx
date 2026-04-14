@@ -28,11 +28,18 @@ export default async function SharePage({
     ? calculateAPS(rawSubjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
-  // Count qualifying programmes (subject to the student's APS)
-  const { count: programmeCount } = await admin
-    .from("faculties")
-    .select("*", { count: "exact", head: true })
-    .lte("aps_minimum", aps);
+  // Count qualifying programmes and bursaries (subject to the student's APS)
+  const [{ count: programmeCount }, { count: fundingCount }] = await Promise.all([
+    admin
+      .from("faculties")
+      .select("*", { count: "exact", head: true })
+      .lte("aps_minimum", aps),
+    admin
+      .from("bursaries")
+      .select("*", { count: "exact", head: true })
+      .lte("minimum_aps", aps)
+      .eq("is_active", true),
+  ]);
 
   // Build subject entries with APS point contribution
   const subjects = (rawSubjects ?? [])
@@ -56,6 +63,7 @@ export default async function SharePage({
       gradeYear={profile.grade_year ?? null}
       subjects={subjects}
       programmeCount={programmeCount ?? 0}
+      fundingCount={fundingCount ?? 0}
       shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za"}/share/${token}`}
     />
   );

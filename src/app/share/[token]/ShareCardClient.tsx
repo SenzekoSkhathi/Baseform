@@ -14,6 +14,7 @@ type Props = {
   gradeYear: string | null;
   subjects: SubjectEntry[];
   programmeCount: number;
+  fundingCount: number;
   shareUrl: string;
 };
 
@@ -81,6 +82,7 @@ export default function ShareCardClient({
   gradeYear,
   subjects,
   programmeCount,
+  fundingCount,
   shareUrl,
 }: Props) {
   const [copied, setCopied] = useState(false);
@@ -119,7 +121,7 @@ export default function ShareCardClient({
       {/* Atmospheric glow layer */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full blur-3xl opacity-30"
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-100 rounded-full blur-3xl opacity-30"
           style={{ background: `radial-gradient(circle, ${tier.glow}, transparent 70%)` }}
         />
       </div>
@@ -134,7 +136,7 @@ export default function ShareCardClient({
         </div>
 
         {/* Main card */}
-        <div className="rounded-3xl border border-white/[0.07] bg-white/[0.04] backdrop-blur-sm overflow-hidden">
+        <div className="rounded-3xl border border-white/[0.07] bg-white/4 backdrop-blur-sm overflow-hidden">
           {/* Header strip */}
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start justify-between">
@@ -147,7 +149,7 @@ export default function ShareCardClient({
               </div>
               {/* Tier badge */}
               <span
-                className={`flex-shrink-0 ml-3 mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${tier.badge}`}
+                className={`shrink-0 ml-3 mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${tier.badge}`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${tier.dot}`} />
                 {tier.label}
@@ -240,12 +242,21 @@ export default function ShareCardClient({
                   </div>
                 </>
               )}
+              {fundingCount > 0 && (
+                <>
+                  <div className="h-6 w-px bg-white/10" />
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Funding</p>
+                    <p className="text-sm font-bold" style={{ color: tier.ring }}>{fundingCount}+</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           {/* Subject breakdown */}
           {subjects.length > 0 && (
-            <div className="px-6 py-4 border-t border-white/[0.06]">
+            <div className="px-6 py-4 border-t border-white/6">
               <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-600">
                 Subject Breakdown
               </p>
@@ -253,13 +264,13 @@ export default function ShareCardClient({
                 {subjects.map((s) => (
                   <div
                     key={s.name}
-                    className="flex items-center justify-between rounded-xl bg-white/[0.04] border border-white/[0.06] px-3 py-2"
+                    className="flex items-center justify-between rounded-xl bg-white/4 border border-white/6 px-3 py-2"
                   >
                     <span className="text-[11px] font-medium text-gray-300 truncate mr-2 leading-tight">
                       {s.name}
                     </span>
                     <span
-                      className="flex-shrink-0 text-xs font-black"
+                      className="shrink-0 text-xs font-black"
                       style={{ color: getSubjectColor(s.apsPoints) }}
                     >
                       {s.apsPoints} pts
@@ -275,7 +286,7 @@ export default function ShareCardClient({
 
           {/* Programme hook (if no subjects shown, surface it here) */}
           {programmeCount > 0 && subjects.length === 0 && (
-            <div className="mx-6 mb-4 rounded-xl border border-white/[0.06] bg-white/[0.04] px-4 py-3 text-center">
+            <div className="mx-6 mb-4 rounded-xl border border-white/6 bg-white/4 px-4 py-3 text-center">
               <p className="text-sm font-bold text-white">{programmeCount}+ university programmes</p>
               <p className="text-xs text-gray-500">qualify with this APS score</p>
             </div>
@@ -293,7 +304,7 @@ export default function ShareCardClient({
             </button>
             <button
               onClick={copyLink}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] py-3 text-sm font-semibold text-gray-300 hover:bg-white/[0.09] transition-colors"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/6 py-3 text-sm font-semibold text-gray-300 hover:bg-white/9 transition-colors"
             >
               {copied ? <Check size={15} className="text-green-400" /> : <Copy size={15} />}
               {copied ? "Copied!" : "Copy link"}
@@ -302,7 +313,7 @@ export default function ShareCardClient({
         </div>
 
         {/* Viral CTA */}
-        <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 text-center">
+        <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/3 p-5 text-center">
           <p className="text-sm font-bold text-white">
             {firstName} used Baseform to calculate their APS
           </p>
