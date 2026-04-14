@@ -479,6 +479,20 @@ export default function VaultClient({ initialFiles }: Props) {
     scanDraftPagesRef.current = scanDraftPages;
   }, [scanDraftPages]);
 
+  // Attach camera stream to the video element after it mounts.
+  // setCameraOpen(true) triggers a re-render; the video ref is only available
+  // after that render completes, so we can't assign srcObject synchronously
+  // inside openInAppCamera.
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const video = cameraVideoRef.current;
+    const stream = cameraStreamRef.current;
+    if (video && stream) {
+      video.srcObject = stream;
+      video.play().catch(() => undefined);
+    }
+  }, [cameraOpen]);
+
   useEffect(() => {
     return () => {
       if (cameraStreamRef.current) {
@@ -586,14 +600,8 @@ export default function VaultClient({ initialFiles }: Props) {
         audio: false,
       });
 
-      setCameraOpen(true);
       cameraStreamRef.current = stream;
-
-      const video = cameraVideoRef.current;
-      if (video) {
-        video.srcObject = stream;
-        await video.play().catch(() => undefined);
-      }
+      setCameraOpen(true); // triggers the useEffect that attaches srcObject after render
     } catch {
       setCameraError("Could not open camera stream. Using image picker instead.");
       scannerInputRef.current?.click();
