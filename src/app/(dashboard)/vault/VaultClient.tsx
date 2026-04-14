@@ -452,6 +452,7 @@ export default function VaultClient({ initialFiles }: Props) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [captureFlash, setCaptureFlash] = useState(false);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
   const [editingPage, setEditingPage] = useState<ScanDraftPage | null>(null);
@@ -580,8 +581,7 @@ export default function VaultClient({ initialFiles }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 960 },
-          height: { ideal: 540 },
+          aspectRatio: { ideal: 3 / 4 },
         },
         audio: false,
       });
@@ -691,6 +691,10 @@ export default function VaultClient({ initialFiles }: Props) {
         type: "image/jpeg",
         lastModified: Date.now(),
       });
+
+      // Flash to confirm capture before async processing.
+      setCaptureFlash(true);
+      setTimeout(() => setCaptureFlash(false), 120);
 
       await addScanDraftFiles([file]);
       setCameraError(null);
@@ -966,54 +970,108 @@ export default function VaultClient({ initialFiles }: Props) {
         </header>
 
         {cameraOpen && (
-          <section className="mt-4 overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-blue-50 px-4 py-3">
-              <p className="text-sm font-bold text-gray-900">Camera Scanner</p>
+          <div className="fixed inset-0 z-40 flex flex-col bg-black">
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-4 py-3 pt-safe">
               <button
                 type="button"
                 onClick={closeInAppCamera}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                className="rounded-full bg-black/40 p-2 text-white backdrop-blur-sm"
                 aria-label="Close camera"
               >
-                <X size={16} />
+                <X size={20} />
+              </button>
+
+              {pendingScanCount > 0 && (
+                <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
+                  {pendingScanCount} page{pendingScanCount > 1 ? "s" : ""} captured
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => scannerInputRef.current?.click()}
+                disabled={cameraLoading || scannerConverting}
+                className="rounded-full bg-black/40 px-3 py-2 text-xs font-bold text-white backdrop-blur-sm disabled:opacity-50"
+              >
+                Gallery
               </button>
             </div>
 
-            <div className="bg-black p-2">
+            {/* Viewfinder — flex-1 fills all remaining space */}
+            <div className="relative min-h-0 flex-1 overflow-hidden">
               <video
                 ref={cameraVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className="h-64 w-full rounded-xl object-cover"
+                className="h-full w-full object-contain"
               />
-            </div>
 
-            <div className="space-y-2 px-4 py-3">
-              {cameraError && (
-                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{cameraError}</p>
+              {/* White flash on capture */}
+              {captureFlash && (
+                <div className="pointer-events-none absolute inset-0 bg-white opacity-70" />
               )}
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={captureFromInAppCamera}
-                  disabled={cameraLoading || scannerConverting || uploading}
-                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  <Camera size={14} />
-                  {cameraLoading ? "Capturing..." : "Capture page"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scannerInputRef.current?.click()}
-                  disabled={cameraLoading || scannerConverting || uploading}
-                  className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  Gallery
-                </button>
+
+              {/* Document guide corners */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="relative aspect-[3/4] w-4/5">
+                  <div className="absolute left-0 top-0 h-8 w-8 rounded-tl-lg border-l-2 border-t-2 border-white/80" />
+                  <div className="absolute right-0 top-0 h-8 w-8 rounded-tr-lg border-r-2 border-t-2 border-white/80" />
+                  <div className="absolute bottom-0 left-0 h-8 w-8 rounded-bl-lg border-b-2 border-l-2 border-white/80" />
+                  <div className="absolute bottom-0 right-0 h-8 w-8 rounded-br-lg border-b-2 border-r-2 border-white/80" />
+                </div>
               </div>
             </div>
-          </section>
+
+            {/* Error toast */}
+            {cameraError && (
+              <div className="mx-4 mb-2 rounded-xl bg-red-500/90 px-3 py-2 text-center text-xs font-semibold text-white backdrop-blur-sm">
+                {cameraError}
+              </div>
+            )}
+
+            {/* Bottom controls */}
+            <div className="flex items-center justify-between px-10 pb-10 pt-6 pb-safe">
+              {/* Last captured thumbnail */}
+              <div className="h-12 w-12">
+                {pendingScanCount > 0 && (
+                  <img
+                    src={scanDraftPages[scanDraftPages.length - 1]?.previewUrl}
+                    alt="Last captured page"
+                    className="h-12 w-12 rounded-xl border-2 border-white/50 object-cover"
+                  />
+                )}
+              </div>
+
+              {/* Shutter button */}
+              <button
+                type="button"
+                onClick={captureFromInAppCamera}
+                disabled={cameraLoading || scannerConverting}
+                aria-label="Capture page"
+                className="flex h-18 w-18 items-center justify-center rounded-full bg-white shadow-lg disabled:opacity-60 active:scale-95 transition-transform"
+                style={{ height: 72, width: 72 }}
+              >
+                <div className="h-16 w-16 rounded-full border-[3px] border-gray-300 bg-white" />
+              </button>
+
+              {/* Done button — appears once pages are captured */}
+              <div className="h-12 w-12 flex items-center justify-center">
+                {pendingScanCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={closeInAppCamera}
+                    className="rounded-xl bg-orange-500 px-2 py-1.5 text-[10px] font-black text-white leading-tight text-center"
+                  >
+                    Done
+                  </button>
+                ) : (
+                  <div />
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {isMobileViewport && showScanReview && (
