@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CreditCard, Shield, User } from "lucide-react";
+import { BarChart2, Bell, CreditCard, Shield } from "lucide-react";
 
 const NAV = [
-  { href: "/settings/account", label: "Account", icon: User },
+  { href: "/settings/usage", label: "Usage", icon: BarChart2 },
   { href: "/settings/notifications", label: "Notifications", icon: Bell },
   { href: "/settings/security", label: "Security", icon: Shield },
   { href: "/settings/billing", label: "Billing", icon: CreditCard },

@@ -100,30 +100,22 @@ export default function NotificationsClient() {
       {isLoading ? (
         <p className="mt-4 text-sm text-gray-400">Loading…</p>
       ) : (
-        <ul className="mt-5 space-y-3">
+        <ul className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-100 bg-white overflow-hidden">
           {TOGGLES.map(({ key, title, description }) => (
-            <li key={key} className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <div>
-                <p className="text-sm font-bold text-gray-900">{title}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{description}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggle(key)}
-                disabled={isSyncing}
-                className={[
-                  "relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60",
-                  prefs[key] ? "bg-orange-500" : "bg-gray-300",
-                ].join(" ")}
-                aria-label={`Toggle ${title}`}
-              >
-                <span
-                  className={[
-                    "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform",
-                    prefs[key] ? "translate-x-5" : "translate-x-0.5",
-                  ].join(" ")}
+            <li key={key}>
+              <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-4 hover:bg-gray-50 transition-colors">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={prefs[key]}
+                  onChange={() => toggle(key)}
+                  disabled={isSyncing}
+                  className="h-4 w-4 shrink-0 rounded border-gray-300 accent-orange-500 disabled:opacity-50 cursor-pointer"
                 />
-              </button>
+              </label>
             </li>
           ))}
         </ul>
