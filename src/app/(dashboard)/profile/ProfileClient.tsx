@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy, Send } from "lucide-react";
+import UpgradeGate from "@/components/UpgradeGate";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
 
@@ -919,21 +920,17 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
               </div>
 
               {isFreePlan ? (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-                    <p className="font-semibold">Connect Gmail is locked on Free.</p>
-                    <p className="mt-1 text-[11px] text-amber-700">
-                      Upgrade to Essential or above to unlock inbox tracking and automatic application status updates.
-                    </p>
-                  </div>
-                  <Link
-                    href="/settings/billing"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 hover:bg-amber-50"
-                  >
-                    <Zap size={14} />
-                    Upgrade to unlock
-                  </Link>
-                </div>
+                <UpgradeGate
+                  variant="card"
+                  icon={<Mail size={18} className="text-orange-500" />}
+                  feature="Email Tracker"
+                  description="Upgrade to automatically track application status updates straight from your Gmail inbox."
+                  bullets={[
+                    "Auto-detect acceptance and rejection emails",
+                    "Keep application statuses up to date hands-free",
+                    "Get notified when an institution replies",
+                  ]}
+                />
               ) : gmailStatus === null ? (
                 <div className="h-8 animate-pulse rounded-xl bg-gray-100" />
               ) : gmailStatus.connected ? (

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, ChevronRight, X, Check, ChevronLeft, Search } from "lucide-react";
+import { Plus, ChevronRight, X, Check, ChevronLeft, Search, Lock, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { checkQualifications } from "@/lib/dashboard/qualifications";
 import { Programme, StudentSubject } from "@/lib/dashboard/types";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
@@ -37,10 +38,13 @@ type UniversityGroup = {
   programmes: AppProgramme[];
 };
 
+const FREE_PLAN_UNI_LIMIT = 3;
+
 type Props = {
   universityGroups: UniversityGroup[];
   aps: number;
   studentSubjects: StudentSubject[];
+  tier: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -115,9 +119,10 @@ function UniversityAvatar({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function DashboardDetailClient({ universityGroups, aps, studentSubjects }: Props) {
+export default function DashboardDetailClient({ universityGroups, aps, studentSubjects, tier }: Props) {
   const router = useRouter();
-  const [panelStep, setPanelStep] = useState<"closed" | "pick-uni" | "pick-programmes">("closed");
+  const isFreePlan = tier === "free";
+  const [panelStep, setPanelStep] = useState<"closed" | "pick-uni" | "pick-programmes" | "upgrade">("closed");
   const [isPanelMounted, setIsPanelMounted] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [universities, setUniversities] = useState<{ id: string; name: string; abbreviation: string | null }[]>([]);
@@ -220,7 +225,9 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
     setProgrammes([]);
     setSelectedFacultyIds(new Set());
     setIsPanelMounted(true);
-    setPanelStep("pick-uni");
+    // Free users at the limit see the upgrade prompt; otherwise the normal picker
+    const atLimit = isFreePlan && groupsState.length >= FREE_PLAN_UNI_LIMIT;
+    setPanelStep(atLimit ? "upgrade" : "pick-uni");
     requestAnimationFrame(() => setIsPanelOpen(true));
   }
 
@@ -357,14 +364,30 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
               onClick={openPanel}
               className="flex shrink-0 items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-transform active:scale-95"
             >
-              <Plus size={16} />
+              {isFreePlan && groupsState.length >= FREE_PLAN_UNI_LIMIT
+                ? <Lock size={15} />
+                : <Plus size={16} />
+              }
               Add
             </button>
           </div>
 
-          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs text-orange-700">
-            <span className="font-semibold">{displayedGroups.length}</span>
-            <span>institution{displayedGroups.length !== 1 ? "s" : ""} shown</span>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs text-orange-700">
+              <span className="font-semibold">{displayedGroups.length}</span>
+              <span>institution{displayedGroups.length !== 1 ? "s" : ""} tracked</span>
+            </div>
+            {isFreePlan && (
+              <div className={[
+                "flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-semibold",
+                groupsState.length >= FREE_PLAN_UNI_LIMIT
+                  ? "bg-red-50 text-red-600"
+                  : "bg-gray-100 text-gray-500",
+              ].join(" ")}>
+                {groupsState.length >= FREE_PLAN_UNI_LIMIT && <Lock size={11} />}
+                {groupsState.length}/{FREE_PLAN_UNI_LIMIT} universities (Free plan)
+              </div>
+            )}
           </div>
         </div>
 
@@ -421,7 +444,9 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
                 )}
                 <div>
                   <h2 className="font-extrabold text-gray-900 text-base">
-                    {panelStep === "pick-uni" ? "Choose a University" : selectedIsKzn ? `${selectedUni?.name} (CAO pool)` : selectedUni?.name}
+                    {panelStep === "pick-uni" ? "Choose a University"
+                      : panelStep === "upgrade" ? "University Limit Reached"
+                      : selectedIsKzn ? `${selectedUni?.name} (CAO pool)` : selectedUni?.name}
                   </h2>
                   {panelStep === "pick-programmes" && (
                     <p className="text-xs text-gray-400 mt-0.5">Select programmes to apply for</p>
@@ -432,6 +457,56 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
                 <X size={18} />
               </button>
             </div>
+
+            {/* Upgrade step — shown to free users at the 3-university limit */}
+            {panelStep === "upgrade" && (
+              <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 mb-4">
+                  <Lock size={28} className="text-orange-400" />
+                </div>
+
+                <h3 className="text-lg font-black text-gray-900">You've used all 3 universities</h3>
+                <p className="mt-2 text-sm text-gray-500 max-w-xs">
+                  The Free plan lets you track up to <span className="font-bold text-gray-700">3 universities</span>. Upgrade to Essential to track unlimited universities and programmes.
+                </p>
+
+                <div className="mt-6 w-full max-w-xs space-y-3">
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">Unlock with Essential</p>
+                    <ul className="space-y-1.5">
+                      {[
+                        "Unlimited university tracking",
+                        "Track all programmes per university",
+                        "Bursary matching and discovery",
+                        "AI Coach guidance",
+                      ].map((b) => (
+                        <li key={b} className="flex items-start gap-2 text-xs text-gray-600">
+                          <Sparkles size={11} className="mt-0.5 shrink-0 text-orange-400" />
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <Link
+                    href="/plans"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 py-3 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
+                    onClick={closePanel}
+                  >
+                    <Sparkles size={14} />
+                    Upgrade Plan
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={closePanel}
+                    className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Step 1 — Pick university */}
             {panelStep === "pick-uni" && (

@@ -9,7 +9,8 @@ export default async function DashboardDetailPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: subjects }, { data: raw }] = await Promise.all([
+  const [{ data: profile }, { data: subjects }, { data: raw }] = await Promise.all([
+    supabase.from("profiles").select("tier").eq("id", user.id).single(),
     supabase.from("student_subjects").select("subject_name, mark").eq("profile_id", user.id),
     supabase
       .from("applications")
@@ -100,11 +101,14 @@ export default async function DashboardDetailPage() {
     }),
   }));
 
+  const tier = String((profile as { tier?: string } | null)?.tier ?? "free").trim().toLowerCase();
+
   return (
     <DashboardDetailClient
       universityGroups={groups}
       aps={aps}
       studentSubjects={studentSubjects}
+      tier={tier}
     />
   );
 }
