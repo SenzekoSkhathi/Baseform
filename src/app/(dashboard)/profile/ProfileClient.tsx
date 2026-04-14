@@ -110,9 +110,15 @@ function ShareButton({
   const [state, setState] = useState<"idle" | "loading">("idle");
   const supabase = createClient();
 
-  async function handleShare() {
-    setState("loading");
-    try {
+  // Pre-generate the image blob on mount so the first click doesn't have to wait.
+  // navigator.share() requires a user gesture — any long await before it causes iOS Safari
+  // to discard the gesture and silently block the share sheet.
+  // By starting the fetch here, the promise is settled (or nearly so) by the time
+  // the user taps the button, so the await in handleShare is near-instant.
+  const blobPromiseRef = useRef<Promise<Blob | null> | null>(null);
+
+  useEffect(() => {
+    async function prefetch() {
       let universitiesQualified = 0;
       let programmesQualified = 0;
       let fundingAvailable = 0;
@@ -129,7 +135,9 @@ function ShareButton({
 
         const { data: qualifyingFaculties, count: programmesCount } = await programmesQuery;
         programmesQualified = programmesCount ?? 0;
-        universitiesQualified = new Set((qualifyingFaculties ?? []).map((f) => f.university_id)).size;
+        universitiesQualified = new Set(
+          (qualifyingFaculties ?? []).map((f) => f.university_id)
+        ).size;
 
         let bursariesQuery = supabase
           .from("bursaries")
@@ -146,7 +154,7 @@ function ShareButton({
         const { count: bursariesCount } = await bursariesQuery;
         fundingAvailable = bursariesCount ?? 0;
       } catch {
-        // Keep share flow resilient even if stats queries fail.
+        // Stats are best-effort — missing counts still produce a valid card.
       }
 
       const params = new URLSearchParams({
@@ -161,10 +169,26 @@ function ShareButton({
         funding: String(fundingAvailable),
       });
 
-      const response = await fetch(`/api/share/card-image?${params}`);
-      if (!response.ok) throw new Error("Failed to generate image");
+      const res = await fetch(`/api/share/card-image?${params}`);
+      return res.ok ? res.blob() : null;
+    }
 
-      const blob = await response.blob();
+    blobPromiseRef.current = prefetch().catch(() => null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount — props are stable for a profile session
+
+  async function handleShare() {
+    setState("loading");
+    try {
+      // Await the pre-generated blob. If mount prefetch already finished this
+      // resolves in <1ms, preserving the iOS gesture context.
+      const blob = await (blobPromiseRef.current ?? Promise.resolve(null));
+
+      if (!blob) {
+        setState("idle");
+        return;
+      }
+
       const filename = `${(fullName || "student").trim().replace(/\s+/g, "-").toLowerCase()}-aps-card.png`;
       const file = new File([blob], filename, { type: "image/png" });
 
@@ -177,7 +201,7 @@ function ShareButton({
       } else if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: `Sharing files is not supported on this browser. Calculate your APS on Baseform: ${window.location.origin}`,
+          text: `I calculated my APS on Baseform. Calculate yours here: ${window.location.origin}`,
         });
       } else {
         const url = window.URL.createObjectURL(blob);
@@ -205,7 +229,7 @@ function ShareButton({
       {state === "loading" ? (
         <>
           <div className="h-3 w-3 animate-spin rounded-full border-2 border-orange-700 border-t-transparent" />
-          Generating…
+          Sharing…
         </>
       ) : (
         <>

@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
 import { GraduationCap, Trophy, Clock, ArrowRight, Sparkles, ChevronLeft, Share2 } from "lucide-react";
@@ -29,6 +29,10 @@ function RevealContent() {
   const [sharing, setSharing] = useState(false);
   const [stats, setStats] = useState<RevealStats | null>(null);
 
+  // Pre-generated image blob — ready before the user taps Share so the
+  // navigator.share() call happens with minimal await (gesture context preserved).
+  const blobPromiseRef = useRef<Promise<Blob | null> | null>(null);
+
   useEffect(() => {
     const raw = localStorage.getItem("bf_onboarding");
     const onboarding = raw ? JSON.parse(raw) : null;
@@ -43,34 +47,49 @@ function RevealContent() {
       .catch(() => {});
   }, []);
 
+  // As soon as stats are ready, kick off image generation in the background.
+  // By the time the user reads the results and taps Share, the blob is cached.
+  useEffect(() => {
+    if (!stats) return;
+
+    const raw = localStorage.getItem("bf_onboarding");
+    const onboarding = raw ? JSON.parse(raw) : null;
+    const subjectNames: string[] = Array.isArray(onboarding?.subjects)
+      ? onboarding.subjects
+          .map((s: { name?: string }) => (typeof s?.name === "string" ? s.name.trim() : ""))
+          .filter((s: string) => s.length > 0)
+          .slice(0, 12)
+      : [];
+
+    const shareParams = new URLSearchParams({
+      aps: String(aps),
+      rating,
+      fullName: name,
+      grade: onboarding?.gradeYear ?? "",
+      school: onboarding?.schoolName ?? "",
+      subjects: subjectNames.join("|"),
+      universities: String(stats.universitiesCount),
+      programmes: String(stats.programmesCount),
+      funding: String(stats.bursariesCount),
+    });
+
+    blobPromiseRef.current = fetch(`/api/share/card-image?${shareParams}`)
+      .then((r) => (r.ok ? r.blob() : null))
+      .catch(() => null);
+  }, [stats, aps, rating, name]);
+
   async function shareApsCard() {
     setSharing(true);
     try {
-      const raw = localStorage.getItem("bf_onboarding");
-      const onboarding = raw ? JSON.parse(raw) : null;
-      const subjectNames = Array.isArray(onboarding?.subjects)
-        ? onboarding.subjects
-            .map((s: { name?: string }) => (typeof s?.name === "string" ? s.name.trim() : ""))
-            .filter((subject: string) => subject.length > 0)
-            .slice(0, 12)
-        : [];
+      // Await the pre-generated blob — resolves near-instantly if stats loaded
+      // before the user tapped (the common case), preserving the iOS gesture context.
+      const blob = await (blobPromiseRef.current ?? Promise.resolve(null));
 
-      const shareParams = new URLSearchParams({
-        aps: String(aps),
-        rating,
-        fullName: name,
-        grade: onboarding?.gradeYear ?? "",
-        school: onboarding?.schoolName ?? "",
-        subjects: subjectNames.join("|"),
-        universities: String(stats?.universitiesCount ?? 0),
-        programmes: String(stats?.programmesCount ?? 0),
-        funding: String(stats?.bursariesCount ?? 0),
-      });
+      if (!blob) {
+        setSharing(false);
+        return;
+      }
 
-      const response = await fetch(`/api/share/card-image?${shareParams}`);
-      if (!response.ok) throw new Error("Failed to generate image");
-
-      const blob = await response.blob();
       const file = new File([blob], "aps-card.png", { type: "image/png" });
 
       if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
@@ -82,10 +101,9 @@ function RevealContent() {
       } else if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
           title: "My APS Card - Baseform",
-          text: `Sharing files is not supported on this browser. Calculate your APS on Baseform: ${window.location.origin}`,
+          text: `I calculated my APS on Baseform. Calculate yours here: ${window.location.origin}`,
         });
       } else {
-        // Keep a graceful fallback for browsers without Web Share API.
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
