@@ -932,9 +932,9 @@ export default function VaultClient({ initialFiles }: Props) {
           <div className="mt-4 grid grid-cols-2 gap-2 sm:max-w-sm">
             <button
               onClick={handleScanClick}
-              disabled={uploading || scannerConverting || !isMobileViewport}
+              disabled={uploading || scannerConverting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-              title={isMobileViewport ? "Scan document" : "Document scanner is available on mobile"}
+              title="Scan document"
             >
               <Camera size={15} />
               {scannerConverting ? "Scanning..." : "Scanner"}
@@ -961,6 +961,7 @@ export default function VaultClient({ initialFiles }: Props) {
             ref={scannerInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleScanImagesSelect}
             className="hidden"
             tabIndex={-1}
@@ -1015,7 +1016,7 @@ export default function VaultClient({ initialFiles }: Props) {
 
               {/* Document guide corners */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="relative aspect-[3/4] w-4/5">
+                <div className="relative aspect-3/4 w-4/5">
                   <div className="absolute left-0 top-0 h-8 w-8 rounded-tl-lg border-l-2 border-t-2 border-white/80" />
                   <div className="absolute right-0 top-0 h-8 w-8 rounded-tr-lg border-r-2 border-t-2 border-white/80" />
                   <div className="absolute bottom-0 left-0 h-8 w-8 rounded-bl-lg border-b-2 border-l-2 border-white/80" />
@@ -1074,7 +1075,7 @@ export default function VaultClient({ initialFiles }: Props) {
           </div>
         )}
 
-        {isMobileViewport && showScanReview && (
+        {showScanReview && (
           <section className="mt-4 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold text-gray-900">Scan Preview</h2>
@@ -1308,22 +1309,20 @@ export default function VaultClient({ initialFiles }: Props) {
                 />
               </div>
 
-              {isMobileViewport && (
-                <button
-                  type="button"
-                  onClick={handleScanClick}
-                  disabled={uploading || scannerConverting}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-                >
-                  <Camera size={14} />
-                  {scannerConverting ? "Converting images to PDF..." : "Scan document with camera (mobile)"}
-                  {pendingScanCount > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
-                      {pendingScanCount}
-                    </span>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleScanClick}
+                disabled={uploading || scannerConverting}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              >
+                <Camera size={14} />
+                {scannerConverting ? "Converting images to PDF..." : "Scan document"}
+                {pendingScanCount > 0 && (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                    {pendingScanCount}
+                  </span>
+                )}
+              </button>
 
               {(uploading || scannerConverting) && (
                 <p className="text-xs font-medium text-orange-500">
