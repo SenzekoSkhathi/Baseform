@@ -3,8 +3,12 @@ import type { NextRequest } from "next/server";
 
 const SANDBOX_PROCESS_URL = "https://sandbox.payfast.co.za/eng/process";
 const SANDBOX_VALIDATE_URL = "https://sandbox.payfast.co.za/eng/query/validate";
+const SANDBOX_ONSITE_URL = "https://sandbox.payfast.co.za/onsite/process";
+const SANDBOX_ENGINE_URL = "https://sandbox.payfast.co.za/onsite/engine.js";
 const LIVE_PROCESS_URL = "https://www.payfast.co.za/eng/process";
 const LIVE_VALIDATE_URL = "https://www.payfast.co.za/eng/query/validate";
+const LIVE_ONSITE_URL = "https://www.payfast.co.za/onsite/process";
+const LIVE_ENGINE_URL = "https://www.payfast.co.za/onsite/engine.js";
 
 export type PayFastMode = "sandbox" | "live";
 
@@ -40,6 +44,14 @@ export function getPayFastProcessUrl(config: PayFastConfig): string {
 
 export function getPayFastValidateUrl(config: PayFastConfig): string {
   return config.mode === "sandbox" ? SANDBOX_VALIDATE_URL : LIVE_VALIDATE_URL;
+}
+
+export function getPayFastOnsiteUrl(config: PayFastConfig): string {
+  return config.mode === "sandbox" ? SANDBOX_ONSITE_URL : LIVE_ONSITE_URL;
+}
+
+export function getPayFastEngineUrl(config: PayFastConfig): string {
+  return config.mode === "sandbox" ? SANDBOX_ENGINE_URL : LIVE_ENGINE_URL;
 }
 
 function encodeForPayFast(value: string): string {
