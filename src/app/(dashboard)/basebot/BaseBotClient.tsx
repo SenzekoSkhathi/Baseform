@@ -401,7 +401,7 @@ function EmptyState({
   onPrompt: (p: string) => void;
 }) {
   return (
-    <div className="flex h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-3 text-center sm:px-4">
+    <div className="flex h-full w-full max-w-3xl mx-auto flex-col items-center justify-center gap-5 px-3 text-center sm:px-4">
       <div className="flex items-center gap-2.5">
         <BotAvatar size="md" />
         <h2 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">Hi {firstName}, how can I help you today?</h2>
@@ -439,6 +439,132 @@ function BotResponseSkeleton() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── Memory types ──────────────────────────────────────────────────────────────
+
+interface MemoryFact {
+  key: string;
+  value: string;
+  category: string;
+  updated_at: string;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  goal: "Goals",
+  applications: "Applications",
+  personal: "Personal",
+  academic: "Academic",
+  bursaries: "Bursaries",
+  general: "General",
+};
+
+// ── Memory icon ───────────────────────────────────────────────────────────────
+
+const MemoryIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+    <path
+      d="M7.5 1.5C5.015 1.5 3 3.515 3 6c0 1.18.455 2.254 1.2 3.055L4 13h7l-.2-3.945A4.478 4.478 0 0 0 12 6c0-2.485-2.015-4.5-4.5-4.5Z"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+    <path d="M5.5 13h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M5.5 6h4M7.5 4v4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+  </svg>
+);
+
+// ── Memory panel ──────────────────────────────────────────────────────────────
+
+function MemoryPanel({
+  memories,
+  onDelete,
+  onClose,
+}: {
+  memories: MemoryFact[];
+  onDelete: (key: string) => void;
+  onClose: () => void;
+}) {
+  const grouped = memories.reduce<Record<string, MemoryFact[]>>((acc, m) => {
+    const cat = m.category ?? "general";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(m);
+    return acc;
+  }, {});
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-orange-500">
+              <MemoryIcon />
+            </span>
+            <span className="text-sm font-bold text-gray-900">What BaseBot Remembers</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-gray-50 text-gray-400 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[60vh] px-4 py-3 space-y-4">
+          {memories.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">
+              Nothing remembered yet. Start chatting and BaseBot will learn about you.
+            </p>
+          ) : (
+            Object.entries(grouped).map(([cat, facts]) => (
+              <div key={cat}>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
+                  {CATEGORY_LABELS[cat] ?? cat}
+                </p>
+                <div className="space-y-1.5">
+                  {facts.map((f) => (
+                    <div
+                      key={f.key}
+                      className="flex items-start justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 capitalize">
+                          {f.key.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-xs text-gray-800 font-medium leading-snug">{f.value}</p>
+                      </div>
+                      <button
+                        onClick={() => onDelete(f.key)}
+                        className="shrink-0 p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
+                        title="Forget this"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                          <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="px-4 py-3 border-t border-gray-50">
+          <p className="text-[10px] text-gray-300 text-center">
+            BaseBot learns from your conversations to give better advice.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 type Profile = { full_name: string | null; field_of_interest: string | null } | null;
 
 export default function BaseBotClient({ profile }: { profile: Profile }) {
@@ -453,6 +579,8 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [memories, setMemories] = useState<MemoryFact[]>([]);
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -469,6 +597,14 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
     };
+  }, []);
+
+  // Load memories
+  useEffect(() => {
+    fetch("/api/basebot/memory")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: MemoryFact[]) => setMemories(data))
+      .catch(() => {});
   }, []);
 
   // Load threads: DB first, fallback to localStorage
@@ -540,10 +676,18 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
     setIsLoading(true);
 
     try {
+      // Build history from existing messages (exclude system messages)
+      const history = messages
+        .filter((m) => m.sender !== "system")
+        .map((m) => ({
+          role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
+          content: m.text,
+        }));
+
       const res = await fetch("/api/basebot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, history }),
       });
 
       const data = (await res.json()) as { response?: string; error?: string };
@@ -555,6 +699,14 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       const withBot = [...withUser, botMsg];
       setMessages(withBot);
       saveThread(currentThreadId, withBot);
+
+      // Refresh memories in background after each exchange (extraction runs server-side)
+      setTimeout(() => {
+        fetch("/api/basebot/memory")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: MemoryFact[] | null) => { if (data) setMemories(data); })
+          .catch(() => {});
+      }, 2000);
     } catch (error) {
       const fallback = "Something went wrong. Please try again.";
       const message = error instanceof Error && error.message ? error.message : fallback;
@@ -591,8 +743,22 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
     }
   };
 
+  const handleDeleteMemory = async (key: string) => {
+    setMemories((prev) => prev.filter((m) => m.key !== key));
+    await fetch(`/api/basebot/memory?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+  };
+
   return (
     <div className="flex h-dvh overflow-hidden overscroll-none bg-gray-50">
+      {/* Memory panel */}
+      {showMemoryPanel && (
+        <MemoryPanel
+          memories={memories}
+          onDelete={handleDeleteMemory}
+          onClose={() => setShowMemoryPanel(false)}
+        />
+      )}
+
       {/* Mobile overlay */}
       {isSidebarOpen && (
         <div
@@ -643,12 +809,27 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
             </button>
           </div>
 
-          <button
-            onClick={handleNewChat}
-            className="flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-semibold transition-colors"
-          >
-            New chat
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowMemoryPanel(true)}
+              className="relative flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 text-gray-400 hover:text-orange-500 rounded-xl text-xs font-medium transition-colors"
+              title="What BaseBot remembers about you"
+            >
+              <MemoryIcon />
+              <span className="hidden sm:inline">Memory</span>
+              {memories.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {memories.length > 9 ? "9+" : memories.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleNewChat}
+              className="flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-semibold transition-colors"
+            >
+              New chat
+            </button>
+          </div>
         </header>
 
         {/* Messages */}

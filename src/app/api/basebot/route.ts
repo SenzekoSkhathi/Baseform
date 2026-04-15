@@ -6,6 +6,8 @@ import { deductCredits } from "@/lib/credits";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
+type HistoryMessage = { role: "user" | "assistant"; content: string };
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
@@ -24,18 +26,25 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
   }
 
-  const { message } = (await req.json()) as { message: string };
+  const { message, history } = (await req.json()) as {
+    message: string;
+    history?: HistoryMessage[];
+  };
+
   if (!message?.trim()) {
     return Response.json({ error: "Message required" }, { status: 400 });
   }
 
   const { ok: credited } = await deductCredits(session.user.id, "basebot_message", "AI Coach message");
   if (!credited) {
-    return Response.json({ error: "You've run out of Base Credits. Your weekly allowance refills every Monday." }, { status: 402 });
+    return Response.json(
+      { error: "You've run out of Base Credits. Your weekly allowance refills every Monday." },
+      { status: 402 },
+    );
   }
 
-  // Fetch student context to personalise the system prompt on the backend
-  const [{ data: profile }, { data: subjects }] = await Promise.all([
+  // Fetch profile, subjects, and memories in parallel
+  const [{ data: profile }, { data: subjects }, { data: memories }] = await Promise.all([
     supabase
       .from("profiles")
       .select("full_name, province, field_of_interest")
@@ -45,17 +54,27 @@ export async function POST(req: NextRequest) {
       .from("student_subjects")
       .select("subject_name, mark")
       .eq("profile_id", session.user.id),
+    supabase
+      .from("basebot_memory")
+      .select("key, value, category")
+      .eq("user_id", session.user.id)
+      .order("updated_at", { ascending: false }),
   ]);
 
   const aps = subjects?.length
     ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
-  const context: Record<string, string | number> = {};
+  const context: Record<string, unknown> = {};
   if (profile?.full_name) context.name = profile.full_name.split(" ")[0];
   if (aps > 0) context.aps = aps;
   if (profile?.field_of_interest) context.field = profile.field_of_interest;
   if (profile?.province) context.province = profile.province;
+  if (memories?.length) context.memories = memories;
+
+  // Build full conversation: cap history at last 20 messages to control token usage
+  const priorMessages: HistoryMessage[] = Array.isArray(history) ? history.slice(-20) : [];
+  const messages: HistoryMessage[] = [...priorMessages, { role: "user", content: message }];
 
   const res = await fetch(`${BACKEND_URL}/ai/coach`, {
     method: "POST",
@@ -63,10 +82,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({
-      messages: [{ role: "user", content: message }],
-      context,
-    }),
+    body: JSON.stringify({ messages, context }),
   });
 
   if (!res.ok) {
@@ -76,5 +92,36 @@ export async function POST(req: NextRequest) {
   }
 
   const data = (await res.json()) as { reply?: string; error?: string };
-  return Response.json({ response: data.reply ?? "" });
+  const replyText = data.reply ?? "";
+
+  // Fire-and-forget: extract new memory facts from this exchange
+  void (async () => {
+    try {
+      const extractRes = await fetch(`${BACKEND_URL}/ai/extract-memory`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ user_message: message, bot_reply: replyText }),
+      });
+      if (!extractRes.ok) return;
+      const { facts } = (await extractRes.json()) as {
+        facts?: Array<{ key: string; value: string; category: string }>;
+      };
+      if (!Array.isArray(facts) || facts.length === 0) return;
+      const rows = facts.map((f) => ({
+        user_id: session.user.id,
+        key: f.key.slice(0, 100),
+        value: f.value.slice(0, 200),
+        category: f.category ?? "general",
+        updated_at: new Date().toISOString(),
+      }));
+      await supabase.from("basebot_memory").upsert(rows, { onConflict: "user_id,key" });
+    } catch {
+      // Background task — failures are silent
+    }
+  })();
+
+  return Response.json({ response: replyText });
 }

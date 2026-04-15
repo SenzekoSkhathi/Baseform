@@ -14,16 +14,26 @@ function toClaudeMessages(messages: { role: string; content: string }[]) {
   }));
 }
 
+type Memory = { key: string; value: string; category: string };
+
 function buildSystemPrompt(
   base: string,
-  ctx: Record<string, string | number>
+  ctx: Record<string, unknown>
 ): string {
-  if (Object.keys(ctx).length === 0) return base;
   const lines: string[] = [];
   if (ctx.name) lines.push(`Student name: ${ctx.name}`);
   if (ctx.aps) lines.push(`APS score: ${ctx.aps}/42`);
   if (ctx.field) lines.push(`Field of interest: ${ctx.field}`);
   if (ctx.province) lines.push(`Province: ${ctx.province}`);
+
+  const memories = ctx.memories as Memory[] | undefined;
+  if (Array.isArray(memories) && memories.length > 0) {
+    const memLines = memories.map(
+      (m) => `- ${m.key.replace(/_/g, " ")}: ${m.value}`
+    );
+    lines.push(`\nWhat I remember about this student:\n${memLines.join("\n")}`);
+  }
+
   return lines.length > 0
     ? `${base}\n\nStudent context:\n${lines.join("\n")}`
     : base;
@@ -44,7 +54,7 @@ ai.post("/coach", async (ctx) => {
   const body = await ctx.req.json();
 
   const messages: { role: string; content: string }[] = body.messages;
-  const studentContext: Record<string, string | number> = body.context ?? {};
+  const studentContext: Record<string, unknown> = body.context ?? {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return ctx.json({ error: "messages array is required" }, 400);
@@ -110,7 +120,7 @@ ai.post("/coach/stream", async (ctx) => {
   const body = await ctx.req.json();
 
   const messages: { role: string; content: string }[] = body.messages;
-  const studentContext: Record<string, string | number> = body.context ?? {};
+  const studentContext: Record<string, unknown> = body.context ?? {};
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return ctx.json({ error: "messages array is required" }, 400);
@@ -190,6 +200,82 @@ ai.post("/coach/stream", async (ctx) => {
       },
     }
   );
+});
+
+/**
+ * POST /ai/extract-memory
+ * Lightweight endpoint that extracts memorable facts from a single exchange.
+ * Uses Haiku for speed/cost. Returns { facts: [{key, value, category}] }.
+ */
+ai.post("/extract-memory", async (ctx) => {
+  const body = await ctx.req.json();
+  const { user_message, bot_reply } = body as {
+    user_message?: string;
+    bot_reply?: string;
+  };
+
+  if (!user_message || !bot_reply) {
+    return ctx.json({ facts: [] });
+  }
+
+  const extractionPrompt = `You extract facts about a student from their conversation with an AI university advisor.
+Return ONLY a valid JSON array. Each element must have: {"key": "snake_case_key", "value": "string value", "category": "goal|applications|personal|academic|bursaries"}
+
+Keys to extract (use these exact keys when applicable):
+- career_goal: what they want to become, e.g. "doctor", "software engineer"
+- target_university: universities they want to attend or are applying to
+- target_programme: course or programme they're applying for
+- school_name: their high school name
+- home_city: where they live
+- bursary_interest: bursaries they mentioned applying for
+- application_deadline: specific deadlines they mentioned
+- study_preference: full-time, part-time, or distance learning preference
+- extracurricular: notable activities or achievements they shared
+
+Rules:
+- Only extract facts the STUDENT explicitly stated (not what the bot said)
+- Use concise values, max 120 characters each
+- Do NOT extract APS score, name, field of interest, or province — already in their profile
+- Return [] if nothing new to extract
+
+Student message: ${JSON.stringify(user_message)}
+Bot reply: ${JSON.stringify(bot_reply)}
+
+Return ONLY the JSON array, no other text:`;
+
+  try {
+    const result = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
+      messages: [{ role: "user", content: extractionPrompt }],
+    });
+
+    const text = result.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return ctx.json({ facts: [] });
+
+    const parsed = JSON.parse(match[0]) as unknown;
+    if (!Array.isArray(parsed)) return ctx.json({ facts: [] });
+
+    const validCategories = ["goal", "applications", "personal", "academic", "bursaries"];
+    const facts = (parsed as Array<Record<string, unknown>>)
+      .filter((f) => typeof f.key === "string" && typeof f.value === "string" && f.key && f.value)
+      .map((f) => ({
+        key: String(f.key).toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 50),
+        value: String(f.value).slice(0, 200),
+        category: validCategories.includes(String(f.category)) ? String(f.category) : "general",
+      }));
+
+    return ctx.json({ facts });
+  } catch (err) {
+    console.error("Memory extraction error:", err);
+    return ctx.json({ facts: [] });
+  }
 });
 
 export default ai;
