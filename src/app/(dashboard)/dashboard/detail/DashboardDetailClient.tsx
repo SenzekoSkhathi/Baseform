@@ -465,7 +465,7 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
                   <Lock size={28} className="text-orange-400" />
                 </div>
 
-                <h3 className="text-lg font-black text-gray-900">You've used all 3 universities</h3>
+                <h3 className="text-lg font-black text-gray-900">You&apos;ve used all 3 universities</h3>
                 <p className="mt-2 text-sm text-gray-500 max-w-xs">
                   The Free plan lets you track up to <span className="font-bold text-gray-700">3 universities</span>. Upgrade to Essential to track unlimited universities and programmes.
                 </p>

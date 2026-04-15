@@ -75,7 +75,7 @@ export default function PrivacyPolicyPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-gray-900">6. Google API Limited Use Disclosure</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Baseform's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" className="text-orange-500 hover:underline">Google API Services User Data Policy</a>, including the Limited Use requirements. We only request read access to scan for university and bursary-related emails, and this data is never used to serve ads or sold to third parties.
+              Baseform&apos;s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" className="text-orange-500 hover:underline">Google API Services User Data Policy</a>, including the Limited Use requirements. We only request read access to scan for university and bursary-related emails, and this data is never used to serve ads or sold to third parties.
             </p>
           </section>
 

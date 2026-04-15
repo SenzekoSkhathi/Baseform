@@ -20,7 +20,7 @@ export default function TrackerError({
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50">
           <AlertTriangle size={22} className="text-orange-500" />
         </div>
-        <h2 className="text-lg font-black text-gray-900">Couldn't load your tracker</h2>
+        <h2 className="text-lg font-black text-gray-900">Couldn&apos;t load your tracker</h2>
         <p className="mt-2 text-sm text-gray-500">
           There was a problem loading your progress data. Please try again.
         </p>

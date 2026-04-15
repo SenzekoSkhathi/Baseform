@@ -30,6 +30,7 @@ export default function TopRightActions() {
   const showActions = pathname === "/dashboard" || pathname === "/profile";
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReadIds(getReadIds());
     fetch("/api/notifications")
       .then((r) => r.json())

@@ -292,7 +292,7 @@ export default async function UsagePage() {
 
       {/* Feature list */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-bold text-gray-900">What's included in {plan.name}</h2>
+        <h2 className="text-sm font-bold text-gray-900">What&apos;s included in {plan.name}</h2>
         <ul className="mt-3 space-y-2">
           {plan.features.map((f) => (
             <li key={f} className="flex items-start gap-2.5 text-sm text-gray-600">

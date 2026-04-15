@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ADMIN_TIER } from "@/lib/admin/access";
 
 export type AdminGuardResult =
   | { ok: true; userId: string; email: string | null }
@@ -20,7 +21,7 @@ export function hasServerAuthoritativeAdminAccess(input: AdminDecisionInput) {
   const appRole = readAdminMetadataField(input.appMetadata, "role").trim().toLowerCase();
   const appTier = readAdminMetadataField(input.appMetadata, "tier").trim().toLowerCase();
 
-  return tier === "admin" || appRole === "admin" || appTier === "admin";
+  return tier === ADMIN_TIER || appRole === ADMIN_TIER || appTier === ADMIN_TIER;
 }
 
 export async function requireAdminGuard(): Promise<AdminGuardResult> {

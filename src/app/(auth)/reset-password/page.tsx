@@ -189,9 +189,10 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">New password</label>
+            <label htmlFor="reset-password" className="text-sm font-medium text-gray-700">New password</label>
             <div className="relative">
               <input
+                id="reset-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -203,6 +204,7 @@ export default function ResetPasswordPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -211,8 +213,9 @@ export default function ResetPasswordPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">Confirm new password</label>
+            <label htmlFor="reset-confirm-password" className="text-sm font-medium text-gray-700">Confirm new password</label>
             <input
+              id="reset-confirm-password"
               type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -223,7 +226,7 @@ export default function ResetPasswordPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+            <p role="alert" className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
           )}
 
           <button

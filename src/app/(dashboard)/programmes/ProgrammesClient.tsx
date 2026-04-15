@@ -283,12 +283,14 @@ export default function ProgrammesClient({
     if (hasSetInitialOpenState.current) return;
     if (universityGroups.length === 0) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenUniversityIds({ [universityGroups[0].university.id]: true });
     hasSetInitialOpenState.current = true;
   }, [universityGroups]);
 
   useEffect(() => {
     if (filteredResults.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedProgrammeId(null);
       return;
     }
@@ -345,6 +347,7 @@ export default function ProgrammesClient({
     if (!mobileDetailProgrammeId) return;
     if (selectedProgrammeId === mobileDetailProgrammeId) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedProgrammeId(mobileDetailProgrammeId);
   }, [mobileDetailProgrammeId, selectedProgrammeId]);
 

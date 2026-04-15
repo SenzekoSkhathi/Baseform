@@ -106,6 +106,7 @@ export default function PaymentPage() {
     if (!status) return;
 
     if (status === "cancelled") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotice("Payment was cancelled. You can try again whenever you are ready.");
       return;
     }

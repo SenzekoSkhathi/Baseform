@@ -74,7 +74,7 @@ export default function AboutPage() {
       <div className="rounded-2xl border border-orange-100 bg-orange-50/60 p-5 shadow-sm">
         <h2 className="text-sm font-bold text-gray-900">Share Baseform</h2>
         <p className="mt-0.5 text-xs text-gray-500 mb-4">
-          Know a Grade 12 learner who could use this? Share it with them — it's free.
+          Know a Grade 12 learner who could use this? Share it with them — it&apos;s free.
         </p>
         <div className="flex gap-2">
           <button

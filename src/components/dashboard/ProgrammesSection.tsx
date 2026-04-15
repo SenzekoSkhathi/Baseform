@@ -221,7 +221,7 @@ export default function ProgrammesSection({
               <strong>⚠ Marginal:</strong> You meet APS but missing some subject requirements
             </li>
             <li>
-              <strong>✗ Not Qualified:</strong> You don't currently meet the requirements
+              <strong>✗ Not Qualified:</strong> You don&apos;t currently meet the requirements
             </li>
           </ul>
         </div>

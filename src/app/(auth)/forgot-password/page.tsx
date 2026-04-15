@@ -66,8 +66,9 @@ export default function ForgotPasswordPage() {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Email address</label>
+                <label htmlFor="forgot-email" className="text-sm font-medium text-gray-700">Email address</label>
                 <input
+                  id="forgot-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -78,7 +79,7 @@ export default function ForgotPasswordPage() {
               </div>
 
               {error && (
-                <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+                <p role="alert" className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
               )}
 
               <button

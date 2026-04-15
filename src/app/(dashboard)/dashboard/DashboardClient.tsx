@@ -103,7 +103,9 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
   const [date, setDate] = useState("");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGreeting(getGreeting());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDate(formatDate());
   }, []);
 

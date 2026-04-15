@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
+import { hasAdminAccess } from "@/lib/admin/access";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,10 +52,11 @@ export default function LoginPage() {
         .eq("id", signedInUser.id);
     }
 
-    const tier = String(profile?.tier ?? "").trim().toLowerCase();
-    const appRole = String(signedInUser?.app_metadata?.role ?? "").trim().toLowerCase();
-    const appTier = String(signedInUser?.app_metadata?.tier ?? "").trim().toLowerCase();
-    const isAdmin = tier === "admin" || appRole === "admin" || appTier === "admin";
+    const isAdmin = hasAdminAccess({
+      tier: profile?.tier,
+      appMetadataRole: signedInUser?.app_metadata?.role,
+      appMetadataTier: signedInUser?.app_metadata?.tier,
+    });
 
     router.push(isAdmin ? "/admin" : "/dashboard");
   }
@@ -100,8 +102,9 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="flex flex-col gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Email address</label>
+                <label htmlFor="login-email" className="text-sm font-medium text-gray-700">Email address</label>
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -112,9 +115,10 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-gray-700">Password</label>
+                <label htmlFor="login-password" className="text-sm font-medium text-gray-700">Password</label>
                 <div className="relative">
                   <input
+                    id="login-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -139,7 +143,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+                <p role="alert" className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
               )}
 
               <button

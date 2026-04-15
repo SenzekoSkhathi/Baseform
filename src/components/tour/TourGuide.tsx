@@ -212,6 +212,7 @@ export default function TourGuide() {
 
   useEffect(() => {
     const state = loadTour();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTour(state);
     if (!state.completed) {
       const t = setTimeout(() => setShow(true), 700);

@@ -204,8 +204,9 @@ export default function SignupPage() {
 
                 <form onSubmit={handleStep1} className="flex flex-col gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Email address</label>
+                    <label htmlFor="signup-email" className="text-sm font-medium text-gray-700">Email address</label>
                     <input
+                      id="signup-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -216,9 +217,10 @@ export default function SignupPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Password</label>
+                    <label htmlFor="signup-password" className="text-sm font-medium text-gray-700">Password</label>
                     <div className="relative">
                       <input
+                        id="signup-password"
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -230,6 +232,7 @@ export default function SignupPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
                       >
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -238,8 +241,9 @@ export default function SignupPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Confirm password</label>
+                    <label htmlFor="signup-confirm-password" className="text-sm font-medium text-gray-700">Confirm password</label>
                     <input
+                      id="signup-confirm-password"
                       type={showPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -250,7 +254,7 @@ export default function SignupPage() {
                   </div>
 
                   {error && (
-                    <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+                    <p role="alert" className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
                   )}
 
                   <button
@@ -288,8 +292,9 @@ export default function SignupPage() {
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Full name</label>
+                    <label htmlFor="guardian-name" className="text-sm font-medium text-gray-700">Full name</label>
                     <input
+                      id="guardian-name"
                       type="text"
                       value={guardian.name}
                       onChange={(e) => setGuardian({ ...guardian, name: e.target.value })}
@@ -300,8 +305,9 @@ export default function SignupPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Relationship to you</label>
+                    <label htmlFor="guardian-relationship" className="text-sm font-medium text-gray-700">Relationship to you</label>
                     <select
+                      id="guardian-relationship"
                       value={guardian.relationship}
                       onChange={(e) => setGuardian({ ...guardian, relationship: e.target.value })}
                       className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
@@ -313,8 +319,9 @@ export default function SignupPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">Phone number</label>
+                    <label htmlFor="guardian-phone" className="text-sm font-medium text-gray-700">Phone number</label>
                     <input
+                      id="guardian-phone"
                       type="tel"
                       value={guardian.phone}
                       onChange={(e) => setGuardian({ ...guardian, phone: e.target.value })}
@@ -326,9 +333,11 @@ export default function SignupPage() {
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">WhatsApp number</label>
+                      <label htmlFor="guardian-whatsapp" className="text-sm font-medium text-gray-700">WhatsApp number</label>
                       <button
                         type="button"
+                        aria-pressed={whatsappSameAsPhone}
+                        aria-label="Same as phone number"
                         onClick={() => {
                           setWhatsappSameAsPhone(!whatsappSameAsPhone);
                           if (!whatsappSameAsPhone) setGuardian({ ...guardian, whatsapp: "" });
@@ -350,21 +359,24 @@ export default function SignupPage() {
                       </button>
                     </div>
                     <input
+                      id="guardian-whatsapp"
                       type="tel"
                       value={whatsappSameAsPhone ? guardian.phone : guardian.whatsapp}
                       onChange={(e) => setGuardian({ ...guardian, whatsapp: e.target.value })}
                       placeholder="e.g. 082 555 1234"
                       disabled={whatsappSameAsPhone}
+                      aria-disabled={whatsappSameAsPhone}
                       className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="guardian-email" className="text-sm font-medium text-gray-700">
                       Email address{" "}
                       <span className="text-gray-400 font-normal">(optional)</span>
                     </label>
                     <input
+                      id="guardian-email"
                       type="email"
                       value={guardian.email}
                       onChange={(e) => setGuardian({ ...guardian, email: e.target.value })}
@@ -374,7 +386,7 @@ export default function SignupPage() {
                   </div>
 
                   {error && (
-                    <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+                    <p role="alert" className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
                   )}
 
                   <button

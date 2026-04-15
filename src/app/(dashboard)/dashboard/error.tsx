@@ -22,7 +22,7 @@ export default function DashboardError({
         </div>
         <h2 className="text-lg font-black text-gray-900">Something went wrong</h2>
         <p className="mt-2 text-sm text-gray-500">
-          We couldn't load your dashboard. This is usually a temporary issue.
+          We couldn&apos;t load your dashboard. This is usually a temporary issue.
         </p>
         <button
           type="button"

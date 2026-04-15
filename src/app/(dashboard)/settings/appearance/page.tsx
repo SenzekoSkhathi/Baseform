@@ -27,6 +27,7 @@ export default function AppearancePage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored === "light" || stored === "system") setTheme(stored);
     } catch { /* ignore */ }
   }, []);
