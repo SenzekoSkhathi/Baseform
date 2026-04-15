@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type PermissionState = "unsupported" | "default" | "granted" | "denied";
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
@@ -12,7 +12,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   for (let i = 0; i < rawData.length; i++) {
     output[i] = rawData.charCodeAt(i);
   }
-  return output;
+  return output.buffer as ArrayBuffer;
 }
 
 async function getVapidPublicKey(): Promise<string | null> {
@@ -33,7 +33,7 @@ async function subscribeUser(registration: ServiceWorkerRegistration): Promise<b
   try {
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: urlBase64ToArrayBuffer(publicKey),
     });
 
     const json = subscription.toJSON();
