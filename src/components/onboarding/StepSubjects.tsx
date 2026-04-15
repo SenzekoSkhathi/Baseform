@@ -80,12 +80,17 @@ type Props = {
   onBack: () => void;
 };
 
+function isLifeOrientation(name: string) {
+  return name.trim().toLowerCase() === "life orientation";
+}
+
 export default function StepSubjects({ data, onNext, onBack }: Props) {
   const [subjects, setSubjects] = useState<Subject[]>(
     data.subjects.length > 0
       ? data.subjects
       : [{ name: "", mark: 0 }]
   );
+  const [attemptedContinue, setAttemptedContinue] = useState(false);
 
   function updateSubject(i: number, patch: Partial<Subject>) {
     setSubjects((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -99,9 +104,33 @@ export default function StepSubjects({ data, onNext, onBack }: Props) {
     setSubjects((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  const valid =
-    subjects.length >= 6 &&
-    subjects.every((s) => s.name.trim() && s.mark >= 0 && s.mark <= 100);
+  // Subjects excluding Life Orientation
+  const nonLOSubjects = subjects.filter((s) => !isLifeOrientation(s.name));
+
+  // Every added subject needs a name selected and a mark explicitly entered (>0)
+  const allFilled = subjects.every((s) => s.name.trim() !== "" && s.mark >= 1 && s.mark <= 100);
+  const hasEnoughSubjects = nonLOSubjects.length >= 6;
+  const valid = allFilled && hasEnoughSubjects;
+
+  // Derive a specific error message to show after a failed attempt
+  const errorMessage = (() => {
+    if (!allFilled) {
+      const missingMark = subjects.find((s) => s.name.trim() !== "" && (s.mark < 1 || s.mark > 100));
+      if (missingMark) return `Enter a mark (1–100) for "${missingMark.name}".`;
+      const missingName = subjects.find((s) => s.name.trim() === "");
+      if (missingName) return "Select a subject for every row, or remove empty rows.";
+    }
+    if (!hasEnoughSubjects) {
+      const shortBy = 6 - nonLOSubjects.length;
+      return `Add ${shortBy} more subject${shortBy > 1 ? "s" : ""} (Life Orientation doesn't count toward the 6).`;
+    }
+    return null;
+  })();
+
+  function handleContinue() {
+    setAttemptedContinue(true);
+    if (valid) onNext({ subjects });
+  }
 
   return (
     <div className="flex flex-col flex-1 gap-4">
@@ -111,7 +140,7 @@ export default function StepSubjects({ data, onNext, onBack }: Props) {
         </button>
         <h1 className="text-2xl font-bold text-gray-900">Your subjects</h1>
         <p className="text-gray-500 text-sm">
-          Enter your Grade 12 subjects and expected marks. Start with the compulsory subjects and add at least 6 in total.
+          Enter your Grade 12 subjects and marks. You need at least 6 subjects excluding Life Orientation, and every subject must have a mark filled in.
         </p>
       </div>
 
@@ -177,10 +206,15 @@ export default function StepSubjects({ data, onNext, onBack }: Props) {
         </button>
       </div>
 
+      {attemptedContinue && errorMessage && (
+        <p className="text-sm text-red-500 font-medium text-center -mb-1">
+          {errorMessage}
+        </p>
+      )}
+
       <button
-        onClick={() => onNext({ subjects })}
-        disabled={!valid}
-        className="w-full bg-orange-500 text-white py-4 rounded-2xl font-semibold text-base disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors"
+        onClick={handleContinue}
+        className="w-full bg-orange-500 text-white py-4 rounded-2xl font-semibold text-base hover:bg-orange-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continue
       </button>
