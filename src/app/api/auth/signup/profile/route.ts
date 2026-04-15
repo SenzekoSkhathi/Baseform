@@ -2,6 +2,101 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+const REFERRAL_PER_SIGNUP = 15;
+const REFERRAL_UNLOCK     = 120;
+const WINDOW_DAYS         = 30;
+
+async function processReferral(
+  admin: SupabaseClient,
+  referredUserId: string,
+  code: string
+) {
+  // Find the referrer
+  const { data: codeRow } = await admin
+    .from("referral_codes")
+    .select("user_id")
+    .eq("code", code.toUpperCase())
+    .maybeSingle();
+
+  if (!codeRow || codeRow.user_id === referredUserId) return; // invalid or self-referral
+
+  const referrerId = codeRow.user_id;
+
+  // Prevent duplicate credit for the same referred user
+  const { data: existing } = await admin
+    .from("referrals")
+    .select("id")
+    .eq("referred_id", referredUserId)
+    .maybeSingle();
+  if (existing) return;
+
+  // Record the referral
+  await admin.from("referrals").insert({
+    referrer_id: referrerId,
+    referred_id: referredUserId,
+    code,
+    credited_at: new Date().toISOString(),
+  });
+
+  // Award credits to referrer
+  const { data: credits } = await admin
+    .from("user_credits")
+    .select("balance, referral_pending, referral_window_start, referral_unlocked")
+    .eq("user_id", referrerId)
+    .maybeSingle();
+
+  const now = new Date();
+
+  if (!credits) {
+    // Free plan user with no credits row yet — create one
+    const windowStart = now.toISOString();
+    const newPending  = REFERRAL_PER_SIGNUP;
+    const unlocked    = newPending >= REFERRAL_UNLOCK;
+    await admin.from("user_credits").insert({
+      user_id:               referrerId,
+      balance:               unlocked ? newPending : 0,
+      week_start_balance:    0,
+      referral_pending:      unlocked ? 0 : newPending,
+      referral_window_start: unlocked ? null : windowStart,
+      referral_unlocked:     unlocked,
+    });
+    return;
+  }
+
+  // Referrer already has a credits row
+  if (credits.referral_unlocked) {
+    // Already unlocked: each new referral adds directly to balance
+    await admin
+      .from("user_credits")
+      .update({ balance: (credits.balance ?? 0) + REFERRAL_PER_SIGNUP })
+      .eq("user_id", referrerId);
+    return;
+  }
+
+  // Not yet unlocked — check window
+  const windowStart = credits.referral_window_start
+    ? new Date(credits.referral_window_start)
+    : null;
+  const windowExpired = windowStart
+    ? (now.getTime() - windowStart.getTime()) > WINDOW_DAYS * 86_400_000
+    : false;
+
+  let newPending     = windowExpired ? REFERRAL_PER_SIGNUP : (credits.referral_pending ?? 0) + REFERRAL_PER_SIGNUP;
+  let newWindowStart = windowExpired || !windowStart ? now.toISOString() : credits.referral_window_start;
+  const unlocked     = newPending >= REFERRAL_UNLOCK;
+
+  await admin
+    .from("user_credits")
+    .update({
+      balance:               unlocked ? (credits.balance ?? 0) + newPending : (credits.balance ?? 0),
+      referral_pending:      unlocked ? 0 : newPending,
+      referral_window_start: unlocked ? null : newWindowStart,
+      referral_unlocked:     unlocked,
+    })
+    .eq("user_id", referrerId);
+}
 
 const subjectSchema = z.object({
   name: z.string().min(1).max(80),
@@ -34,6 +129,7 @@ const bodySchema = z.object({
     guardian_whatsapp_number: z.string().max(20).nullable().optional(),
   }),
   subjects: z.array(subjectSchema).max(10).optional(),
+  referral_code: z.string().max(20).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -57,7 +153,7 @@ export async function POST(req: NextRequest) {
 
     const userId = user.id;
     const email = user.email ?? "";
-    const { profile, subjects } = parsed.data;
+    const { profile, subjects, referral_code } = parsed.data;
     const admin = createAdminClient();
 
     const { error: profileError } = await admin.from("profiles").upsert({
@@ -102,6 +198,11 @@ export async function POST(req: NextRequest) {
       if (insertError) {
         return NextResponse.json({ error: insertError.message }, { status: 500 });
       }
+    }
+
+    // ── Process referral credit (fire-and-forget, never block signup) ──────────
+    if (referral_code?.trim()) {
+      void processReferral(admin, userId, referral_code.trim()).catch(() => undefined);
     }
 
     return NextResponse.json({ success: true });

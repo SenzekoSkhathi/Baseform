@@ -28,7 +28,17 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (isFreePlanTier(profile?.tier)) {
-    return NextResponse.json({ error: "Credits are available on paid plans only." }, { status: 403 });
+    // Free plan users can use BaseBot only if they have unlocked referral credits
+    const { data: freeCredits } = await supabase
+      .from("user_credits")
+      .select("balance, referral_unlocked")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (!freeCredits?.referral_unlocked || (freeCredits.balance ?? 0) <= 0) {
+      return NextResponse.json({ error: "Credits are available on paid plans only." }, { status: 403 });
+    }
+    // Has unlocked referral credits — fall through to deduct
   }
 
   const body = (await req.json()) as { action?: string; description?: string };

@@ -33,6 +33,11 @@ export default function VerifyEmailPage() {
     if (!raw) return;
 
     const payload = JSON.parse(raw);
+
+    // Attach referral code if one was captured at sign-up
+    const pendingReferral = localStorage.getItem("bf_pending_referral");
+    if (pendingReferral) payload.referral_code = pendingReferral;
+
     const supabase = createClient();
     const {
       data: { user },
@@ -55,6 +60,7 @@ export default function VerifyEmailPage() {
     }
 
     localStorage.removeItem("bf_pending_signup_profile");
+    localStorage.removeItem("bf_pending_referral");
   }
 
   useEffect(() => {

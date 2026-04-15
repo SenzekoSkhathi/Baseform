@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Check } from "lucide-react";
@@ -51,6 +51,13 @@ function StepDots({ current }: { current: number }) {
 export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+
+  // Capture referral code from URL and persist it for post-verification use
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) localStorage.setItem("bf_pending_referral", ref.toUpperCase().slice(0, 20));
+  }, []);
 
   // Step 1
   const [email, setEmail] = useState("");

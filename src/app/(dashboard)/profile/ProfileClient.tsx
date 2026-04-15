@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy, Send } from "lucide-react";
+import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy } from "lucide-react";
 import UpgradeGate from "@/components/UpgradeGate";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
@@ -241,50 +241,114 @@ function ShareButton({
   );
 }
 
-function InviteGuardianButton({ hasGuardianEmail }: { hasGuardianEmail: boolean }) {
-  const [state, setState] = useState<"idle" | "loading" | "done" | "copied">("idle");
-  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+type ReferralInfo = {
+  code: string;
+  referralUrl: string;
+  pending: number;
+  unlocked: boolean;
+  balance: number;
+  windowDaysLeft: number | null;
+  referralCount: number;
+  unlockAt: number;
+};
 
-  async function handleInvite() {
-    setState("loading");
-    try {
-      const res = await fetch("/api/parent/invite", { method: "POST" });
-      const data = await res.json();
-      setPortalUrl(data.portalUrl ?? null);
-      setState("done");
-    } catch {
-      setState("idle");
-    }
+function InviteFriendCard() {
+  const [info,    setInfo]    = useState<ReferralInfo | null>(null);
+  const [copied,  setCopied]  = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/referral")
+      .then(r => r.json())
+      .then((d: ReferralInfo) => setInfo(d))
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleCopy() {
+    if (!info?.referralUrl) return;
+    await navigator.clipboard.writeText(info.referralUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
-  async function copyPortalLink() {
-    if (!portalUrl) return;
-    await navigator.clipboard.writeText(portalUrl);
-    setState("copied");
-    setTimeout(() => setState("done"), 2000);
-  }
-
-  if (state === "done" || state === "copied") {
-    return (
-      <button
-        onClick={copyPortalLink}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-      >
-        {state === "copied" ? <Check size={12} /> : <Copy size={12} />}
-        {state === "copied" ? "Portal link copied!" : hasGuardianEmail ? "Email sent · Copy link" : "Copy guardian link"}
-      </button>
-    );
-  }
+  const pct = info ? Math.min(100, Math.round((info.pending / info.unlockAt) * 100)) : 0;
 
   return (
-    <button
-      onClick={handleInvite}
-      disabled={state === "loading"}
-      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-    >
-      <Send size={12} />
-      {state === "loading" ? "Sending…" : "Invite guardian"}
-    </button>
+    <div className="mt-5 rounded-3xl border border-orange-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500">
+            <Users size={15} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-900">Invite a Friend</p>
+            <p className="text-[11px] text-gray-400">Earn 15 credits per sign-up</p>
+          </div>
+        </div>
+        {info?.unlocked && (
+          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+            Unlocked
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="h-8 rounded-xl bg-gray-100 animate-pulse" />
+      ) : info ? (
+        <>
+          {/* Referral link row */}
+          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+            <p className="flex-1 truncate text-xs text-gray-500">{info.referralUrl}</p>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600 transition-colors"
+            >
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+
+          {/* Progress or unlocked balance */}
+          {info.unlocked ? (
+            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-emerald-700">BaseBot access active</p>
+                <p className="text-xs font-black text-emerald-700">{info.balance} credits left</p>
+              </div>
+              <p className="mt-1 text-[11px] text-emerald-600">
+                Every new referral adds 15 credits directly to your balance.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+                <span>{info.pending}/{info.unlockAt} credits earned</span>
+                {info.windowDaysLeft !== null ? (
+                  <span className={info.windowDaysLeft <= 7 ? "text-amber-600" : "text-gray-400"}>
+                    {info.windowDaysLeft}d left in window
+                  </span>
+                ) : info.pending > 0 ? (
+                  <span className="text-red-500">Window expired</span>
+                ) : null}
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-orange-400 transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-gray-400">
+                {info.referralCount === 0
+                  ? "Share your link — get 15 credits for every friend who signs up."
+                  : `${info.referralCount} friend${info.referralCount !== 1 ? "s" : ""} joined so far. Reach 120 credits within 30 days to unlock BaseBot.`}
+              </p>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -694,7 +758,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
             <span className="font-bold">APS {aps}</span> · {rating}
           </div>
 
-          {/* Share APS card + Invite guardian */}
+          {/* Share APS card */}
           <div className="mt-4 flex flex-wrap gap-2">
             <ShareButton
               aps={aps}
@@ -706,8 +770,9 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
               province={displayProfile?.province || ""}
               fieldOfInterest={displayProfile?.field_of_interest || ""}
             />
-            <InviteGuardianButton hasGuardianEmail={!!displayProfile?.guardian_email} />
           </div>
+
+          <InviteFriendCard />
 
           {gmailBanner && (
             <div
