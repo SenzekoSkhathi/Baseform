@@ -26,12 +26,14 @@ function parseSubjects(value: string | null): string[] {
     .map((s) => s.slice(0, 26));
 }
 
-function getTier(aps: number): { label: string; color: string } {
-  if (aps >= 38) return { label: "Platinum Scholar", color: "#c084fc" };
-  if (aps >= 32) return { label: "Gold Scholar",     color: "#fbbf24" };
-  if (aps >= 25) return { label: "Silver Scholar",   color: "#94a3b8" };
-  if (aps >= 18) return { label: "Bronze Scholar",   color: "#f97316" };
-  return            { label: "Rising Scholar",    color: "#6b7280" };
+function getTier(aps: number): { label: string; color: string; badgeColor: string } {
+  // color = orange shade for progress bar / stats / percentage
+  // badgeColor = tier-representative color for the header badge only
+  if (aps >= 38) return { label: "Platinum Scholar", color: "#fed7aa", badgeColor: "#c084fc" }; // orange-200 / purple
+  if (aps >= 32) return { label: "Gold Scholar",     color: "#fb923c", badgeColor: "#fbbf24" }; // orange-400 / gold
+  if (aps >= 25) return { label: "Silver Scholar",   color: "#f97316", badgeColor: "#94a3b8" }; // orange-500 / silver
+  if (aps >= 18) return { label: "Bronze Scholar",   color: "#ea580c", badgeColor: "#b45309" }; // orange-600 / bronze
+  return            { label: "Rising Scholar",    color: "#c2410c", badgeColor: "#6b7280" }; // orange-700 / gray
 }
 
 // ── Image ─────────────────────────────────────────────────────────────────────
@@ -47,6 +49,7 @@ export async function GET(request: Request) {
     const grade            = text(searchParams.get("grade"), "Grade 12");
     const school           = text(searchParams.get("school"), "", 50);
     const subjects         = parseSubjects(searchParams.get("subjects"));
+    const universities     = clamp(searchParams.get("universities"), 0);
     const programmes       = clamp(searchParams.get("programmes"), 0);
     const funding          = clamp(searchParams.get("funding"), 0);
 
@@ -128,7 +131,7 @@ export async function GET(request: Request) {
               }, "Baseform"),
             ),
 
-            // Tier badge
+            // Tier badge — uses badgeColor (tier-specific) not the main orange
             h(
               "div",
               {
@@ -137,8 +140,8 @@ export async function GET(request: Request) {
                   alignItems: "center",
                   gap: "8px",
                   borderRadius: "999px",
-                  border: `1.5px solid ${tier.color}44`,
-                  background: `${tier.color}18`,
+                  border: `1.5px solid ${tier.badgeColor}44`,
+                  background: `${tier.badgeColor}18`,
                   padding: "8px 20px",
                 },
               },
@@ -147,14 +150,14 @@ export async function GET(request: Request) {
                   width: "10px",
                   height: "10px",
                   borderRadius: "50%",
-                  background: tier.color,
+                  background: tier.badgeColor,
                 },
               }),
               h("div", {
                 style: {
                   fontSize: "22px",
                   fontWeight: 700,
-                  color: tier.color,
+                  color: tier.badgeColor,
                 },
               }, tier.label),
             ),
@@ -307,9 +310,9 @@ export async function GET(request: Request) {
             },
 
             ...[
-              { label: "Programmes", value: programmes > 0 ? `${programmes}+` : "—" },
-              { label: "Funding",    value: funding > 0    ? `${funding}+`    : "—" },
-              { label: "APS Score",  value: `${aps} / 42` },
+              { label: "Universities", value: universities > 0 ? `${universities}+` : "—" },
+              { label: "Funding",      value: funding > 0      ? `${funding}+`      : "—" },
+              { label: "Programmes",   value: programmes > 0   ? `${programmes}+`   : "—" },
             ].map(({ label, value }) =>
               h(
                 "div",
