@@ -60,3 +60,47 @@ body {
     animation: none;
   }
 }
+
+/* ── Tour Guide ───────────────────────────────────────────────────────────── */
+
+@keyframes tourCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.tour-card-enter {
+  animation: tourCardIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Pulsing highlight ring applied to the target element for each step */
+@keyframes tourPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.7), 0 0 0 6px rgba(249, 115, 22, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.9), 0 0 0 10px rgba(249, 115, 22, 0.08);
+  }
+}
+
+.tour-highlight {
+  position: relative;
+  z-index: 45;
+  border-radius: 16px;
+  animation: tourPulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-card-enter {
+    animation: none;
+  }
+  .tour-highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.7);
+  }
+}

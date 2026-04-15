@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavigationTile from "@/components/dashboard/NavigationTile";
 import ApsProgressCard from "@/components/dashboard/ApsProgressCard";
+import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
 
 type Profile = {
@@ -108,6 +109,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
+      <TourGuide />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(65%_55%_at_10%_5%,rgba(251,146,60,0.18),transparent_62%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(45%_40%_at_92%_16%,rgba(56,189,248,0.10),transparent_70%)]" />
@@ -160,7 +162,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
             </div>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4" data-tour="aps-card">
             <ApsProgressCard
               aps={aps}
               rating={rating}
@@ -170,7 +172,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
           </div>
         </section>
 
-        <section className="mt-5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-sm md:p-5">
+        <section className="mt-5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-sm md:p-5" data-tour="quick-access">
           <div className="mb-4 flex items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold tracking-tight text-gray-900 md:text-xl">
