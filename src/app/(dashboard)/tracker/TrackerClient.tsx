@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Flame,
-  Plus,
   Send,
   Shield,
   Star,
@@ -28,6 +27,12 @@ type Application = {
   applied_at: string;
   faculties: Faculty | null;
   universities: University | null;
+};
+
+type UniGroup = {
+  uniKey: string;
+  uni: University;
+  apps: Application[];
 };
 
 type ActivityRow = {
@@ -142,12 +147,31 @@ export default function TrackerClient({
     return map;
   }, [activityRows]);
 
+  // Group applications by university
+  const uniGroups = useMemo((): UniGroup[] => {
+    const map = new Map<string, UniGroup>();
+    for (const app of applications) {
+      if (!app.universities) continue;
+      const key = String(app.universities.id);
+      if (!map.has(key)) map.set(key, { uniKey: key, uni: app.universities, apps: [] });
+      map.get(key)!.apps.push(app);
+    }
+    return Array.from(map.values());
+  }, [applications]);
+
   const xp       = useMemo(() => calcXp(applications, activityByApp), [applications, activityByApp]);
   const lvl      = useMemo(() => levelFromXp(xp), [xp]);
   const xpPct    = useMemo(() => xpProgressPct(xp), [xp]);
   const nextXp   = lvl.level < 5 ? lvl.max + 1 : lvl.max;
   const totalDone = useMemo(
-    () => applications.filter((a) => ["submitted","accepted","rejected","waitlisted"].includes(a.status)).length,
+    () => {
+      const doneUnis = new Set(
+        applications
+          .filter(a => ["submitted","accepted","rejected","waitlisted"].includes(a.status))
+          .map(a => String(a.universities?.id))
+      );
+      return doneUnis.size;
+    },
     [applications]
   );
 
@@ -200,9 +224,9 @@ export default function TrackerClient({
 
         {/* Quick stats */}
         <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-          <span><span className="font-black text-gray-900">{applications.length}</span> missions</span>
+          <span><span className="font-black text-gray-900">{uniGroups.length}</span> universities</span>
           <span className="text-gray-200">|</span>
-          <span><span className="font-black text-gray-900">{totalDone}</span> completed</span>
+          <span><span className="font-black text-gray-900">{applications.length}</span> programmes</span>
           <span className="text-gray-200">|</span>
           <span><span className="font-black text-orange-500">{achievements.filter(a => a.unlocked).length}</span> / {achievements.length} badges</span>
         </div>
@@ -210,23 +234,31 @@ export default function TrackerClient({
 
       <div className="px-4 pt-4 pb-10 space-y-4 sm:px-5">
 
-        {/* ── Mission cards ── */}
-        {applications.length === 0 ? (
+        {/* ── University cards ── */}
+        {uniGroups.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center">
             <p className="text-sm font-bold text-gray-500">No missions yet</p>
             <p className="mt-1 text-xs text-gray-400">Add universities from the Dashboard to start tracking your roadmap.</p>
           </div>
         ) : (
-          applications.map((app, i) => (
-            <MissionCard
-              key={app.id}
-              app={app}
-              index={i}
-              activity={activityByApp[app.id] ?? []}
-              onUpdate={updateApp}
-              onAddActivity={addActivity}
-            />
-          ))
+          uniGroups.map((group) => {
+            // Merge activity from all apps in the group, sorted newest first
+            const groupActivity = group.apps
+              .flatMap(a => activityByApp[a.id] ?? [])
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            // Shared checklist lives on the first app
+            const firstApp = group.apps[0];
+            return (
+              <UniCard
+                key={group.uniKey}
+                group={group}
+                activity={groupActivity}
+                sharedChecklist={firstApp?.checklist ?? []}
+                onUpdateApp={updateApp}
+                onAddActivity={addActivity}
+              />
+            );
+          })
         )}
 
         {/* ── Achievements ── */}
@@ -263,41 +295,37 @@ export default function TrackerClient({
   );
 }
 
-// ── MissionCard ───────────────────────────────────────────────────────────────
+// ── UniCard ───────────────────────────────────────────────────────────────────
 
-function MissionCard({
-  app,
-  index,
+function UniCard({
+  group,
   activity,
-  onUpdate,
+  sharedChecklist,
+  onUpdateApp,
   onAddActivity,
 }: {
-  app: Application;
-  index: number;
+  group: UniGroup;
   activity: ActivityRow[];
-  onUpdate: (id: string, patch: Partial<Application>) => void;
+  sharedChecklist: string[];
+  onUpdateApp: (id: string, patch: Partial<Application>) => void;
   onAddActivity: (appId: string, entry: ActivityRow) => void;
 }) {
   const [checklistOpen, setChecklistOpen] = useState(true);
   const [activityOpen,  setActivityOpen]  = useState(true);
   const [noteInput,     setNoteInput]     = useState("");
   const [saving,        setSaving]        = useState(false);
-  const [_, startTransition] = useTransition();
 
-  const uni     = app.universities;
-  const faculty = app.faculties;
-  const abbr    = uni?.abbreviation ?? "UNI";
-  const logoUrl = getUniversityLogo(abbr, uni?.logo_url ?? null);
+  const { uni, apps } = group;
+  const abbr    = uni.abbreviation ?? "UNI";
+  const logoUrl = getUniversityLogo(abbr, uni.logo_url ?? null);
   const color   = ABBR_COLORS[abbr] ?? "bg-gray-600";
-  const days    = daysUntil(uni?.closing_date ?? null);
-  const isTerminal = ["accepted","rejected","waitlisted"].includes(app.status);
-  const checklist  = app.checklist ?? [];
-  const checkPct   = Math.round((checklist.length / CHECKLIST_ITEMS.length) * 100);
-  const railIndex  = STATUS_RAIL.indexOf(app.status as RailStatus);
+  const days    = daysUntil(uni.closing_date ?? null);
+  const checklist = sharedChecklist;
+  const checkPct  = Math.round((checklist.length / CHECKLIST_ITEMS.length) * 100);
 
-  async function setStatus(status: string) {
-    onUpdate(app.id, { status });
-    await fetch(`/api/applications/${app.id}`, {
+  async function setStatus(appId: string, status: string) {
+    onUpdateApp(appId, { status });
+    await fetch(`/api/applications/${appId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -308,12 +336,15 @@ function MissionCard({
     const next = checklist.includes(itemId)
       ? checklist.filter(i => i !== itemId)
       : [...checklist, itemId];
-    onUpdate(app.id, { checklist: next });
-    await fetch(`/api/applications/${app.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checklist: next }),
-    });
+    // Sync checklist to all apps in this group
+    apps.forEach(a => onUpdateApp(a.id, { checklist: next }));
+    await Promise.all(apps.map(a =>
+      fetch(`/api/applications/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checklist: next }),
+      })
+    ));
   }
 
   async function submitNote() {
@@ -321,14 +352,16 @@ function MissionCard({
     if (!note || saving) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/applications/${app.id}/activity`, {
+      const targetId = apps[0]?.id;
+      if (!targetId) return;
+      const res = await fetch(`/api/applications/${targetId}/activity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ note }),
       });
       if (res.ok) {
         const { entry } = await res.json() as { entry: ActivityRow };
-        onAddActivity(app.id, entry);
+        onAddActivity(targetId, entry);
         setNoteInput("");
       }
     } finally {
@@ -351,83 +384,90 @@ function MissionCard({
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-black text-gray-900 leading-snug">{uni?.name ?? "University"}</p>
-                {faculty?.name && (
-                  <p className="text-xs text-gray-500 mt-0.5">{faculty.name}</p>
-                )}
-              </div>
+              <p className="text-sm font-black text-gray-900 leading-snug">{uni.name}</p>
               {days !== null && (
                 <span className={[
                   "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold",
-                  days < 0  ? "bg-red-50 text-red-600"   :
-                  days <= 14 ? "bg-amber-50 text-amber-700" :
+                  days < 0   ? "bg-red-50 text-red-600"     :
+                  days <= 14 ? "bg-amber-50 text-amber-700"  :
                                "bg-gray-100 text-gray-500",
                 ].join(" ")}>
                   {days < 0 ? "Closed" : days === 0 ? "Today" : `${days}d left`}
                 </span>
               )}
             </div>
+            <p className="text-xs text-gray-400 mt-0.5">{apps.length} programme{apps.length !== 1 ? "s" : ""}</p>
           </div>
-        </div>
-
-        {/* Status rail */}
-        <div className="mt-3">
-          {!isTerminal ? (
-            <div className="flex items-center gap-1">
-              {STATUS_RAIL.map((s, i) => {
-                const active  = i <= railIndex;
-                const current = i === railIndex;
-                const canClick = i <= railIndex + 1;
-                return (
-                  <div key={s} className="flex items-center flex-1">
-                    <button
-                      type="button"
-                      onClick={() => canClick && setStatus(s)}
-                      disabled={!canClick}
-                      className={[
-                        "flex-1 rounded-lg py-1.5 text-[11px] font-bold text-center transition-all",
-                        current  ? "bg-orange-500 text-white shadow-sm shadow-orange-200" :
-                        active   ? "bg-orange-100 text-orange-600" :
-                                   "bg-gray-100 text-gray-400",
-                        canClick && !current ? "hover:bg-orange-200 cursor-pointer" : "cursor-default",
-                      ].join(" ")}
-                    >
-                      {STATUS_META[s].label}
-                    </button>
-                    {i < STATUS_RAIL.length - 1 && (
-                      <div className={`h-0.5 w-2 shrink-0 ${active ? "bg-orange-300" : "bg-gray-200"}`} />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className={`rounded-lg px-3 py-1.5 text-center text-xs font-bold ${STATUS_META[app.status]?.bg} ${STATUS_META[app.status]?.color}`}>
-              {STATUS_META[app.status]?.label}
-            </div>
-          )}
-
-          {/* Outcome buttons — only show once submitted */}
-          {app.status === "submitted" && (
-            <div className="mt-2 flex gap-1.5">
-              <p className="text-[10px] text-gray-400 self-center mr-1">Outcome:</p>
-              {OUTCOMES.map(o => (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => setStatus(o)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold border transition-colors ${STATUS_META[o].bg} ${STATUS_META[o].color} border-current/20 hover:opacity-80`}
-                >
-                  {STATUS_META[o].label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Checklist */}
+      {/* Programmes list */}
+      <div className="border-b border-gray-50 px-4 py-3 space-y-2">
+        {apps.map(app => {
+          const isTerminal = ["accepted","rejected","waitlisted"].includes(app.status);
+          const railIndex  = STATUS_RAIL.indexOf(app.status as RailStatus);
+          return (
+            <div key={app.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+              <p className="text-xs font-bold text-gray-700 mb-2">
+                {app.faculties?.name ?? "Programme"}
+              </p>
+
+              {!isTerminal ? (
+                <div className="flex items-center gap-1">
+                  {STATUS_RAIL.map((s, i) => {
+                    const active   = i <= railIndex;
+                    const current  = i === railIndex;
+                    const canClick = i <= railIndex + 1;
+                    return (
+                      <div key={s} className="flex items-center flex-1">
+                        <button
+                          type="button"
+                          onClick={() => canClick && setStatus(app.id, s)}
+                          disabled={!canClick}
+                          className={[
+                            "flex-1 rounded-lg py-1 text-[10px] font-bold text-center transition-all",
+                            current  ? "bg-orange-500 text-white shadow-sm shadow-orange-200" :
+                            active   ? "bg-orange-100 text-orange-600" :
+                                       "bg-white text-gray-400",
+                            canClick && !current ? "hover:bg-orange-200 cursor-pointer" : "cursor-default",
+                          ].join(" ")}
+                        >
+                          {STATUS_META[s].label}
+                        </button>
+                        {i < STATUS_RAIL.length - 1 && (
+                          <div className={`h-0.5 w-2 shrink-0 ${active ? "bg-orange-300" : "bg-gray-200"}`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className={`rounded-lg px-3 py-1 text-center text-[10px] font-bold ${STATUS_META[app.status]?.bg} ${STATUS_META[app.status]?.color}`}>
+                  {STATUS_META[app.status]?.label}
+                </div>
+              )}
+
+              {app.status === "submitted" && (
+                <div className="mt-2 flex gap-1.5 flex-wrap">
+                  <p className="text-[10px] text-gray-400 self-center mr-1">Outcome:</p>
+                  {OUTCOMES.map(o => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() => setStatus(app.id, o)}
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border transition-colors ${STATUS_META[o].bg} ${STATUS_META[o].color} border-current/20 hover:opacity-80`}
+                    >
+                      {STATUS_META[o].label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Shared checklist */}
       <div className="border-b border-gray-50">
         <button
           type="button"
@@ -436,7 +476,7 @@ function MissionCard({
         >
           <div className="flex items-center gap-2">
             <Shield size={13} className="text-orange-500" />
-            <span className="text-xs font-bold text-gray-700">Checklist</span>
+            <span className="text-xs font-bold text-gray-700">Application Checklist</span>
             <span className="rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-orange-600">
               {checklist.length}/{CHECKLIST_ITEMS.length}
             </span>
@@ -503,7 +543,6 @@ function MissionCard({
 
         {activityOpen && (
           <div className="px-4 pb-4 space-y-2">
-            {/* Add update input */}
             <div className="flex gap-2">
               <input
                 value={noteInput}
@@ -523,7 +562,6 @@ function MissionCard({
               </button>
             </div>
 
-            {/* Entries */}
             {activity.length === 0 ? (
               <p className="text-[11px] text-gray-400 text-center py-2">
                 Log your first update above — each entry earns +{ACTIVITY_XP} XP
