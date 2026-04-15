@@ -1127,6 +1127,30 @@ export default function AdminClient() {
       <div className="mx-auto max-w-7xl space-y-5">
         {toast && <div className={`rounded-xl border px-3 py-2 text-sm ${toast.type === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>{toast.message}</div>}
 
+        {/* ── Section nav chips ───────────────────────────────────────── */}
+        <div className="sticky top-0 z-20 -mx-4 flex gap-2 overflow-x-auto bg-[#fff9f2]/90 px-4 py-2 backdrop-blur-sm md:-mx-6 md:px-6">
+          {([
+            ["sec-metrics",      "Metrics"],
+            ["sec-users",        "Users"],
+            ["sec-universities", "Universities"],
+            ["sec-programmes",   "Programmes"],
+            ["sec-bursaries",    "Bursaries"],
+            ["sec-plans",        "Plans"],
+            ["sec-settings",     "Settings"],
+            ["sec-audit",        "Audit"],
+          ] as [string, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="shrink-0 rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-50 active:bg-orange-100"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div id="sec-metrics">
         <MetricsOverviewSection
           metrics={metrics}
           rangePreset={rangePreset}
@@ -1152,7 +1176,9 @@ export default function AdminClient() {
           alertHistoryTo={alertHistoryTo}
           onAlertHistoryToChange={setAlertHistoryTo}
         />
+        </div>
 
+        <div id="sec-users">
         <UserManagementSection
           userQuery={userQuery}
           onUserQueryChange={(value) => {
@@ -1192,7 +1218,9 @@ export default function AdminClient() {
           onDisableUser={(userId) => updateUserTier(userId, "disabled", userOriginalTierById[userId] ?? (users.find((u) => u.id === userId)?.tier ?? "free"))}
           isSavingUser={(userId) => saving === `user-${userId}`}
         />
+        </div>
 
+        <div id="sec-universities">
         <SectionCard title="Universities" subtitle="Add, search, sort, edit, archive, and delete universities.">
           <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-4">
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Name" value={newUniversity.name} onChange={(e) => setNewUniversity((p) => ({ ...p, name: e.target.value }))} />
@@ -1228,7 +1256,9 @@ export default function AdminClient() {
 
           <Pagination page={uniPage} totalPages={pagedUniversities.totalPages} onPageChange={setUniPage} />
         </SectionCard>
+        </div>
 
+        <div id="sec-programmes">
         <SectionCard title="Programmes" subtitle="Add, search, sort, edit, and delete programmes.">
           <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-5">
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Name" value={newProgramme.name} onChange={(e) => setNewProgramme((p) => ({ ...p, name: e.target.value }))} />
@@ -1263,7 +1293,9 @@ export default function AdminClient() {
 
           <Pagination page={progPage} totalPages={pagedProgrammes.totalPages} onPageChange={setProgPage} />
         </SectionCard>
+        </div>
 
+        <div id="sec-bursaries">
         <SectionCard title="Bursaries" subtitle="Add, search, sort, edit, archive, and delete bursaries.">
           <div className="grid gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3 md:grid-cols-3">
             <input className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400" placeholder="Title" value={newBursary.title} onChange={(e) => setNewBursary((p) => ({ ...p, title: e.target.value }))} />
@@ -1323,7 +1355,9 @@ export default function AdminClient() {
 
           <Pagination page={bursPage} totalPages={pagedBursaries.totalPages} onPageChange={setBursPage} />
         </SectionCard>
+        </div>
 
+        <div id="sec-plans">
         <PlanManagementSection
           saving={saving}
           planQuery={planQuery}
@@ -1339,7 +1373,9 @@ export default function AdminClient() {
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
         />
+        </div>
 
+        <div id="sec-settings">
         <SiteSettingsSection
           saving={saving}
           newSetting={newSetting}
@@ -1355,7 +1391,9 @@ export default function AdminClient() {
           onExportCsv={exportSiteSettingsCsv}
           onImportCsv={importSiteSettingsCsv}
         />
+        </div>
 
+        <div id="sec-audit">
         <ContentAuditSection
           contentAudit={contentAudit}
           contentAuditEntityType={contentAuditEntityType}
@@ -1368,6 +1406,7 @@ export default function AdminClient() {
           onContentAuditToChange={setContentAuditTo}
           onExportContentAuditCsv={exportContentAuditCsv}
         />
+        </div>
       </div>
     </div>
   );
