@@ -26,51 +26,51 @@ function getTier(aps: number) {
   if (aps >= 38)
     return {
       label: "Platinum Scholar",
-      ring: "#fed7aa", // orange-200 — lightest
-      glow: "rgba(254,215,170,0.32)",
-      badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-      dot: "bg-purple-400",
+      ring: "#fb923c", // orange-400 — shifted darker for light bg
+      glow: "rgba(251,146,60,0.14)",
+      badge: "bg-purple-100 text-purple-700 border-purple-200",
+      dot: "bg-purple-500",
     };
   if (aps >= 32)
     return {
       label: "Gold Scholar",
-      ring: "#fb923c", // orange-400
-      glow: "rgba(251,146,60,0.34)",
-      badge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-      dot: "bg-yellow-400",
+      ring: "#f97316", // orange-500
+      glow: "rgba(249,115,22,0.14)",
+      badge: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      dot: "bg-yellow-500",
     };
   if (aps >= 25)
     return {
       label: "Silver Scholar",
-      ring: "#f97316", // orange-500
-      glow: "rgba(249,115,22,0.3)",
-      badge: "bg-zinc-400/20 text-zinc-300 border-zinc-400/30",
-      dot: "bg-zinc-300",
+      ring: "#ea580c", // orange-600
+      glow: "rgba(234,88,12,0.12)",
+      badge: "bg-zinc-100 text-zinc-600 border-zinc-200",
+      dot: "bg-zinc-400",
     };
   if (aps >= 18)
     return {
       label: "Bronze Scholar",
-      ring: "#ea580c", // orange-600
-      glow: "rgba(234,88,12,0.28)",
-      badge: "bg-amber-800/20 text-amber-600 border-amber-700/30",
+      ring: "#c2410c", // orange-700
+      glow: "rgba(194,65,12,0.10)",
+      badge: "bg-amber-100 text-amber-700 border-amber-200",
       dot: "bg-amber-600",
     };
   return {
     label: "Rising Scholar",
-    ring: "#c2410c", // orange-700 — deepest
-    glow: "rgba(194,65,12,0.22)",
-    badge: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-    dot: "bg-gray-500",
+    ring: "#9a3412", // orange-800 — deepest
+    glow: "rgba(154,52,18,0.08)",
+    badge: "bg-gray-100 text-gray-500 border-gray-200",
+    dot: "bg-gray-400",
   };
 }
 
 function getSubjectColor(pts: number): string {
-  if (pts >= 7) return "#22c55e";
-  if (pts >= 6) return "#10b981";
-  if (pts >= 5) return "#3b82f6";
-  if (pts >= 4) return "#f59e0b";
-  if (pts >= 3) return "#f97316";
-  if (pts >= 2) return "#ef4444";
+  if (pts >= 7) return "#16a34a";
+  if (pts >= 6) return "#059669";
+  if (pts >= 5) return "#2563eb";
+  if (pts >= 4) return "#d97706";
+  if (pts >= 3) return "#ea580c";
+  if (pts >= 2) return "#dc2626";
   return "#6b7280";
 }
 
@@ -116,11 +116,11 @@ export default function ShareCardClient({
   }
 
   return (
-    <main className="min-h-screen bg-stone-950 flex flex-col items-center justify-center px-4 py-12">
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-12">
       {/* Atmospheric glow layer */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-100 rounded-full blur-3xl opacity-30"
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-100 rounded-full blur-3xl opacity-60"
           style={{ background: `radial-gradient(circle, ${tier.glow}, transparent 70%)` }}
         />
       </div>
@@ -131,17 +131,17 @@ export default function ShareCardClient({
           <div className="h-5 w-5 rounded-md bg-orange-500 flex items-center justify-center">
             <span className="text-[9px] font-black text-white">B</span>
           </div>
-          <span className="text-xs font-bold tracking-widest text-gray-500 uppercase">Baseform</span>
+          <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Baseform</span>
         </div>
 
         {/* Main card */}
-        <div className="rounded-3xl border border-white/[0.07] bg-white/4 backdrop-blur-sm overflow-hidden">
+        <div className="rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {/* Header strip */}
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-lg font-black text-white leading-tight">{fullName}</h1>
-                <p className="mt-0.5 text-xs text-gray-500">
+                <h1 className="text-lg font-black text-gray-900 leading-tight">{fullName}</h1>
+                <p className="mt-0.5 text-xs text-gray-400">
                   {gradeYear ?? "Grade 12"}
                   {school ? ` · ${school}` : ""}
                 </p>
@@ -168,7 +168,7 @@ export default function ShareCardClient({
                 width="180"
                 height="180"
                 className="block"
-                style={{ filter: `drop-shadow(0 0 18px ${tier.ring}60)` }}
+                style={{ filter: `drop-shadow(0 0 14px ${tier.ring}40)` }}
               >
                 {/* Track */}
                 <circle
@@ -176,7 +176,7 @@ export default function ShareCardClient({
                   cy="90"
                   r={RING_R}
                   fill="none"
-                  stroke="rgba(255,255,255,0.06)"
+                  stroke="rgba(0,0,0,0.07)"
                   strokeWidth="10"
                 />
                 {/* Fill */}
@@ -193,13 +193,13 @@ export default function ShareCardClient({
                   transform="rotate(-90 90 90)"
                   style={{ transition: "stroke-dashoffset 1.2s ease-out" }}
                 />
-                {/* Percentage text inside ring */}
+                {/* APS number inside ring */}
                 <text
                   x="90"
                   y="83"
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fill="white"
+                  fill="#111827"
                   fontSize="38"
                   fontWeight="900"
                   fontFamily="system-ui, -apple-system, sans-serif"
@@ -211,7 +211,7 @@ export default function ShareCardClient({
                   y="108"
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fill="rgba(255,255,255,0.4)"
+                  fill="rgba(0,0,0,0.28)"
                   fontSize="13"
                   fontWeight="600"
                   fontFamily="system-ui, -apple-system, sans-serif"
@@ -224,17 +224,17 @@ export default function ShareCardClient({
             {/* Qualification meta row */}
             <div className="mt-3 flex items-center gap-3">
               <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Universities</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Universities</p>
                 <p className="text-sm font-bold" style={{ color: tier.ring }}>{universitiesCount}</p>
               </div>
-              <div className="h-6 w-px bg-white/10" />
+              <div className="h-6 w-px bg-gray-200" />
               <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Funding</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Funding</p>
                 <p className="text-sm font-bold" style={{ color: tier.ring }}>{fundingCount}+</p>
               </div>
-              <div className="h-6 w-px bg-white/10" />
+              <div className="h-6 w-px bg-gray-200" />
               <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Programmes</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Programmes</p>
                 <p className="text-sm font-bold" style={{ color: tier.ring }}>{programmeCount}+</p>
               </div>
             </div>
@@ -242,17 +242,17 @@ export default function ShareCardClient({
 
           {/* Subject breakdown */}
           {subjects.length > 0 && (
-            <div className="px-6 py-4 border-t border-white/6">
-              <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-600">
+            <div className="px-6 py-4 border-t border-gray-100">
+              <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                 Subject Breakdown
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 {subjects.map((s) => (
                   <div
                     key={s.name}
-                    className="flex items-center justify-between rounded-xl bg-white/4 border border-white/6 px-3 py-2"
+                    className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-100 px-3 py-2"
                   >
-                    <span className="text-[11px] font-medium text-gray-300 truncate mr-2 leading-tight">
+                    <span className="text-[11px] font-medium text-gray-600 truncate mr-2 leading-tight">
                       {s.name}
                     </span>
                     <span
@@ -264,7 +264,7 @@ export default function ShareCardClient({
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-[9px] text-gray-700 text-center">
+              <p className="mt-2 text-[9px] text-gray-400 text-center">
                 Best 6 subjects · Life Orientation excluded
               </p>
             </div>
@@ -272,9 +272,9 @@ export default function ShareCardClient({
 
           {/* Programme hook (if no subjects shown, surface it here) */}
           {programmeCount > 0 && subjects.length === 0 && (
-            <div className="mx-6 mb-4 rounded-xl border border-white/6 bg-white/4 px-4 py-3 text-center">
-              <p className="text-sm font-bold text-white">{programmeCount}+ university programmes</p>
-              <p className="text-xs text-gray-500">qualify with this APS score</p>
+            <div className="mx-6 mb-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-center">
+              <p className="text-sm font-bold text-gray-900">{programmeCount}+ university programmes</p>
+              <p className="text-xs text-gray-400">qualify with this APS score</p>
             </div>
           )}
 
@@ -283,37 +283,37 @@ export default function ShareCardClient({
             <button
               onClick={nativeShare}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-              style={{ background: `linear-gradient(135deg, ${tier.ring}, ${tier.ring}cc)` }}
+              style={{ background: `linear-gradient(135deg, ${tier.ring}, ${tier.ring}dd)` }}
             >
               <Share2 size={15} />
               Share
             </button>
             <button
               onClick={copyLink}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/6 py-3 text-sm font-semibold text-gray-300 hover:bg-white/9 transition-colors"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
             >
-              {copied ? <Check size={15} className="text-green-400" /> : <Copy size={15} />}
+              {copied ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
               {copied ? "Copied!" : "Copy link"}
             </button>
           </div>
         </div>
 
         {/* Viral CTA */}
-        <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/3 p-5 text-center">
-          <p className="text-sm font-bold text-white">
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm p-5 text-center">
+          <p className="text-sm font-bold text-gray-900">
             {firstName} used Baseform to calculate their APS
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-400">
             Free · 2 minutes · Built for South African Grade 12 learners
           </p>
           <Link
             href="/onboarding"
-            className="mt-4 group inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-orange-400 transition-colors shadow-[0_4px_20px_rgba(249,115,22,0.35)]"
+            className="mt-4 group inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors shadow-[0_4px_20px_rgba(249,115,22,0.25)]"
           >
             Calculate your APS
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
-          <p className="mt-3 text-[10px] text-gray-700 tracking-wide">{websiteUrl}</p>
+          <p className="mt-3 text-[10px] text-gray-400 tracking-wide">{websiteUrl}</p>
         </div>
       </div>
     </main>

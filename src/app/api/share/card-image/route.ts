@@ -27,13 +27,13 @@ function parseSubjects(value: string | null): string[] {
 }
 
 function getTier(aps: number): { label: string; color: string; badgeColor: string } {
-  // color = orange shade for progress bar / stats / percentage
+  // color = orange shade for progress bar / stats / percentage (shifted darker for light bg readability)
   // badgeColor = tier-representative color for the header badge only
-  if (aps >= 38) return { label: "Platinum Scholar", color: "#fed7aa", badgeColor: "#c084fc" }; // orange-200 / purple
-  if (aps >= 32) return { label: "Gold Scholar",     color: "#fb923c", badgeColor: "#fbbf24" }; // orange-400 / gold
-  if (aps >= 25) return { label: "Silver Scholar",   color: "#f97316", badgeColor: "#94a3b8" }; // orange-500 / silver
-  if (aps >= 18) return { label: "Bronze Scholar",   color: "#ea580c", badgeColor: "#b45309" }; // orange-600 / bronze
-  return            { label: "Rising Scholar",    color: "#c2410c", badgeColor: "#6b7280" }; // orange-700 / gray
+  if (aps >= 38) return { label: "Platinum Scholar", color: "#fb923c", badgeColor: "#9333ea" }; // orange-400 / purple-600
+  if (aps >= 32) return { label: "Gold Scholar",     color: "#f97316", badgeColor: "#d97706" }; // orange-500 / amber-600
+  if (aps >= 25) return { label: "Silver Scholar",   color: "#ea580c", badgeColor: "#52525b" }; // orange-600 / zinc-600
+  if (aps >= 18) return { label: "Bronze Scholar",   color: "#c2410c", badgeColor: "#92400e" }; // orange-700 / amber-800
+  return            { label: "Rising Scholar",    color: "#9a3412", badgeColor: "#4b5563" }; // orange-800 / gray-600
 }
 
 // ── Image ─────────────────────────────────────────────────────────────────────
@@ -57,8 +57,8 @@ export async function GET(request: Request) {
     const apsPct = Math.round((aps / 42) * 100);
 
     // Progress bar fill width (out of 860px inner bar width)
-    const BAR_W    = 860;
-    const fillW    = Math.round((aps / 42) * BAR_W);
+    const BAR_W = 860;
+    const fillW = Math.round((aps / 42) * BAR_W);
 
     // ── Card dimensions ──────────────────────────────────────────────────────
     const W = 1080;
@@ -67,9 +67,6 @@ export async function GET(request: Request) {
 
     return new ImageResponse(
       h(
-        // Root element IS the card — fills the full image, no nested positioning needed.
-        // The tier-colour glow is baked into the background gradient so we avoid
-        // absolutely-positioned children (Satori / yoga handles them poorly).
         "div",
         {
           style: {
@@ -79,7 +76,7 @@ export async function GET(request: Request) {
             flexDirection: "column",
             padding: `${PAD}px`,
             boxSizing: "border-box",
-            background: `linear-gradient(160deg, ${tier.color}1e 0%, #111111 28%, #0f0f0f 100%)`,
+            background: `linear-gradient(160deg, ${tier.color}12 0%, #ffffff 22%, #fafafa 100%)`,
             fontFamily: "sans-serif",
           },
         },
@@ -125,7 +122,7 @@ export async function GET(request: Request) {
                   fontSize: "20px",
                   fontWeight: 700,
                   letterSpacing: "4px",
-                  color: "#4b5563",
+                  color: "#9ca3af",
                   textTransform: "uppercase",
                 },
               }, "Baseform"),
@@ -140,8 +137,8 @@ export async function GET(request: Request) {
                   alignItems: "center",
                   gap: "8px",
                   borderRadius: "999px",
-                  border: `1.5px solid ${tier.badgeColor}44`,
-                  background: `${tier.badgeColor}18`,
+                  border: `1.5px solid ${tier.badgeColor}33`,
+                  background: `${tier.badgeColor}0f`,
                   padding: "8px 20px",
                 },
               },
@@ -178,14 +175,14 @@ export async function GET(request: Request) {
               style: {
                 fontSize: "52px",
                 fontWeight: 900,
-                color: "#ffffff",
+                color: "#111827",
                 lineHeight: 1.1,
               },
             }, fullName),
             h("div", {
               style: {
                 fontSize: "26px",
-                color: "#4b5563",
+                color: "#9ca3af",
                 fontWeight: 500,
               },
             }, school ? `${grade} · ${school}` : grade),
@@ -199,8 +196,8 @@ export async function GET(request: Request) {
                 marginTop: "48px",
                 width: "100%",
                 borderRadius: "28px",
-                background: `${tier.color}0f`,
-                border: `1.5px solid ${tier.color}22`,
+                background: `${tier.color}08`,
+                border: `1.5px solid ${tier.color}20`,
                 padding: "44px 48px",
                 display: "flex",
                 flexDirection: "column",
@@ -223,14 +220,14 @@ export async function GET(request: Request) {
                 style: {
                   fontSize: "180px",
                   fontWeight: 900,
-                  color: "#ffffff",
+                  color: "#111827",
                   lineHeight: 1,
                 },
               }, String(aps)),
               h("div", {
                 style: {
                   fontSize: "36px",
-                  color: "#4b5563",
+                  color: "#d1d5db",
                   fontWeight: 600,
                   paddingBottom: "28px",
                 },
@@ -246,7 +243,7 @@ export async function GET(request: Request) {
                   width: `${BAR_W}px`,
                   height: "14px",
                   borderRadius: "999px",
-                  background: "#1e1e1e",
+                  background: "#f3f4f6",
                   overflow: "hidden",
                   display: "flex",
                 },
@@ -256,7 +253,7 @@ export async function GET(request: Request) {
                   width: `${fillW}px`,
                   height: "100%",
                   borderRadius: "999px",
-                  background: `linear-gradient(90deg, ${tier.color}cc, ${tier.color})`,
+                  background: `linear-gradient(90deg, ${tier.color}bb, ${tier.color})`,
                 },
               }),
             ),
@@ -284,7 +281,7 @@ export async function GET(request: Request) {
                   width: "4px",
                   height: "4px",
                   borderRadius: "50%",
-                  background: "#374151",
+                  background: "#d1d5db",
                 },
               }),
               h("div", {
@@ -321,8 +318,8 @@ export async function GET(request: Request) {
                   style: {
                     flex: 1,
                     borderRadius: "20px",
-                    border: "1.5px solid #1e1e1e",
-                    background: "#0f0f0f",
+                    border: "1.5px solid #e5e7eb",
+                    background: "#f9fafb",
                     padding: "20px 24px",
                     display: "flex",
                     flexDirection: "column",
@@ -333,7 +330,7 @@ export async function GET(request: Request) {
                   style: {
                     fontSize: "18px",
                     fontWeight: 600,
-                    color: "#4b5563",
+                    color: "#9ca3af",
                     letterSpacing: "1px",
                     textTransform: "uppercase",
                   },
@@ -361,7 +358,7 @@ export async function GET(request: Request) {
                     marginTop: "36px",
                     fontSize: "18px",
                     fontWeight: 700,
-                    color: "#374151",
+                    color: "#d1d5db",
                     letterSpacing: "2px",
                     textTransform: "uppercase",
                   },
@@ -378,7 +375,6 @@ export async function GET(request: Request) {
                       gap: "12px",
                     },
                   },
-                  // Render subjects as pairs, each pair in its own flex row
                   ...Array.from({ length: Math.ceil(subjects.length / 2) }, (_, rowIdx) => {
                     const pair = subjects.slice(rowIdx * 2, rowIdx * 2 + 2);
                     return h(
@@ -395,8 +391,8 @@ export async function GET(request: Request) {
                             style: {
                               flex: 1,
                               borderRadius: "16px",
-                              border: "1.5px solid #1e1e1e",
-                              background: "#0f0f0f",
+                              border: "1.5px solid #e5e7eb",
+                              background: "#f9fafb",
                               padding: "16px 20px",
                               display: "flex",
                               alignItems: "center",
@@ -406,7 +402,7 @@ export async function GET(request: Request) {
                             style: {
                               fontSize: "22px",
                               fontWeight: 600,
-                              color: "#d1d5db",
+                              color: "#374151",
                             },
                           }, subject),
                         )
@@ -428,13 +424,13 @@ export async function GET(request: Request) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 width: "100%",
-                borderTop: "1px solid #1a1a1a",
+                borderTop: "1px solid #e5e7eb",
               },
             },
             h("div", {
               style: {
                 fontSize: "22px",
-                color: "#374151",
+                color: "#d1d5db",
                 fontWeight: 500,
               },
             }, "Calculate your APS free"),
