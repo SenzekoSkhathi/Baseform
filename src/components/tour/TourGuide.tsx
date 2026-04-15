@@ -30,38 +30,38 @@ function SkhathiAvatar() {
       {/* Neck */}
       <rect x="27.5" y="50" width="9" height="12" rx="3" fill="#c68642" />
 
-      {/* Afro — side puffs first (behind face) */}
-      <ellipse cx="15" cy="30" rx="7" ry="9" fill="#1a0800" />
-      <ellipse cx="49" cy="30" rx="7" ry="9" fill="#1a0800" />
-      {/* Main afro dome */}
-      <ellipse cx="32" cy="22" rx="16" ry="15" fill="#1a0800" />
+      {/* Short cropped hair — cap shape */}
+      <ellipse cx="32" cy="23" rx="14" ry="11" fill="#1a0800" />
+      {/* Hairline fade at sides */}
+      <ellipse cx="18.5" cy="29" rx="4" ry="6" fill="#1a0800" />
+      <ellipse cx="45.5" cy="29" rx="4" ry="6" fill="#1a0800" />
 
       {/* Ears */}
-      <ellipse cx="19.5" cy="37" rx="2.5" ry="3" fill="#c68642" />
-      <ellipse cx="44.5" cy="37" rx="2.5" ry="3" fill="#c68642" />
+      <ellipse cx="19" cy="37" rx="2.5" ry="3" fill="#c68642" />
+      <ellipse cx="45" cy="37" rx="2.5" ry="3" fill="#c68642" />
 
-      {/* Face */}
-      <ellipse cx="32" cy="37" rx="13" ry="14" fill="#c68642" />
+      {/* Face — slightly wider/squarer jaw for masculine look */}
+      <ellipse cx="32" cy="38" rx="13" ry="13" fill="#c68642" />
 
-      {/* Eyebrows */}
-      <path d="M24 29.5 Q27 27.5 30.5 29" stroke="#1a0800" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-      <path d="M33.5 29 Q37 27.5 40 29.5" stroke="#1a0800" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      {/* Eyebrows — straighter/thicker for masculine look */}
+      <path d="M24 30 Q27.5 28 31 30" stroke="#1a0800" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d="M33 30 Q36.5 28 40 30" stroke="#1a0800" strokeWidth="2" fill="none" strokeLinecap="round" />
 
       {/* Eyes */}
-      <ellipse cx="27" cy="33" rx="2.3" ry="2.6" fill="#1a0800" />
-      <ellipse cx="37" cy="33" rx="2.3" ry="2.6" fill="#1a0800" />
-      <circle cx="28" cy="32" r="0.85" fill="white" />
-      <circle cx="38" cy="32" r="0.85" fill="white" />
+      <ellipse cx="27.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <ellipse cx="36.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <circle cx="28.5" cy="33" r="0.85" fill="white" />
+      <circle cx="37.5" cy="33" r="0.85" fill="white" />
 
-      {/* Nose */}
-      <path d="M30 38.5 Q32 40.5 34 38.5" stroke="#a0522d" strokeWidth="1.1" fill="none" strokeLinecap="round" opacity="0.55" />
+      {/* Nose — broader for masculine look */}
+      <path d="M30 39.5 Q32 42 34 39.5" stroke="#a0522d" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity="0.6" />
 
       {/* Smile + teeth */}
-      <path d="M26 43 Q32 48 38 43" fill="#8b3a22" />
-      <path d="M27.5 43 Q32 45.5 36.5 43" fill="white" />
+      <path d="M27 44 Q32 49 37 44" fill="#7a3010" />
+      <path d="M28.5 44 Q32 46.5 35.5 44" fill="white" />
 
-      {/* Top of afro (layered on top) */}
-      <ellipse cx="32" cy="20" rx="13.5" ry="12" fill="#1a0800" />
+      {/* Hair top detail */}
+      <ellipse cx="32" cy="21" rx="12" ry="9" fill="#1a0800" />
     </svg>
   );
 }
