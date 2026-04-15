@@ -252,7 +252,7 @@ function buildInvoiceEmailHtml(inv: InvoiceData): string {
         The PDF invoice is attached. You can also view and save it from your billing settings at any time.
       </p>
 
-      <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za"}/settings/billing"
+      <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com"}/settings/billing"
          style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:12px;">
         View billing settings →
       </a>

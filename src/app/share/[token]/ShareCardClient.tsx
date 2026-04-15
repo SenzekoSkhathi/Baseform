@@ -86,7 +86,7 @@ export default function ShareCardClient({
   shareUrl,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const websiteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za";
+  const websiteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
   const firstName = fullName.split(" ")[0] || "A student";
   const shareMessage = `${fullName} scored ${aps}/42 APS on Baseform — qualifying for ${programmeCount}+ university programmes. Calculate yours free:`;
 

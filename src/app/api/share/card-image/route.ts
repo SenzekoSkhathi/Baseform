@@ -64,51 +64,22 @@ export async function GET(request: Request) {
 
     return new ImageResponse(
       h(
-        // Page background
+        // Root element IS the card — fills the full image, no nested positioning needed.
+        // The tier-colour glow is baked into the background gradient so we avoid
+        // absolutely-positioned children (Satori / yoga handles them poorly).
         "div",
         {
           style: {
             width: `${W}px`,
             height: `${H}px`,
-            position: "relative",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "#0c0a09",
-            overflow: "hidden",
-            fontFamily: "ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif",
+            flexDirection: "column",
+            padding: `${PAD}px`,
+            boxSizing: "border-box",
+            background: `linear-gradient(160deg, ${tier.color}1e 0%, #111111 28%, #0f0f0f 100%)`,
+            fontFamily: "sans-serif",
           },
         },
-
-        // Atmosphere glow — linear-gradient (radial-gradient is not supported by Satori)
-        h("div", {
-          style: {
-            position: "absolute",
-            top: "0px",
-            left: "0px",
-            width: "100%",
-            height: "480px",
-            background: `linear-gradient(to bottom, ${tier.color}22 0%, transparent 100%)`,
-          },
-        }),
-
-        // Card — explicit height so content fills the frame and footer anchors to bottom
-        h(
-          "div",
-          {
-            style: {
-              position: "relative",
-              width: `${W - PAD * 2}px`,
-              height: `${H - PAD * 2}px`,
-              borderRadius: "44px",
-              border: "1.5px solid #1e1e1e",
-              background: "#111111",
-              display: "flex",
-              flexDirection: "column",
-              padding: "52px",
-              boxSizing: "border-box",
-            },
-          },
 
           // ── Header row ───────────────────────────────────────────────────
           h(
@@ -377,6 +348,8 @@ export async function GET(request: Request) {
           ),
 
           // ── Subject grid ─────────────────────────────────────────────────
+          // NOTE: Satori does not support flexWrap or calc() — subjects are
+          // rendered as explicit pairs of rows to avoid both.
           ...(subjects.length > 0
             ? [
                 h("div", {
@@ -393,41 +366,50 @@ export async function GET(request: Request) {
                 h(
                   "div",
                   {
-                    key: "subjects-grid",
+                    key: "subjects-rows",
                     style: {
                       marginTop: "14px",
                       width: "100%",
                       display: "flex",
-                      flexWrap: "wrap",
+                      flexDirection: "column",
                       gap: "12px",
                     },
                   },
-                  ...subjects.map((subject, i) =>
-                    h(
+                  // Render subjects as pairs, each pair in its own flex row
+                  ...Array.from({ length: Math.ceil(subjects.length / 2) }, (_, rowIdx) => {
+                    const pair = subjects.slice(rowIdx * 2, rowIdx * 2 + 2);
+                    return h(
                       "div",
                       {
-                        key: `${subject}-${i}`,
-                        style: {
-                          width: "calc(50% - 6px)",
-                          borderRadius: "16px",
-                          border: "1.5px solid #1e1e1e",
-                          background: "#0f0f0f",
-                          padding: "16px 20px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          boxSizing: "border-box",
-                        },
+                        key: `row-${rowIdx}`,
+                        style: { display: "flex", gap: "12px", width: "100%" },
                       },
-                      h("div", {
-                        style: {
-                          fontSize: "22px",
-                          fontWeight: 600,
-                          color: "#d1d5db",
-                        },
-                      }, subject),
-                    )
-                  ),
+                      ...pair.map((subject, j) =>
+                        h(
+                          "div",
+                          {
+                            key: `${rowIdx}-${j}`,
+                            style: {
+                              flex: 1,
+                              borderRadius: "16px",
+                              border: "1.5px solid #1e1e1e",
+                              background: "#0f0f0f",
+                              padding: "16px 20px",
+                              display: "flex",
+                              alignItems: "center",
+                            },
+                          },
+                          h("div", {
+                            style: {
+                              fontSize: "22px",
+                              fontWeight: 600,
+                              color: "#d1d5db",
+                            },
+                          }, subject),
+                        )
+                      ),
+                    );
+                  }),
                 ),
               ]
             : []),
@@ -459,9 +441,8 @@ export async function GET(request: Request) {
                 fontWeight: 700,
                 color: "#f97316",
               },
-            }, "baseform.co.za"),
+            }, "baseformapplications.com"),
           ),
-        ),
       ),
       {
         width: W,

@@ -64,7 +64,7 @@ export default async function SharePage({
       subjects={subjects}
       programmeCount={programmeCount ?? 0}
       fundingCount={fundingCount ?? 0}
-      shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za"}/share/${token}`}
+      shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com"}/share/${token}`}
     />
   );
 }

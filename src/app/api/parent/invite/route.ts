@@ -20,7 +20,7 @@ export async function POST() {
     return NextResponse.json({ error: "No guardian email saved on your profile" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseform.co.za";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
   const portalUrl = `${appUrl}/parent/${profile.guardian_token}`;
   const studentName = (profile.full_name ?? "").trim() || "your child";
   const guardianFirst = (profile.guardian_name ?? "").trim().split(" ")[0] || "there";
