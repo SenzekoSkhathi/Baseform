@@ -1,711 +1,546 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
-  CalendarClock,
   CheckCircle2,
-  ClipboardList,
+  ChevronDown,
+  ChevronUp,
   Flame,
   Plus,
-  Sparkles,
-  Target,
+  Send,
+  Shield,
+  Star,
   Trophy,
+  Zap,
 } from "lucide-react";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
-import { createClient } from "@/lib/supabase/client";
 
-type Application = Record<string, any>;
-type GoalCategory = "Applications" | "Documents" | "Exams" | "Funding" | "Personal";
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type Goal = {
+type Faculty = { id: string | number; name: string };
+type University = { id: string | number; name: string; abbreviation: string; logo_url: string | null; closing_date: string | null };
+
+type Application = {
   id: string;
-  title: string;
-  category: GoalCategory;
-  notes: string;
-  targetDate: string | null;
-  points: number;
-  completed: boolean;
-  createdAt: string;
-  completedAt: string | null;
+  status: string;
+  notes: string | null;
+  checklist: string[];
+  applied_at: string;
+  faculties: Faculty | null;
+  universities: University | null;
 };
 
-type GoalDraft = {
-  title: string;
-  category: GoalCategory;
-  notes: string;
-  targetDate: string | null;
+type ActivityRow = {
+  id: string;
+  application_id: string;
+  note: string;
+  created_at: string;
 };
 
-const STORAGE_KEY = "bf_tracker_goals_v1";
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const CATEGORY_POINTS: Record<GoalCategory, number> = {
-  Applications: 20,
-  Documents: 15,
-  Exams: 25,
-  Funding: 20,
-  Personal: 10,
-};
+const CHECKLIST_ITEMS = [
+  { id: "id_doc",     label: "Certified copy of ID / birth certificate" },
+  { id: "matric",     label: "Matric results / NSC certificate" },
+  { id: "form",       label: "Application form completed" },
+  { id: "motivation", label: "Motivation letter written" },
+  { id: "fee",        label: "Application fee paid" },
+  { id: "reference",  label: "Reference letter obtained" },
+  { id: "residence",  label: "Proof of residence ready" },
+] as const;
 
-const CATEGORY_STYLES: Record<GoalCategory, string> = {
-  Applications: "bg-orange-50 text-orange-700 border-orange-200",
-  Documents: "bg-sky-50 text-sky-700 border-sky-200",
-  Exams: "bg-violet-50 text-violet-700 border-violet-200",
-  Funding: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Personal: "bg-amber-50 text-amber-700 border-amber-200",
-};
+type ChecklistId = (typeof CHECKLIST_ITEMS)[number]["id"];
 
-const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  planning: { label: "Planning", className: "bg-gray-100 text-gray-600" },
-  in_progress: { label: "In Progress", className: "bg-blue-50 text-blue-600" },
-  submitted: { label: "Submitted", className: "bg-purple-50 text-purple-600" },
-  accepted: { label: "Accepted", className: "bg-green-50 text-green-700" },
-  rejected: { label: "Rejected", className: "bg-red-50 text-red-600" },
-  waitlisted: { label: "Waitlisted", className: "bg-amber-50 text-amber-700" },
+const STATUS_RAIL = ["planning", "in_progress", "submitted"] as const;
+const OUTCOMES    = ["accepted", "rejected", "waitlisted"] as const;
+type RailStatus    = (typeof STATUS_RAIL)[number];
+type OutcomeStatus = (typeof OUTCOMES)[number];
+
+const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
+  planning:    { label: "Planning",    color: "text-gray-600",   bg: "bg-gray-100"   },
+  in_progress: { label: "In Progress", color: "text-blue-600",   bg: "bg-blue-50"    },
+  submitted:   { label: "Submitted",   color: "text-purple-600", bg: "bg-purple-50"  },
+  accepted:    { label: "Accepted",    color: "text-green-700",  bg: "bg-green-50"   },
+  rejected:    { label: "Rejected",    color: "text-red-600",    bg: "bg-red-50"     },
+  waitlisted:  { label: "Waitlisted",  color: "text-amber-700",  bg: "bg-amber-50"   },
 };
 
 const ABBR_COLORS: Record<string, string> = {
-  UWC: "bg-teal-600",
-  SU: "bg-red-700",
-  UP: "bg-blue-800",
-  NWU: "bg-yellow-600",
-  CPUT: "bg-blue-600",
-  UCT: "bg-sky-700",
-  WITS: "bg-blue-700",
-  UJ: "bg-orange-600",
-  DUT: "bg-green-700",
-  TUT: "bg-rose-600",
+  UWC:"bg-teal-600", SU:"bg-red-700", UP:"bg-blue-800", NWU:"bg-yellow-600",
+  CPUT:"bg-blue-600", UCT:"bg-sky-700", WITS:"bg-blue-700", UJ:"bg-orange-600",
+  DUT:"bg-green-700", TUT:"bg-rose-600",
 };
 
-function getStatus(app: Application) {
-  const raw = (app.status ?? "planning").toLowerCase();
-  return STATUS_STYLES[raw] ?? { label: raw, className: "bg-gray-100 text-gray-600" };
+// ── XP + level ────────────────────────────────────────────────────────────────
+
+const STATUS_XP: Record<string, number> = {
+  planning: 10, in_progress: 30, submitted: 60,
+  accepted: 100, rejected: 50, waitlisted: 50,
+};
+const CHECKLIST_XP = 15;
+const ACTIVITY_XP  = 10;
+const MAX_ACT_XP   = 30; // cap per app
+
+function calcXp(apps: Application[], activity: Record<string, ActivityRow[]>): number {
+  return apps.reduce((sum, app) => {
+    const statusXp = STATUS_XP[app.status] ?? 10;
+    const checkXp  = (app.checklist?.length ?? 0) * CHECKLIST_XP;
+    const actCount = Math.min(activity[app.id]?.length ?? 0, MAX_ACT_XP / ACTIVITY_XP);
+    return sum + statusXp + checkXp + actCount * ACTIVITY_XP;
+  }, 0);
 }
+
+const LEVELS = [
+  { min: 0,   max: 99,  level: 1, title: "Starter"            },
+  { min: 100, max: 249, level: 2, title: "Focused Applicant"  },
+  { min: 250, max: 499, level: 3, title: "Momentum Builder"   },
+  { min: 500, max: 799, level: 4, title: "Deadline Master"    },
+  { min: 800, max: Infinity, level: 5, title: "Application Legend" },
+];
 
 function levelFromXp(xp: number) {
-  if (xp >= 280) return { level: 5, title: "Application Legend" };
-  if (xp >= 190) return { level: 4, title: "Deadline Master" };
-  if (xp >= 120) return { level: 3, title: "Momentum Builder" };
-  if (xp >= 60) return { level: 2, title: "Focused Applicant" };
-  return { level: 1, title: "Starter" };
+  return LEVELS.find((l) => xp >= l.min && xp <= l.max) ?? LEVELS[0];
 }
 
-function isOverdue(targetDate: string | null, completed: boolean) {
-  if (!targetDate || completed) return false;
-  const due = new Date(targetDate);
-  if (Number.isNaN(due.getTime())) return false;
-  due.setHours(23, 59, 59, 999);
-  return due.getTime() < Date.now();
+function xpProgressPct(xp: number): number {
+  const lvl = levelFromXp(xp);
+  if (lvl.level === 5) return 100;
+  const range = lvl.max - lvl.min + 1;
+  return Math.round(((xp - lvl.min) / range) * 100);
 }
 
-function formatTargetDate(targetDate: string | null) {
-  if (!targetDate) return "No due date";
-  const parsed = new Date(targetDate);
-  if (Number.isNaN(parsed.getTime())) return targetDate;
-  return parsed.toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  return Math.ceil(diff / 86_400_000);
 }
 
-function buildGoalsFromApplication(app: Application): GoalDraft[] {
-  const uni = app.universities;
-  const faculty = app.faculties;
-  const programmeName = faculty?.name ?? "Selected programme";
-  const universityName = uni?.name ?? "Selected university";
-  const status = (app.status ?? "planning").toLowerCase();
-  const closingDate = uni?.closing_date ?? null;
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+}
 
-  const goals: GoalDraft[] = [
-    {
-      title: `Complete checklist for ${programmeName}`,
-      category: "Applications",
-      notes: `${universityName} application planning and readiness steps.`,
-      targetDate: closingDate,
-    },
-    {
-      title: `Prepare documents for ${programmeName}`,
-      category: "Documents",
-      notes: `Collect certified copies, supporting documents, and upload proofs for ${universityName}.`,
-      targetDate: closingDate,
-    },
-  ];
+// ── Main component ────────────────────────────────────────────────────────────
 
-  if (status === "planning" || status === "in_progress") {
-    goals.push({
-      title: `Submit application for ${programmeName}`,
-      category: "Applications",
-      notes: `Finalize and submit before deadline at ${universityName}.`,
-      targetDate: closingDate,
-    });
+export default function TrackerClient({
+  applications: initialApplications,
+  activityRows: initialActivityRows,
+}: {
+  applications: Application[];
+  activityRows: ActivityRow[];
+}) {
+  const [applications, setApplications] = useState(initialApplications);
+  const [activityRows, setActivityRows]  = useState(initialActivityRows);
+
+  const activityByApp = useMemo(() => {
+    const map: Record<string, ActivityRow[]> = {};
+    for (const row of activityRows) {
+      if (!map[row.application_id]) map[row.application_id] = [];
+      map[row.application_id].push(row);
+    }
+    return map;
+  }, [activityRows]);
+
+  const xp       = useMemo(() => calcXp(applications, activityByApp), [applications, activityByApp]);
+  const lvl      = useMemo(() => levelFromXp(xp), [xp]);
+  const xpPct    = useMemo(() => xpProgressPct(xp), [xp]);
+  const nextXp   = lvl.level < 5 ? lvl.max + 1 : lvl.max;
+  const totalDone = useMemo(
+    () => applications.filter((a) => ["submitted","accepted","rejected","waitlisted"].includes(a.status)).length,
+    [applications]
+  );
+
+  const achievements = useMemo(() => [
+    { id:"first",     icon:"🎯", title:"First Mission",      hint:"Add your first university",           unlocked: applications.length >= 1 },
+    { id:"move",      icon:"⚡", title:"On The Move",         hint:"Update any application status",       unlocked: applications.some(a => a.status !== "planning") },
+    { id:"docs",      icon:"📋", title:"Paperwork Done",      hint:"Complete checklist on one application", unlocked: applications.some(a => a.checklist?.length >= CHECKLIST_ITEMS.length) },
+    { id:"submitted", icon:"📬", title:"Submitted!",          hint:"Submit at least one application",     unlocked: applications.some(a => a.status === "submitted" || a.status === "accepted") },
+    { id:"allin",     icon:"🔥", title:"Going All In",        hint:"Have 3 active applications",          unlocked: applications.length >= 3 },
+    { id:"accepted",  icon:"🏆", title:"Accepted!",           hint:"Receive an acceptance offer",         unlocked: applications.some(a => a.status === "accepted") },
+  ], [applications]);
+
+  function updateApp(id: string, patch: Partial<Application>) {
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
   }
 
-  goals.push({
-    title: `Track response for ${programmeName}`,
-    category: "Personal",
-    notes: `Current application status: ${status.replace(/_/g, " ")}.`,
-    targetDate: null,
-  });
-
-  return goals;
-}
-
-export default function TrackerClient({ applications: initialApplications }: { applications: Application[] }) {
-  const [applications, setApplications] = useState<Application[]>(initialApplications);
-  const [statusBanner, setStatusBanner] = useState<string | null>(null);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  // Realtime: auto-update application statuses when email scan detects changes
-  useEffect(() => {
-    const supabase = createClient();
-
-    const channel = supabase
-      .channel("tracker-applications")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "applications" },
-        (payload) => {
-          const updated = payload.new as Application;
-          setApplications((prev) =>
-            prev.map((app) => (app.id === updated.id ? { ...app, ...updated } : app))
-          );
-          const uniName = (updated as Application & { universities?: { name: string } }).universities?.name;
-          const status = String(updated.status ?? "").replace(/_/g, " ");
-          setStatusBanner(`Application update: ${uniName ?? "A university"} → ${status}`);
-          setTimeout(() => setStatusBanner(null), 6000);
-        }
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
-  }, []);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<GoalCategory>("Applications");
-  const [notes, setNotes] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [appGoalFeedback, setAppGoalFeedback] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        setIsHydrated(true);
-        return;
-      }
-      const parsed = JSON.parse(raw) as Goal[];
-      if (Array.isArray(parsed)) setGoals(parsed);
-    } catch {
-      // Ignore malformed local storage and start clean.
-    } finally {
-      setIsHydrated(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
-  }, [goals, isHydrated]);
-
-  const progress = useMemo(() => {
-    const total = goals.length;
-    const completed = goals.filter((goal) => goal.completed).length;
-    const percentage = total === 0 ? 0 : Math.round((completed / total) * 100);
-    const xp = goals.filter((goal) => goal.completed).reduce((sum, goal) => sum + goal.points, 0);
-    const overdue = goals.filter((goal) => isOverdue(goal.targetDate, goal.completed)).length;
-    const streak = Math.min(completed, 7);
-    const level = levelFromXp(xp);
-    return { total, completed, percentage, xp, overdue, streak, level };
-  }, [goals]);
-
-  const achievements = useMemo(
-    () => [
-      { title: "First Step", unlocked: goals.length >= 1, hint: "Create your first goal" },
-      { title: "On The Board", unlocked: goals.some((goal) => goal.completed), hint: "Complete one goal" },
-      {
-        title: "Halfway There",
-        unlocked: progress.total > 0 && progress.percentage >= 50,
-        hint: "Reach 50% completion",
-      },
-      {
-        title: "Application Legend",
-        unlocked: progress.percentage === 100 && progress.total >= 5,
-        hint: "Complete all goals",
-      },
-    ],
-    [goals, progress.percentage, progress.total]
-  );
-
-  const sortedGoals = useMemo(() => {
-    return [...goals].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      if (a.targetDate && b.targetDate) return a.targetDate.localeCompare(b.targetDate);
-      if (a.targetDate && !b.targetDate) return -1;
-      if (!a.targetDate && b.targetDate) return 1;
-      return a.createdAt.localeCompare(b.createdAt);
-    });
-  }, [goals]);
-
-  const starterGoals = useMemo(
-    () => [
-      { title: "Create your master document checklist", category: "Documents" as const },
-      { title: "Prepare certified copies of ID and results", category: "Documents" as const },
-      { title: "Submit at least one university application", category: "Applications" as const },
-      { title: "Identify 2 bursaries you can apply for", category: "Funding" as const },
-      { title: "Book and prepare for required admission tests", category: "Exams" as const },
-    ],
-    []
-  );
-
-  const addGoal = () => {
-    const cleanTitle = title.trim();
-    if (!cleanTitle) return;
-
-    const newGoal: Goal = {
-      id: crypto.randomUUID(),
-      title: cleanTitle,
-      category,
-      notes: notes.trim(),
-      targetDate: targetDate || null,
-      points: CATEGORY_POINTS[category],
-      completed: false,
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-    };
-
-    setGoals((current) => [newGoal, ...current]);
-    setTitle("");
-    setCategory("Applications");
-    setNotes("");
-    setTargetDate("");
-  };
-
-  const toggleGoal = (goalId: string) => {
-    setGoals((current) =>
-      current.map((goal) => {
-        if (goal.id !== goalId) return goal;
-        const nextCompleted = !goal.completed;
-        return {
-          ...goal,
-          completed: nextCompleted,
-          completedAt: nextCompleted ? new Date().toISOString() : null,
-        };
-      })
-    );
-  };
-
-  const removeGoal = (goalId: string) => {
-    setGoals((current) => current.filter((goal) => goal.id !== goalId));
-  };
-
-  const addQuickGoal = (goal: { title: string; category: GoalCategory }) => {
-    setGoals((current) => {
-      if (current.some((item) => item.title.toLowerCase() === goal.title.toLowerCase())) return current;
-      return [
-        {
-          id: crypto.randomUUID(),
-          title: goal.title,
-          category: goal.category,
-          notes: "",
-          targetDate: null,
-          points: CATEGORY_POINTS[goal.category],
-          completed: false,
-          createdAt: new Date().toISOString(),
-          completedAt: null,
-        },
-        ...current,
-      ];
-    });
-  };
-
-  const addGoalsFromApplication = (app: Application) => {
-    const drafts = buildGoalsFromApplication(app);
-    let addedCount = 0;
-
-    setGoals((current) => {
-      const existingTitles = new Set(current.map((goal) => goal.title.trim().toLowerCase()));
-      const newGoals: Goal[] = [];
-
-      for (const draft of drafts) {
-        const key = draft.title.trim().toLowerCase();
-        if (existingTitles.has(key)) continue;
-
-        existingTitles.add(key);
-        addedCount += 1;
-
-        newGoals.push({
-          id: crypto.randomUUID(),
-          title: draft.title,
-          category: draft.category,
-          notes: draft.notes,
-          targetDate: draft.targetDate,
-          points: CATEGORY_POINTS[draft.category],
-          completed: false,
-          createdAt: new Date().toISOString(),
-          completedAt: null,
-        });
-      }
-
-      return newGoals.length > 0 ? [...newGoals, ...current] : current;
-    });
-
-    if (addedCount > 0) {
-      setAppGoalFeedback(`${addedCount} goal${addedCount === 1 ? "" : "s"} added from this application.`);
-    } else {
-      setAppGoalFeedback("All suggested goals for this application are already in your path.");
-    }
-  };
+  function addActivity(appId: string, entry: ActivityRow) {
+    setActivityRows(prev => [entry, ...prev]);
+  }
 
   return (
     <div className="overflow-x-hidden">
+      {/* ── Header ── */}
       <div className="bg-white border-b border-gray-100 px-4 pt-12 pb-5 sm:px-5">
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Progress</h1>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">
-          Build your goal path and track achievements manually
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Progress</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Your application roadmap</p>
+          </div>
+          <div className="text-right">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
+              <Zap size={11} /> Lv {lvl.level} · {lvl.title}
+            </span>
+          </div>
+        </div>
+
+        {/* XP bar */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+            <span className="flex items-center gap-1"><Flame size={11} className="text-amber-500" />{xp} XP</span>
+            <span>Next level: {nextXp} XP</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-linear-to-r from-orange-400 to-orange-500 transition-all duration-500"
+              style={{ width: `${xpPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Quick stats */}
+        <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+          <span><span className="font-black text-gray-900">{applications.length}</span> missions</span>
+          <span className="text-gray-200">|</span>
+          <span><span className="font-black text-gray-900">{totalDone}</span> completed</span>
+          <span className="text-gray-200">|</span>
+          <span><span className="font-black text-orange-500">{achievements.filter(a => a.unlocked).length}</span> / {achievements.length} badges</span>
+        </div>
       </div>
 
-      {statusBanner && (
-        <div className="mx-4 mt-3 flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 sm:mx-5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          {statusBanner}
-        </div>
-      )}
+      <div className="px-4 pt-4 pb-10 space-y-4 sm:px-5">
 
-      <div className="px-4 pt-4 pb-6 sm:px-5">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          <StatCard
-            icon={<Target size={16} className="text-orange-500" />}
-            label="Completion"
-            value={`${progress.percentage}%`}
-            caption={`${progress.completed}/${progress.total} goals`}
-          />
-          <StatCard
-            icon={<Flame size={16} className="text-amber-500" />}
-            label="XP"
-            value={progress.xp.toString()}
-            caption={`Level ${progress.level.level}: ${progress.level.title}`}
-          />
-          <StatCard
-            icon={<CalendarClock size={16} className="text-red-500" />}
-            label="Overdue"
-            value={progress.overdue.toString()}
-            caption="Goals that need attention"
-          />
-          <StatCard
-            icon={<CheckCircle2 size={16} className="text-emerald-500" />}
-            label="Streak"
-            value={`${progress.streak} day${progress.streak === 1 ? "" : "s"}`}
-            caption="Consistency bonus"
-          />
+        {/* ── Mission cards ── */}
+        {applications.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center">
+            <p className="text-sm font-bold text-gray-500">No missions yet</p>
+            <p className="mt-1 text-xs text-gray-400">Add universities from the Dashboard to start tracking your roadmap.</p>
+          </div>
+        ) : (
+          applications.map((app, i) => (
+            <MissionCard
+              key={app.id}
+              app={app}
+              index={i}
+              activity={activityByApp[app.id] ?? []}
+              onUpdate={updateApp}
+              onAddActivity={addActivity}
+            />
+          ))
+        )}
+
+        {/* ── Achievements ── */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy size={15} className="text-amber-500" />
+            <p className="text-sm font-bold text-gray-900">Badges</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {achievements.map((a) => (
+              <div
+                key={a.id}
+                className={[
+                  "rounded-xl border px-3 py-2.5",
+                  a.unlocked
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-gray-100 bg-gray-50 opacity-50",
+                ].join(" ")}
+              >
+                <span className="text-lg">{a.icon}</span>
+                <p className={`mt-1 text-xs font-bold ${a.unlocked ? "text-gray-900" : "text-gray-500"}`}>
+                  {a.title}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {a.unlocked ? "Unlocked" : a.hint}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-orange-100 bg-linear-to-br from-orange-50 to-white p-4">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <div>
-              <p className="text-sm font-bold text-gray-900">Build Your Goal Path</p>
-              <p className="text-xs text-gray-500">Create goals first, then mark each step complete.</p>
+      </div>
+    </div>
+  );
+}
+
+// ── MissionCard ───────────────────────────────────────────────────────────────
+
+function MissionCard({
+  app,
+  index,
+  activity,
+  onUpdate,
+  onAddActivity,
+}: {
+  app: Application;
+  index: number;
+  activity: ActivityRow[];
+  onUpdate: (id: string, patch: Partial<Application>) => void;
+  onAddActivity: (appId: string, entry: ActivityRow) => void;
+}) {
+  const [checklistOpen, setChecklistOpen] = useState(true);
+  const [activityOpen,  setActivityOpen]  = useState(true);
+  const [noteInput,     setNoteInput]     = useState("");
+  const [saving,        setSaving]        = useState(false);
+  const [_, startTransition] = useTransition();
+
+  const uni     = app.universities;
+  const faculty = app.faculties;
+  const abbr    = uni?.abbreviation ?? "UNI";
+  const logoUrl = getUniversityLogo(abbr, uni?.logo_url ?? null);
+  const color   = ABBR_COLORS[abbr] ?? "bg-gray-600";
+  const days    = daysUntil(uni?.closing_date ?? null);
+  const isTerminal = ["accepted","rejected","waitlisted"].includes(app.status);
+  const checklist  = app.checklist ?? [];
+  const checkPct   = Math.round((checklist.length / CHECKLIST_ITEMS.length) * 100);
+  const railIndex  = STATUS_RAIL.indexOf(app.status as RailStatus);
+
+  async function setStatus(status: string) {
+    onUpdate(app.id, { status });
+    await fetch(`/api/applications/${app.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async function toggleChecklist(itemId: string) {
+    const next = checklist.includes(itemId)
+      ? checklist.filter(i => i !== itemId)
+      : [...checklist, itemId];
+    onUpdate(app.id, { checklist: next });
+    await fetch(`/api/applications/${app.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ checklist: next }),
+    });
+  }
+
+  async function submitNote() {
+    const note = noteInput.trim();
+    if (!note || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/applications/${app.id}/activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }),
+      });
+      if (res.ok) {
+        const { entry } = await res.json() as { entry: ActivityRow };
+        onAddActivity(app.id, entry);
+        setNoteInput("");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+
+      {/* Card header */}
+      <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+        <div className="flex items-start gap-3">
+          {logoUrl ? (
+            <img src={logoUrl} alt={abbr} className="h-10 w-10 shrink-0 rounded-xl border border-gray-100 bg-white p-1 object-contain" />
+          ) : (
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
+              <span className="text-[9px] font-black text-white">{abbr}</span>
             </div>
-            <div className="inline-flex w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-500">
-              Manual Tracker
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-black text-gray-900 leading-snug">{faculty?.name ?? "Programme"}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{uni?.name ?? "University"}</p>
+              </div>
+              {days !== null && (
+                <span className={[
+                  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold",
+                  days < 0  ? "bg-red-50 text-red-600"   :
+                  days <= 14 ? "bg-amber-50 text-amber-700" :
+                               "bg-gray-100 text-gray-500",
+                ].join(" ")}>
+                  {days < 0 ? "Closed" : days === 0 ? "Today" : `${days}d left`}
+                </span>
+              )}
             </div>
           </div>
+        </div>
 
-          <div className="grid gap-2 md:grid-cols-2">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Goal title (e.g., Submit UCT application)"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-            />
+        {/* Status rail */}
+        <div className="mt-3">
+          {!isTerminal ? (
+            <div className="flex items-center gap-1">
+              {STATUS_RAIL.map((s, i) => {
+                const active  = i <= railIndex;
+                const current = i === railIndex;
+                const canClick = i <= railIndex + 1;
+                return (
+                  <div key={s} className="flex items-center flex-1">
+                    <button
+                      type="button"
+                      onClick={() => canClick && setStatus(s)}
+                      disabled={!canClick}
+                      className={[
+                        "flex-1 rounded-lg py-1.5 text-[11px] font-bold text-center transition-all",
+                        current  ? "bg-orange-500 text-white shadow-sm shadow-orange-200" :
+                        active   ? "bg-orange-100 text-orange-600" :
+                                   "bg-gray-100 text-gray-400",
+                        canClick && !current ? "hover:bg-orange-200 cursor-pointer" : "cursor-default",
+                      ].join(" ")}
+                    >
+                      {STATUS_META[s].label}
+                    </button>
+                    {i < STATUS_RAIL.length - 1 && (
+                      <div className={`h-0.5 w-2 shrink-0 ${active ? "bg-orange-300" : "bg-gray-200"}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={`rounded-lg px-3 py-1.5 text-center text-xs font-bold ${STATUS_META[app.status]?.bg} ${STATUS_META[app.status]?.color}`}>
+              {STATUS_META[app.status]?.label}
+            </div>
+          )}
 
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as GoalCategory)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-            >
-              {Object.keys(CATEGORY_POINTS).map((value) => (
-                <option key={value} value={value}>
-                  {value} ({CATEGORY_POINTS[value as GoalCategory]} XP)
-                </option>
-              ))}
-            </select>
-
-            <input
-              value={targetDate}
-              onChange={(event) => setTargetDate(event.target.value)}
-              type="date"
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-            />
-
-            <button
-              type="button"
-              onClick={addGoal}
-              disabled={!title.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-200"
-            >
-              <Plus size={14} />
-              Add Goal
-            </button>
-          </div>
-
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            rows={2}
-            placeholder="Optional note (what this goal needs)"
-            className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
-          />
-
-          <div className="mt-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Quick starter goals</p>
-            <div className="flex flex-wrap gap-2">
-              {starterGoals.map((goal) => (
+          {/* Outcome buttons — only show once submitted */}
+          {app.status === "submitted" && (
+            <div className="mt-2 flex gap-1.5">
+              <p className="text-[10px] text-gray-400 self-center mr-1">Outcome:</p>
+              {OUTCOMES.map(o => (
                 <button
-                  key={goal.title}
+                  key={o}
                   type="button"
-                  onClick={() => addQuickGoal(goal)}
-                  className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-orange-600 hover:bg-orange-50"
+                  onClick={() => setStatus(o)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold border transition-colors ${STATUS_META[o].bg} ${STATUS_META[o].color} border-current/20 hover:opacity-80`}
                 >
-                  + {goal.title}
+                  {STATUS_META[o].label}
                 </button>
               ))}
             </div>
-          </div>
+          )}
         </div>
+      </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <div>
-                <p className="text-sm font-bold text-gray-900">Your Achievement Path</p>
-                <p className="text-xs text-gray-500">Complete each step to move forward.</p>
+      {/* Checklist */}
+      <div className="border-b border-gray-50">
+        <button
+          type="button"
+          onClick={() => setChecklistOpen(v => !v)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Shield size={13} className="text-orange-500" />
+            <span className="text-xs font-bold text-gray-700">Checklist</span>
+            <span className="rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-orange-600">
+              {checklist.length}/{CHECKLIST_ITEMS.length}
+            </span>
+            {checklist.length > 0 && (
+              <div className="h-1 w-14 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full bg-orange-400 rounded-full transition-all" style={{ width: `${checkPct}%` }} />
               </div>
-              <div className="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
-                {progress.completed}/{progress.total} done
-              </div>
+            )}
+          </div>
+          {checklistOpen ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+        </button>
+
+        {checklistOpen && (
+          <div className="px-4 pb-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {CHECKLIST_ITEMS.map(item => {
+              const ticked = checklist.includes(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => toggleChecklist(item.id)}
+                  className={[
+                    "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-xs transition-all",
+                    ticked
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-gray-100 bg-gray-50 text-gray-600 hover:border-orange-200 hover:bg-orange-50/50",
+                  ].join(" ")}
+                >
+                  <CheckCircle2
+                    size={14}
+                    className={ticked ? "shrink-0 text-emerald-500" : "shrink-0 text-gray-300"}
+                  />
+                  <span className={`leading-snug ${ticked ? "line-through opacity-70" : ""}`}>
+                    {item.label}
+                  </span>
+                  {ticked && (
+                    <span className="ml-auto shrink-0 text-[9px] font-bold text-emerald-500">+{CHECKLIST_XP}xp</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Activity log */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setActivityOpen(v => !v)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Star size={13} className="text-amber-500" />
+            <span className="text-xs font-bold text-gray-700">Updates</span>
+            {activity.length > 0 && (
+              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-600">
+                {activity.length}
+              </span>
+            )}
+          </div>
+          {activityOpen ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+        </button>
+
+        {activityOpen && (
+          <div className="px-4 pb-4 space-y-2">
+            {/* Add update input */}
+            <div className="flex gap-2">
+              <input
+                value={noteInput}
+                onChange={e => setNoteInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") void submitNote(); }}
+                placeholder="What did you do? (press Enter)"
+                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+                disabled={saving}
+              />
+              <button
+                type="button"
+                onClick={submitNote}
+                disabled={!noteInput.trim() || saving}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 transition-colors"
+              >
+                <Send size={13} />
+              </button>
             </div>
 
-            {!isHydrated ? (
-              <div className="h-28 animate-pulse rounded-xl bg-gray-100" />
-            ) : sortedGoals.length === 0 ? (
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-8 text-center">
-                <ClipboardList size={28} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-sm font-bold text-gray-700">No goals yet</p>
-                <p className="mt-1 text-xs text-gray-500">Start by creating your first milestone above.</p>
-              </div>
+            {/* Entries */}
+            {activity.length === 0 ? (
+              <p className="text-[11px] text-gray-400 text-center py-2">
+                Log your first update above — each entry earns +{ACTIVITY_XP} XP
+              </p>
             ) : (
-              <div className="space-y-3">
-                {sortedGoals.map((goal, index) => (
-                  <GoalPathCard
-                    key={goal.id}
-                    goal={goal}
-                    isLast={index === sortedGoals.length - 1}
-                    onToggle={() => toggleGoal(goal.id)}
-                    onRemove={() => removeGoal(goal.id)}
-                  />
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {activity.map(entry => (
+                  <div key={entry.id} className="flex items-start gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-gray-700 leading-snug">{entry.note}</p>
+                      <p className="mt-0.5 text-[10px] text-gray-400">{formatDate(entry.created_at)}</p>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Trophy size={16} className="text-amber-500" />
-                <p className="text-sm font-bold text-gray-900">Achievements</p>
-              </div>
-
-              <div className="space-y-2">
-                {achievements.map((achievement) => (
-                  <div
-                    key={achievement.title}
-                    className={`rounded-xl border px-3 py-2 text-sm ${
-                      achievement.unlocked
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-gray-200 bg-gray-50 text-gray-500"
-                    }`}
-                  >
-                    <p className="font-semibold">{achievement.title}</p>
-                    <p className="text-xs">{achievement.unlocked ? "Unlocked" : achievement.hint}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Sparkles size={16} className="text-orange-500" />
-                <p className="text-sm font-bold text-gray-900">Applications Context</p>
-              </div>
-
-              {appGoalFeedback && (
-                <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                  {appGoalFeedback}
-                </div>
-              )}
-
-              {applications.length === 0 ? (
-                <p className="text-xs text-gray-500">
-                  Add universities and programmes in Dashboard Detail to connect your goals to real applications.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {applications.slice(0, 4).map((app, index) => (
-                    <ApplicationChip
-                      key={app.id ?? index}
-                      app={app}
-                      onAddGoals={() => addGoalsFromApplication(app)}
-                    />
-                  ))}
-                  {applications.length > 4 && (
-                    <p className="text-[11px] text-gray-400">+{applications.length - 4} more applications</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  caption,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  caption: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4">
-      <div className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50">{icon}</div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-black text-gray-900">{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{caption}</p>
-    </div>
-  );
-}
-
-function GoalPathCard({
-  goal,
-  isLast,
-  onToggle,
-  onRemove,
-}: {
-  goal: Goal;
-  isLast: boolean;
-  onToggle: () => void;
-  onRemove: () => void;
-}) {
-  const overdue = isOverdue(goal.targetDate, goal.completed);
-
-  return (
-    <div className="relative pl-8">
-      {!isLast && (
-        <div
-          className={`absolute left-3.75 top-8 h-[calc(100%-4px)] w-0.5 ${goal.completed ? "bg-emerald-300" : "bg-gray-200"}`}
-        />
-      )}
-
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full border-2 transition ${
-          goal.completed
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-gray-300 bg-white text-gray-400 hover:border-orange-400"
-        }`}
-      >
-        <CheckCircle2 size={16} />
-      </button>
-
-      <div
-        className={`rounded-xl border p-3 ${
-          goal.completed
-            ? "border-emerald-200 bg-emerald-50"
-            : overdue
-              ? "border-red-200 bg-red-50"
-              : "border-gray-200 bg-white"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold leading-snug text-gray-900">{goal.title}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${CATEGORY_STYLES[goal.category]}`}>
-                {goal.category}
-              </span>
-              <span className="text-[11px] text-gray-500">{goal.points} XP</span>
-              <span className={`text-[11px] ${overdue ? "font-semibold text-red-500" : "text-gray-400"}`}>
-                Due: {formatTargetDate(goal.targetDate)}
-              </span>
-            </div>
-
-            {goal.notes && <p className="mt-2 text-xs text-gray-500">{goal.notes}</p>}
-          </div>
-
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-[11px] font-semibold text-gray-400 hover:text-red-500"
-          >
-            Remove
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ApplicationChip({ app, onAddGoals }: { app: Application; onAddGoals: () => void }) {
-  const status = getStatus(app);
-  const uni = app.universities;
-  const faculty = app.faculties;
-  const abbr = uni?.abbreviation ?? "UNI";
-  const logoUrl = getUniversityLogo(abbr, uni?.logo_url);
-  const color = ABBR_COLORS[abbr] ?? "bg-gray-600";
-  const universityName = uni?.name ?? "University";
-  const programmeName = faculty?.name ?? "Programme";
-
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-start">
-      {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt={abbr}
-          className="h-9 w-9 shrink-0 rounded-lg border border-gray-100 bg-white p-1 object-contain"
-        />
-      ) : (
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${color}`}>
-          <span className="text-[9px] font-black text-white">{abbr}</span>
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold leading-snug text-gray-900">{programmeName}</p>
-            <p className="mt-0.5 truncate text-[11px] text-gray-500">{universityName}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status.className}`}>
-              {status.label}
-            </span>
-            <button
-              type="button"
-              onClick={onAddGoals}
-              className="rounded-full border border-orange-200 bg-white px-2 py-0.5 text-[10px] font-bold text-orange-600 hover:bg-orange-50"
-            >
-              Add goals
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
