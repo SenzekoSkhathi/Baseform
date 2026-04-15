@@ -19,7 +19,7 @@ const GUIDES = {
     role: "Your Baseform guide",
     steps: [
       {
-        title: "Sawubona! 👋",
+        title: "Hey, welcome! 👋",
         text: "I'm Skhathi, your Baseform guide. Let me show you around so you can hit the ground running!",
         target: null,
       },
