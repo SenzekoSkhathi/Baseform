@@ -9,10 +9,10 @@ type SubjectEntry = { name: string; mark: number; apsPoints: number };
 type Props = {
   fullName: string;
   aps: number;
-  rating: string;
   school: string | null;
   gradeYear: string | null;
   subjects: SubjectEntry[];
+  universitiesCount: number;
   programmeCount: number;
   fundingCount: number;
   shareUrl: string;
@@ -26,39 +26,39 @@ function getTier(aps: number) {
   if (aps >= 38)
     return {
       label: "Platinum Scholar",
-      ring: "#c084fc",
-      glow: "rgba(192,132,252,0.3)",
+      ring: "#fdba74",
+      glow: "rgba(253,186,116,0.36)",
       badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
       dot: "bg-purple-400",
     };
   if (aps >= 32)
     return {
       label: "Gold Scholar",
-      ring: "#fbbf24",
-      glow: "rgba(251,191,36,0.3)",
+      ring: "#fb923c",
+      glow: "rgba(251,146,60,0.34)",
       badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
       dot: "bg-amber-400",
     };
   if (aps >= 25)
     return {
       label: "Silver Scholar",
-      ring: "#94a3b8",
-      glow: "rgba(148,163,184,0.25)",
+      ring: "#f97316",
+      glow: "rgba(249,115,22,0.3)",
       badge: "bg-slate-500/20 text-slate-300 border-slate-500/30",
       dot: "bg-slate-400",
     };
   if (aps >= 18)
     return {
       label: "Bronze Scholar",
-      ring: "#f97316",
-      glow: "rgba(249,115,22,0.3)",
+      ring: "#ea580c",
+      glow: "rgba(234,88,12,0.28)",
       badge: "bg-orange-500/20 text-orange-300 border-orange-500/30",
       dot: "bg-orange-400",
     };
   return {
     label: "Rising Scholar",
-    ring: "#6b7280",
-    glow: "rgba(107,114,128,0.2)",
+    ring: "#c2410c",
+    glow: "rgba(194,65,12,0.22)",
     badge: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     dot: "bg-gray-500",
   };
@@ -77,10 +77,10 @@ function getSubjectColor(pts: number): string {
 export default function ShareCardClient({
   fullName,
   aps,
-  rating,
   school,
   gradeYear,
   subjects,
+  universitiesCount,
   programmeCount,
   fundingCount,
   shareUrl,
@@ -92,7 +92,6 @@ export default function ShareCardClient({
 
   const tier = getTier(aps);
   const ringOffset = RING_CIRCUMFERENCE * (1 - aps / MAX_APS);
-  const apsPct = Math.round((aps / MAX_APS) * 100);
 
   async function copyLink() {
     await navigator.clipboard.writeText(`${shareMessage}\n${shareUrl}`);
@@ -222,35 +221,22 @@ export default function ShareCardClient({
               </svg>
             </div>
 
-            {/* Score meta row */}
+            {/* Qualification meta row */}
             <div className="mt-3 flex items-center gap-3">
               <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Rating</p>
-                <p className="text-sm font-bold text-white">{rating}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Universities</p>
+                <p className="text-sm font-bold" style={{ color: tier.ring }}>{universitiesCount}</p>
               </div>
               <div className="h-6 w-px bg-white/10" />
               <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Percentile</p>
-                <p className="text-sm font-bold text-white">{apsPct}%</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Funding</p>
+                <p className="text-sm font-bold" style={{ color: tier.ring }}>{fundingCount}+</p>
               </div>
-              {programmeCount > 0 && (
-                <>
-                  <div className="h-6 w-px bg-white/10" />
-                  <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Programmes</p>
-                    <p className="text-sm font-bold" style={{ color: tier.ring }}>{programmeCount}+</p>
-                  </div>
-                </>
-              )}
-              {fundingCount > 0 && (
-                <>
-                  <div className="h-6 w-px bg-white/10" />
-                  <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Funding</p>
-                    <p className="text-sm font-bold" style={{ color: tier.ring }}>{fundingCount}+</p>
-                  </div>
-                </>
-              )}
+              <div className="h-6 w-px bg-white/10" />
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Programmes</p>
+                <p className="text-sm font-bold" style={{ color: tier.ring }}>{programmeCount}+</p>
+              </div>
             </div>
           </div>
 

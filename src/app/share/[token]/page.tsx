@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calculateAPS, apsRating, markToApsPoint } from "@/lib/aps/calculator";
+import { calculateAPS, markToApsPoint } from "@/lib/aps/calculator";
 import ShareCardClient from "./ShareCardClient";
 
 export default async function SharePage({
@@ -28,18 +28,25 @@ export default async function SharePage({
     ? calculateAPS(rawSubjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
-  // Count qualifying programmes and bursaries (subject to the student's APS)
-  const [{ count: programmeCount }, { count: fundingCount }] = await Promise.all([
+  // Count qualifying programmes/bursaries and derive unique qualifying universities.
+  const [{ count: programmeCount }, { data: facForUnis }, { count: fundingCount }] = await Promise.all([
     admin
       .from("faculties")
       .select("*", { count: "exact", head: true })
       .lte("aps_minimum", aps),
+    admin
+      .from("faculties")
+      .select("university_id")
+      .lte("aps_minimum", aps)
+      .limit(5000),
     admin
       .from("bursaries")
       .select("*", { count: "exact", head: true })
       .lte("minimum_aps", aps)
       .eq("is_active", true),
   ]);
+
+  const universitiesCount = new Set((facForUnis ?? []).map((f) => f.university_id)).size;
 
   // Build subject entries with APS point contribution
   const subjects = (rawSubjects ?? [])
@@ -58,10 +65,10 @@ export default async function SharePage({
     <ShareCardClient
       fullName={fullName}
       aps={aps}
-      rating={apsRating(aps)}
       school={profile.school_name ?? null}
       gradeYear={profile.grade_year ?? null}
       subjects={subjects}
+      universitiesCount={universitiesCount}
       programmeCount={programmeCount ?? 0}
       fundingCount={fundingCount ?? 0}
       shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com"}/share/${token}`}
