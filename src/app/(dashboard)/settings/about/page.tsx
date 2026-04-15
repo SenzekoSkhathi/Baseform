@@ -12,15 +12,15 @@ const APP_URL = "https://baseformapplications.com";
 
 const TEAM = [
   {
-    name: "Skhathi",
-    role: "Co-founder & Developer",
+    name: "Senzeko Skhathi Nduli",
+    role: "Founder & Developer",
     avatarFrom: "#fb923c",
     avatarTo: "#ea580c",
     initial: "S",
   },
   {
-    name: "Ande",
-    role: "Co-founder & Developer",
+    name: "Ande Melane",
+    role: "Co-Founder",
     avatarFrom: "#60a5fa",
     avatarTo: "#2563eb",
     initial: "A",
