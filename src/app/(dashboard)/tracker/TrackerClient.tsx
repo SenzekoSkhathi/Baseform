@@ -352,8 +352,10 @@ function MissionCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-black text-gray-900 leading-snug">{faculty?.name ?? "Programme"}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{uni?.name ?? "University"}</p>
+                <p className="text-sm font-black text-gray-900 leading-snug">{uni?.name ?? "University"}</p>
+                {faculty?.name && (
+                  <p className="text-xs text-gray-500 mt-0.5">{faculty.name}</p>
+                )}
               </div>
               {days !== null && (
                 <span className={[
