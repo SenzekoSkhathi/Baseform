@@ -15,6 +15,7 @@ import {
   toPayFastAmount,
 } from "@/lib/payfast";
 import { initializeUserCredits } from "@/lib/credits";
+import { sendInvoiceEmail } from "@/lib/invoice";
 
 type PlanId = "essential" | "pro" | "ultra";
 
@@ -144,10 +145,15 @@ export async function POST(req: NextRequest) {
     {
       onConflict: "payfast_payment_id",
     }
-  );
+  ).select("id").maybeSingle();
 
   if (billingInsert.error) {
     return NextResponse.json({ ok: false, error: "Could not write billing history." }, { status: 500 });
+  }
+
+  // Send invoice email non-blocking — never let this fail the webhook response
+  if (billingInsert.data?.id) {
+    sendInvoiceEmail(userId, String(billingInsert.data.id)).catch(() => undefined);
   }
 
   return NextResponse.json({ ok: true });

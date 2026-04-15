@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Lock, Zap, ChevronLeft } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
@@ -40,10 +40,13 @@ function mapPlans(rows: PublicPlan[]): Plan[] {
   }));
 }
 
-export default function PlansPage() {
+function PlansPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paramPlan = toPlanId(searchParams.get("plan") ?? "essential");
+
   const [plans, setPlans] = useState<Plan[]>(() => mapPlans(DEFAULT_PLANS));
-  const [selected, setSelected] = useState<PlanId>("essential");
+  const [selected, setSelected] = useState<PlanId>(paramPlan);
   const [loading, setLoading] = useState(false);
 
   const selectedPlan = useMemo(
@@ -67,7 +70,11 @@ export default function PlansPage() {
         setPlans(incoming);
 
         setSelected((prev) => {
-          const stillExists = incoming.some((p) => p.id === prev);
+          // If the URL param plan exists and is available, keep it selected
+          const paramExists = incoming.some((p) => p.id === paramPlan && p.available);
+          if (paramExists) return paramPlan;
+          // Otherwise keep current selection if still valid
+          const stillExists = incoming.some((p) => p.id === prev && p.available);
           if (stillExists) return prev;
           const recommended = incoming.find((p) => p.recommended && p.available)?.id;
           const available = incoming.find((p) => p.available)?.id;
@@ -85,23 +92,22 @@ export default function PlansPage() {
 
   async function handleContinue() {
     setLoading(true);
-    const supabase = createClient();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push(`/login?next=${encodeURIComponent(`/plans?plan=${selected}`)}`);
+    if (selected === "free") {
+      const res = await fetch("/api/billing/downgrade", { method: "POST" });
+      if (!res.ok) {
+        // Not authed — send to login first
+        router.push(`/login?next=${encodeURIComponent("/plans?plan=free")}`);
+        return;
+      }
+      router.push("/dashboard");
       return;
     }
 
-    if (selected === "free") {
-      await supabase
-        .from("profiles")
-        .update({ tier: "free" })
-        .eq("id", user.id);
-      router.push("/dashboard");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent(`/plans?plan=${selected}`)}`);
       return;
     }
 
@@ -262,5 +268,13 @@ export default function PlansPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function PlansPage() {
+  return (
+    <Suspense>
+      <PlansPageInner />
+    </Suspense>
   );
 }

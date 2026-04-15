@@ -8,8 +8,9 @@ function isAllowedPlan(plan: string): plan is PlanId {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as { plan?: string } | null;
+  const body = (await req.json().catch(() => null)) as { plan?: string; term?: string | number } | null;
   const plan = String(body?.plan ?? "").trim().toLowerCase();
+  const term = body?.term ? Number(body.term) : null;
 
   if (!isAllowedPlan(plan)) {
     return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 });
@@ -37,8 +38,8 @@ export async function POST(req: NextRequest) {
 
   const currentTier = String(profile?.tier ?? "").trim().toLowerCase();
   if (currentTier !== plan) {
-    return NextResponse.json({ ok: false, pending: true, tier: currentTier });
+    return NextResponse.json({ ok: false, pending: true, tier: currentTier, term });
   }
 
-  return NextResponse.json({ ok: true, tier: currentTier });
+  return NextResponse.json({ ok: true, tier: currentTier, term });
 }
