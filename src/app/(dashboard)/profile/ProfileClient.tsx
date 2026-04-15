@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2, Copy } from "lucide-react";
+import { Mail, MapPin, BookOpen, School, GraduationCap, ChevronLeft, Pencil, Check, X, Trash2, AlertTriangle, Phone, Users, Zap, RefreshCw, Unlink, Share2 } from "lucide-react";
 import UpgradeGate from "@/components/UpgradeGate";
 import { apsRating } from "@/lib/aps/calculator";
 import { createClient } from "@/lib/supabase/client";
@@ -265,11 +265,20 @@ function InviteFriendCard() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleCopy() {
+  async function handleShare() {
     if (!info?.referralUrl) return;
-    await navigator.clipboard.writeText(info.referralUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (navigator.share) {
+      await navigator.share({
+        title: "Join me on Baseform",
+        text: "I'm using Baseform to track my university applications. Sign up with my link:",
+        url: info.referralUrl,
+      }).catch(() => undefined);
+    } else {
+      // Fallback to clipboard on browsers without Web Share API
+      await navigator.clipboard.writeText(info.referralUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }
 
   const pct = info ? Math.min(100, Math.round((info.pending / info.unlockAt) * 100)) : 0;
@@ -302,11 +311,11 @@ function InviteFriendCard() {
             <p className="flex-1 truncate text-xs text-gray-500">{info.referralUrl}</p>
             <button
               type="button"
-              onClick={handleCopy}
+              onClick={handleShare}
               className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-orange-600 transition-colors"
             >
-              {copied ? <Check size={11} /> : <Copy size={11} />}
-              {copied ? "Copied!" : "Copy"}
+              {copied ? <Check size={11} /> : <Share2 size={11} />}
+              {copied ? "Copied!" : "Share"}
             </button>
           </div>
 

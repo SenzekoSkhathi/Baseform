@@ -1,4 +1,4 @@
-const CACHE_NAME = "baseform-shell-v3";
+const CACHE_NAME = "baseform-shell-v4";
 const PRECACHE_URLS = ["/", "/manifest.json", "/icon.png", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 function isStaticAsset(pathname) {
