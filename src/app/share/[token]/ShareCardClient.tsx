@@ -26,38 +26,38 @@ function getTier(aps: number) {
   if (aps >= 38)
     return {
       label: "Platinum Scholar",
-      ring: "#fdba74",
-      glow: "rgba(253,186,116,0.36)",
+      ring: "#fed7aa", // orange-200 — lightest
+      glow: "rgba(254,215,170,0.32)",
       badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
       dot: "bg-purple-400",
     };
   if (aps >= 32)
     return {
       label: "Gold Scholar",
-      ring: "#fb923c",
+      ring: "#fb923c", // orange-400
       glow: "rgba(251,146,60,0.34)",
-      badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-      dot: "bg-amber-400",
+      badge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+      dot: "bg-yellow-400",
     };
   if (aps >= 25)
     return {
       label: "Silver Scholar",
-      ring: "#f97316",
+      ring: "#f97316", // orange-500
       glow: "rgba(249,115,22,0.3)",
-      badge: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-      dot: "bg-slate-400",
+      badge: "bg-zinc-400/20 text-zinc-300 border-zinc-400/30",
+      dot: "bg-zinc-300",
     };
   if (aps >= 18)
     return {
       label: "Bronze Scholar",
-      ring: "#ea580c",
+      ring: "#ea580c", // orange-600
       glow: "rgba(234,88,12,0.28)",
-      badge: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-      dot: "bg-orange-400",
+      badge: "bg-amber-800/20 text-amber-600 border-amber-700/30",
+      dot: "bg-amber-600",
     };
   return {
     label: "Rising Scholar",
-    ring: "#c2410c",
+    ring: "#c2410c", // orange-700 — deepest
     glow: "rgba(194,65,12,0.22)",
     badge: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     dot: "bg-gray-500",
