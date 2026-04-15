@@ -70,35 +70,36 @@ export async function GET(request: Request) {
           style: {
             width: `${W}px`,
             height: `${H}px`,
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             background: "#0c0a09",
+            overflow: "hidden",
             fontFamily: "ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif",
           },
         },
 
-        // Atmosphere glow behind card
+        // Atmosphere glow — linear-gradient (radial-gradient is not supported by Satori)
         h("div", {
           style: {
             position: "absolute",
             top: "0px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "800px",
-            height: "500px",
-            borderRadius: "50%",
-            background: `radial-gradient(ellipse at center, ${tier.color}28 0%, transparent 70%)`,
+            left: "0px",
+            width: "100%",
+            height: "480px",
+            background: `linear-gradient(to bottom, ${tier.color}22 0%, transparent 100%)`,
           },
         }),
 
-        // Card
+        // Card — explicit height so content fills the frame and footer anchors to bottom
         h(
           "div",
           {
             style: {
               position: "relative",
               width: `${W - PAD * 2}px`,
+              height: `${H - PAD * 2}px`,
               borderRadius: "44px",
               border: "1.5px solid #1e1e1e",
               background: "#111111",
