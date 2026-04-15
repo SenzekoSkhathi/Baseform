@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Zap, Trophy } from "lucide-react";
+import { Bell, Zap, Trophy, BatteryLow } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type NotificationItem = {
   id: string;
-  type: "deadline" | "status" | "reminder" | "email_detected" | "milestone";
+  type: "deadline" | "status" | "reminder" | "email_detected" | "milestone" | "credits";
   title: string;
   message: string;
   timestamp: string;
@@ -108,24 +108,31 @@ export default function NotificationsClient() {
                       ? "border-l-emerald-400"
                       : item.type === "milestone"
                         ? "border-l-orange-400"
-                        : "border-l-amber-400";
+                        : item.type === "credits"
+                          ? "border-l-amber-400"
+                          : "border-l-gray-300";
 
               const isMilestone = item.type === "milestone";
+              const isCredits = item.type === "credits";
 
               return (
                 <Link
                   key={item.id}
                   href={item.href}
                   className={`block rounded-2xl border border-l-4 ${accent} p-4 shadow-sm transition-colors hover:bg-gray-50 ${
-                    isMilestone ? "border-orange-100 bg-orange-50/60" : "border-gray-100 bg-white"
+                    isMilestone
+                      ? "border-orange-100 bg-orange-50/60"
+                      : isCredits
+                        ? "border-amber-100 bg-amber-50/50"
+                        : "border-gray-100 bg-white"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className={`text-sm font-bold ${isMilestone ? "text-orange-800" : "text-gray-900"}`}>
+                      <p className={`text-sm font-bold ${isMilestone ? "text-orange-800" : isCredits ? "text-amber-800" : "text-gray-900"}`}>
                         {item.title}
                       </p>
-                      <p className={`mt-1 text-xs ${isMilestone ? "text-orange-700" : "text-gray-500"}`}>
+                      <p className={`mt-1 text-xs ${isMilestone ? "text-orange-700" : isCredits ? "text-amber-700" : "text-gray-500"}`}>
                         {item.message}
                       </p>
                     </div>
@@ -134,7 +141,9 @@ export default function NotificationsClient() {
                         ? <Zap size={14} className="shrink-0 text-emerald-500" />
                         : item.type === "milestone"
                           ? <Trophy size={14} className="shrink-0 text-orange-500" />
-                          : <Bell size={14} className="shrink-0 text-orange-500" />
+                          : item.type === "credits"
+                            ? <BatteryLow size={14} className="shrink-0 text-amber-500" />
+                            : <Bell size={14} className="shrink-0 text-orange-500" />
                     )}
                   </div>
                 </Link>

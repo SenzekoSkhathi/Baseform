@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PushNotificationManager from "@/components/PushNotificationManager";
+import { Bell, BellOff, BellRing } from "lucide-react";
 
 type Prefs = {
   deadlineAlerts: boolean;
@@ -93,6 +95,70 @@ export default function NotificationsClient() {
   }
 
   return (
+    <div className="space-y-4">
+
+    {/* Push permission card */}
+    <PushNotificationManager>
+      {({ permission, isLoading, enable, disable }) => {
+        if (permission === "unsupported") return null;
+
+        return (
+          <div className={[
+            "rounded-2xl border p-5",
+            permission === "granted" ? "border-green-100 bg-green-50/60" : "border-orange-100 bg-orange-50/40",
+          ].join(" ")}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className={[
+                  "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                  permission === "granted" ? "bg-green-100" : "bg-orange-100",
+                ].join(" ")}>
+                  {permission === "granted"
+                    ? <BellRing size={17} className="text-green-600" />
+                    : <Bell size={17} className="text-orange-500" />}
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
+                    {permission === "granted" ? "Push notifications on" : "Turn on push notifications"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {permission === "granted"
+                      ? "You'll receive alerts on this device even when the app is closed."
+                      : "Get deadline alerts and credit warnings directly on your screen, even when the app is closed."}
+                  </p>
+                  {permission === "denied" && (
+                    <p className="mt-1 text-xs font-semibold text-red-500">
+                      Notifications are blocked. Open your browser settings to allow them for this site.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {permission !== "denied" && (
+                <button
+                  type="button"
+                  onClick={permission === "granted" ? disable : enable}
+                  disabled={isLoading}
+                  className={[
+                    "shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50",
+                    permission === "granted"
+                      ? "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      : "bg-orange-500 text-white hover:bg-orange-600",
+                  ].join(" ")}
+                >
+                  {isLoading ? "…" : permission === "granted" ? (
+                    <span className="flex items-center gap-1.5"><BellOff size={12} /> Turn off</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5"><Bell size={12} /> Enable</span>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }}
+    </PushNotificationManager>
+
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <h1 className="text-lg font-black text-gray-900">Notifications</h1>
       <p className="mt-0.5 text-sm text-gray-500">Choose when Baseform sends you updates.</p>
@@ -124,6 +190,8 @@ export default function NotificationsClient() {
       {error && <p className="mt-3 text-xs font-semibold text-red-600">{error}</p>}
       {saved && <p className="mt-3 text-xs font-semibold text-green-600">Saved</p>}
       {isSyncing && <p className="mt-3 text-xs text-gray-400">Syncing…</p>}
+    </div>
+
     </div>
   );
 }

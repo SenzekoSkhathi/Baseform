@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
-import { BarChart2, FileText, FolderOpen, Layers } from "lucide-react";
+import { getUserCredits, getCreditTransactions, CREDIT_CAP } from "@/lib/credits";
+import { BarChart2, FileText, FolderOpen, Layers, Zap } from "lucide-react";
 
 export const metadata = { title: "Usage — Settings" };
 
@@ -154,6 +155,11 @@ export default async function UsagePage() {
   const vaultPct = vaultLimit ? Math.round((vaultBytes / vaultLimit) * 100) : null;
   const vaultLocked = tier === "free";
 
+  // Credits (essential plan only)
+  const [userCredits, creditTransactions] = tier === "essential"
+    ? await Promise.all([getUserCredits(user.id), getCreditTransactions(user.id, 10)])
+    : [null, []];
+
   return (
     <div className="space-y-4">
       {/* Header card */}
@@ -214,6 +220,75 @@ export default async function UsagePage() {
           sub={`${plan.name} — ${plan.price}${plan.period}`}
         />
       </div>
+
+      {/* Base Credits (essential only) */}
+      {tier === "essential" && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50">
+                <Zap size={17} className="text-orange-500" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-gray-900">Base Credits</p>
+                <p className="text-[11px] text-gray-400">Powers AI features — refills 100/week, capped at {CREDIT_CAP}</p>
+              </div>
+            </div>
+            <span className="text-2xl font-black text-gray-900">
+              {userCredits?.balance ?? 0}
+              <span className="text-sm font-medium text-gray-400"> / {CREDIT_CAP}</span>
+            </span>
+          </div>
+
+          {/* Balance bar */}
+          {userCredits && (
+            <div>
+              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className={[
+                    "h-full rounded-full transition-all",
+                    userCredits.balance <= 20 ? "bg-red-500" : userCredits.balance <= 80 ? "bg-amber-500" : "bg-orange-500",
+                  ].join(" ")}
+                  style={{ width: `${Math.round((userCredits.balance / CREDIT_CAP) * 100)}%` }}
+                />
+              </div>
+              {userCredits.balance <= 20 && (
+                <p className="mt-1.5 text-xs text-red-500 font-medium">
+                  Running low — your weekly top-up of 100 credits lands every Monday.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Credit costs reference */}
+          <div className="rounded-xl bg-gray-50 p-3">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Credit costs</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+              <span>AI Coach message</span><span className="font-semibold text-right">1 credit</span>
+              <span>Bursary deadline alert</span><span className="font-semibold text-right">1 credit</span>
+              <span>Gmail agent check</span><span className="font-semibold text-right">1 credit</span>
+              <span>Motivation letter draft</span><span className="font-semibold text-right">5 credits</span>
+            </div>
+          </div>
+
+          {/* Recent transactions */}
+          {creditTransactions.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Recent activity</p>
+              <ul className="space-y-1.5">
+                {creditTransactions.map((tx) => (
+                  <li key={tx.id} className="flex items-center justify-between text-xs text-gray-600">
+                    <span className="truncate max-w-[65%]">{tx.description ?? tx.action ?? tx.type}</span>
+                    <span className={tx.amount > 0 ? "font-semibold text-green-600" : "font-semibold text-gray-700"}>
+                      {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Feature list */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

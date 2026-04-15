@@ -1,4 +1,4 @@
-const CACHE_NAME = "baseform-shell-v2";
+const CACHE_NAME = "baseform-shell-v3";
 const PRECACHE_URLS = ["/", "/manifest.json", "/icon.png", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 function isStaticAsset(pathname) {
@@ -31,6 +31,55 @@ self.addEventListener("activate", (event) => {
     ).then(() => self.clients.claim())
   );
 });
+
+// ── Push notifications ────────────────────────────────────────────────────────
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: "Baseform", body: event.data.text(), href: "/notifications" };
+  }
+
+  const title = payload.title ?? "Baseform";
+  const options = {
+    body: payload.body ?? "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    data: { href: payload.href ?? "/notifications" },
+    tag: payload.tag ?? "baseform-notification",
+    renotify: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const href = event.notification.data?.href ?? "/notifications";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        // If app is already open, focus it and navigate
+        for (const client of clientList) {
+          if ("focus" in client) {
+            client.focus();
+            if ("navigate" in client) client.navigate(href);
+            return;
+          }
+        }
+        // Otherwise open a new tab
+        if (self.clients.openWindow) return self.clients.openWindow(href);
+      })
+  );
+});
+
+// ── Fetch handler ─────────────────────────────────────────────────────────────
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;

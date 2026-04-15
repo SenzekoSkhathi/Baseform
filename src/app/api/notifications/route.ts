@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getUserCredits } from "@/lib/credits";
 
 type NotificationItem = {
   id: string;
-  type: "deadline" | "status" | "reminder" | "email_detected" | "milestone";
+  type: "deadline" | "status" | "reminder" | "email_detected" | "milestone" | "credits";
   title: string;
   message: string;
   timestamp: string;
@@ -180,7 +181,7 @@ export async function GET() {
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [appsResult, emailLogsResult, emailConnResult] = await Promise.all([
+  const [appsResult, emailLogsResult, emailConnResult, userCredits] = await Promise.all([
     supabase
       .from("applications")
       .select(`
@@ -209,6 +210,8 @@ export async function GET() {
       .eq("user_id", user.id)
       .eq("is_active", true)
       .maybeSingle(),
+
+    getUserCredits(user.id),
   ]);
 
   if (appsResult.error) {
@@ -355,6 +358,37 @@ export async function GET() {
     );
     if (allDone && apps.length >= 2 && latestSubmittedAt) {
       notifications.push(milestoneAllSubmitted(latestSubmittedAt));
+    }
+  }
+
+  // ── Base Credits threshold notifications ─────────────────────────────────
+  if (userCredits?.highestThresholdCrossed != null) {
+    const pct = userCredits.highestThresholdCrossed;
+    const remaining = Math.max(0, userCredits.weekStartBalance - userCredits.weeklyUsed);
+
+    // Use last_topped_up_at as timestamp so the ID changes each week
+    const weekKey = userCredits.lastToppedUpAt
+      ? userCredits.lastToppedUpAt.slice(0, 10)
+      : userCredits.planStartDate.slice(0, 10);
+
+    const messages: Record<number, { title: string; message: string }> = {
+      25:  { title: "You've used 25% of your weekly credits", message: `${remaining} of your 100 weekly Base Credits remain. You're pacing well — keep it up.` },
+      50:  { title: "Halfway through your weekly credits", message: `${remaining} Base Credits left this week. Use them wisely and they'll roll over if you don't spend them all.` },
+      80:  { title: "80% of weekly credits used", message: `Only ${remaining} Base Credits left for this week. Your next top-up lands next Monday.` },
+      90:  { title: "90% of weekly credits used — running low", message: `Just ${remaining} Base Credits remaining. AI features will pause if you hit zero before Monday's top-up.` },
+      95:  { title: "Almost out of weekly credits", message: `Only ${remaining} Base Credit${remaining === 1 ? "" : "s"} left. Monday's top-up of 100 credits is on its way.` },
+    };
+
+    const content = messages[pct];
+    if (content) {
+      notifications.push({
+        id: `credits-${pct}pct-${weekKey}`,
+        type: "credits",
+        title: content.title,
+        message: content.message,
+        timestamp: new Date().toISOString(),
+        href: "/settings/usage",
+      });
     }
   }
 

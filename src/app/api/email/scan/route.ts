@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isFreePlanTier } from "@/lib/access/tiers";
+import { deductCredits } from "@/lib/credits";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
@@ -17,6 +18,11 @@ export async function POST() {
 
   if (isFreePlanTier(profile?.tier)) {
     return NextResponse.json({ error: "Connect Gmail is available on paid plans only." }, { status: 403 });
+  }
+
+  const { ok: credited } = await deductCredits(session.user.id, "email_scan", "Gmail agent check");
+  if (!credited) {
+    return NextResponse.json({ error: "You've run out of Base Credits. Your weekly allowance refills every Monday." }, { status: 402 });
   }
 
   const res = await fetch(`${BACKEND_URL}/email/scan`, {

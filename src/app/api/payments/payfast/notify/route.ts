@@ -14,6 +14,7 @@ import {
   isAmountMatch,
   toPayFastAmount,
 } from "@/lib/payfast";
+import { initializeUserCredits } from "@/lib/credits";
 
 type PlanId = "essential" | "pro" | "ultra";
 
@@ -119,6 +120,10 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ ok: false, error: "Could not update profile tier." }, { status: 500 });
+  }
+
+  if (plan === "essential" && term) {
+    await initializeUserCredits(userId, term);
   }
 
   const billingInsert = await supabase.from("billing_events").upsert(

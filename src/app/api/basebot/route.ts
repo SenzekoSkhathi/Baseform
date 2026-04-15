@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS } from "@/lib/aps/calculator";
 import { isFreePlanTier } from "@/lib/access/tiers";
+import { deductCredits } from "@/lib/credits";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
   const { message } = (await req.json()) as { message: string };
   if (!message?.trim()) {
     return Response.json({ error: "Message required" }, { status: 400 });
+  }
+
+  const { ok: credited } = await deductCredits(session.user.id, "basebot_message", "AI Coach message");
+  if (!credited) {
+    return Response.json({ error: "You've run out of Base Credits. Your weekly allowance refills every Monday." }, { status: 402 });
   }
 
   // Fetch student context to personalise the system prompt on the backend
