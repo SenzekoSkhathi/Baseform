@@ -27,9 +27,15 @@ export default async function TrackerPage() {
       .order("created_at", { ascending: false }),
   ]);
 
+  const normalised = (applications ?? []).map((a) => ({
+    ...a,
+    faculties: Array.isArray(a.faculties) ? (a.faculties[0] ?? null) : a.faculties,
+    universities: Array.isArray(a.universities) ? (a.universities[0] ?? null) : a.universities,
+  }));
+
   return (
     <TrackerClient
-      applications={applications ?? []}
+      applications={normalised}
       activityRows={activityRows ?? []}
     />
   );
