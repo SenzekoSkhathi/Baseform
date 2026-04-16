@@ -150,7 +150,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isBaseBotRoute && user) {
+  if (isBaseBotRoute && !pathname.startsWith("/basebot/preview") && user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("tier")
@@ -158,7 +158,7 @@ export async function middleware(request: NextRequest) {
       .maybeSingle();
 
     if (isFreePlanTier(profile?.tier)) {
-      return NextResponse.redirect(new URL("/settings/billing?upgrade=ai", request.url));
+      return NextResponse.redirect(new URL("/basebot/preview", request.url));
     }
   }
 
