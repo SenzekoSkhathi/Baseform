@@ -116,7 +116,7 @@ export default function TargetsClient({ targets: initialTargets, aps, gradeYear 
             </div>
             <h2 className="text-lg font-bold text-stone-900">No targets saved yet</h2>
             <p className="mt-2 text-sm text-stone-500">
-              Browse programmes and tap "Save as target" to build your wishlist.
+              Browse programmes and tap &quot;Save as target&quot; to build your wishlist.
             </p>
             <Link
               href="/programmes"
@@ -178,7 +178,7 @@ export default function TargetsClient({ targets: initialTargets, aps, gradeYear 
 
                     {apsShortfall > 0 && isGrade11 && (
                       <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-                        You need <span className="font-bold">{apsShortfall} more APS point{apsShortfall !== 1 ? "s" : ""}</span> to reach this programme's minimum. Keep improving your marks.
+                        You need <span className="font-bold">{apsShortfall} more APS point{apsShortfall !== 1 ? "s" : ""}</span> to reach this programme&apos;s minimum. Keep improving your marks.
                       </div>
                     )}
                   </div>

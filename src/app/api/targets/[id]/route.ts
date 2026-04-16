@@ -4,13 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 // DELETE /api/targets/[id] — remove a saved target
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: routeId } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const id = Number(params.id);
+  const id = Number(routeId);
   if (!id) return Response.json({ error: "Invalid id" }, { status: 400 });
 
   const { error } = await supabase
