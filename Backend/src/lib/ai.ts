@@ -8,7 +8,7 @@ if (!apiKey) {
 
 export const anthropic = new Anthropic({ apiKey });
 
-export const AI_MODEL = "claude-sonnet-4-6";
+export const AI_MODEL = "claude-haiku-4-5-20251001";
 
 export const SYSTEM_PROMPT = `You are Baseform AI Coach, an expert university admissions advisor for South African students.
 You help Grade 12 learners understand their APS score, choose the right universities and programmes,
