@@ -81,6 +81,20 @@ self.addEventListener("notificationclick", (event) => {
 
 // ── Fetch handler ─────────────────────────────────────────────────────────────
 
+// Only cache a response if it is a successful, non-redirect, non-opaque response.
+// Caching redirects or opaque responses corrupts the cache and causes
+// "opaqueredirect" errors on subsequent navigations.
+function isCacheable(response) {
+  return (
+    response &&
+    response.ok &&
+    response.status >= 200 &&
+    response.status < 300 &&
+    response.type !== "opaqueredirect" &&
+    response.type !== "error"
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -94,10 +108,14 @@ self.addEventListener("fetch", (event) => {
 
   if (shouldUseNetworkFirst) {
     event.respondWith(
-      fetch(request)
+      // Use redirect:"follow" so the SW never receives an opaqueredirect —
+      // the browser follows redirects and we see the final 200 response.
+      fetch(request, { redirect: "follow" })
         .then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          if (isCacheable(response)) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          }
           return response;
         })
         .catch(async () => {
@@ -112,10 +130,12 @@ self.addEventListener("fetch", (event) => {
 
   if (!isStaticAsset(url.pathname)) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { redirect: "follow" })
         .then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          if (isCacheable(response)) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          }
           return response;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
@@ -127,10 +147,12 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => {
       if (cached) return cached;
 
-      return fetch(request)
+      return fetch(request, { redirect: "follow" })
         .then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          if (isCacheable(response)) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          }
           return response;
         })
         .catch(() => caches.match("/"));
