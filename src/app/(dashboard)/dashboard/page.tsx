@@ -25,6 +25,8 @@ export default async function DashboardPage() {
     ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
+  const studentSubjects = subjects?.map((s) => ({ name: s.subject_name, mark: s.mark })) ?? [];
+
   const { data: applications } = await supabase
     .from("applications")
     .select("status, universities ( abbreviation )")
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
     <DashboardClient
       profile={profile}
       aps={aps}
+      subjects={studentSubjects}
       totalInstitutionCount={totalInstitutionCount}
       submittedInstitutionCount={submittedInstitutionCount}
     />

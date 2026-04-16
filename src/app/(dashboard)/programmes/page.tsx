@@ -57,7 +57,7 @@ export default async function ProgrammesPage() {
 
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: subjects }, { data: universities }, rawProgrammes] = await Promise.all([
+  const [{ data: profile }, { data: subjects }, { data: universities }, rawProgrammes, { data: savedTargets }] = await Promise.all([
     supabase
       .from("profiles")
       .select("field_of_interest, grade_year")
@@ -70,6 +70,7 @@ export default async function ProgrammesPage() {
       .eq("is_active", true)
       .order("name"),
     fetchAllFaculties(supabase),
+    supabase.from("targets").select("id, faculty_id").eq("user_id", user.id),
   ]);
 
   const aps = subjects
@@ -112,6 +113,12 @@ export default async function ProgrammesPage() {
     additionalRequirements: item.additional_requirements,
   }));
 
+  // Build a map of facultyId -> targetId for quick lookup
+  const initialTargets: Record<number, number> = {};
+  for (const t of savedTargets ?? []) {
+    initialTargets[t.faculty_id] = t.id;
+  }
+
   return (
     <ProgrammesClient
       aps={aps}
@@ -120,6 +127,7 @@ export default async function ProgrammesPage() {
       universities={universityRows}
       programmes={programmeRows}
       isGrade11={profile?.grade_year === "Grade 11"}
+      initialTargets={initialTargets}
     />
   );
 }

@@ -372,6 +372,15 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
   const [isEditing, setIsEditing] = useState(profileIsEmpty);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Marks editing state
+  const [isEditingMarks, setIsEditingMarks] = useState(false);
+  const [editMarks, setEditMarks] = useState<{ subjectName: string; mark: number }[]>(subjects);
+  const [marksSaving, setMarksSaving] = useState(false);
+  const [marksError, setMarksError] = useState<string | null>(null);
+  const [marksSuccess, setMarksSuccess] = useState(false);
+  const [displaySubjects, setDisplaySubjects] = useState(subjects);
+  const [displayAps, setDisplayAps] = useState(aps);
   const [editValues, setEditValues] = useState({
     full_name: profile?.full_name ?? "",
     school_name: profile?.school_name ?? "",
@@ -658,13 +667,47 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
     router.replace("/");
   }
 
+  async function handleSaveMarks() {
+    if (marksSaving) return;
+    setMarksSaving(true);
+    setMarksError(null);
+    setMarksSuccess(false);
+
+    const res = await fetch("/api/student-subjects", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subjects: editMarks.map((s) => ({ subject_name: s.subjectName, mark: s.mark })),
+      }),
+    });
+
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMarksError(json.error ?? "Failed to save marks. Please try again.");
+      setMarksSaving(false);
+      return;
+    }
+
+    // Recalculate APS locally from updated marks
+    const { calculateAPS, markToApsPoint } = await import("@/lib/aps/calculator");
+    const newAps = calculateAPS(editMarks.map((s) => ({ name: s.subjectName, mark: s.mark })));
+    const withPoints = editMarks.map((s) => ({ ...s, apsPoints: markToApsPoint(s.mark) }));
+
+    setDisplaySubjects(withPoints);
+    setDisplayAps(newAps);
+    setMarksSuccess(true);
+    setIsEditingMarks(false);
+    setMarksSaving(false);
+    router.refresh();
+  }
+
   // Exclude Life Orientation for APS display — only show counted subjects
-  const scoredSubjects = subjects
+  const scoredSubjects = displaySubjects
     .filter(s => !s.subjectName.toLowerCase().includes("life orientation"))
     .sort((a, b) => b.apsPoints - a.apsPoints)
     .slice(0, 6);
 
-  const loSubject = subjects.find(s => s.subjectName.toLowerCase().includes("life orientation"));
+  const loSubject = displaySubjects.find(s => s.subjectName.toLowerCase().includes("life orientation"));
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -1143,11 +1186,13 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
 
           <section className="order-1 min-w-0 space-y-5 lg:order-2 lg:col-span-8">
             <div className="rounded-3xl bg-orange-500 p-5 text-white shadow-[0_16px_40px_rgba(249,115,22,0.35)] sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-widest text-orange-100">Total APS</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-orange-100">
+                {displayProfile?.grade_year === "Grade 11" ? "Projected APS" : "Total APS"}
+              </p>
               <div className="mt-2 flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-6xl font-black leading-none">{aps}</p>
-                  <p className="mt-2 text-sm font-semibold text-orange-100">{rating}</p>
+                  <p className="text-6xl font-black leading-none">{displayAps}</p>
+                  <p className="mt-2 text-sm font-semibold text-orange-100">{apsRating(displayAps)}</p>
                 </div>
                 <div className="text-right text-xs font-medium text-orange-100">
                   <p>Best 6 subjects</p>
@@ -1157,40 +1202,108 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
             </div>
 
             <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-              <div className="border-b border-gray-50 px-5 py-3.5">
-                <p className="text-sm font-bold text-gray-900">Subjects</p>
-              </div>
-
-              <div className="divide-y divide-gray-50">
-                {scoredSubjects.map((s) => (
-                  <div key={s.subjectName} className="flex items-center justify-between px-5 py-3">
-                    <p className="flex-1 min-w-0 truncate pr-3 text-sm font-medium text-gray-800">
-                      {s.subjectName}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <MarkBadge mark={s.mark} />
-                      <span className="w-4 text-right text-xs font-black text-orange-500">{s.apsPoints}</span>
-                      <span className="text-[10px] font-medium text-gray-400">pts</span>
-                    </div>
-                  </div>
-                ))}
-
-                {loSubject && (
-                  <div className="flex items-center justify-between bg-gray-50/60 px-5 py-3">
-                    <p className="flex-1 min-w-0 truncate pr-3 text-sm font-medium text-gray-400 line-through">
-                      {loSubject.subjectName}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <MarkBadge mark={loSubject.mark} />
-                      <span className="text-[10px] font-medium text-gray-400">excluded</span>
-                    </div>
+              <div className="flex items-center justify-between border-b border-gray-50 px-5 py-3.5">
+                <p className="text-sm font-bold text-gray-900">
+                  {displayProfile?.grade_year === "Grade 11" ? "Interim Marks" : "Subjects"}
+                </p>
+                {!isEditingMarks ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditMarks(displaySubjects);
+                      setMarksError(null);
+                      setMarksSuccess(false);
+                      setIsEditingMarks(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    <Pencil size={12} />
+                    Update marks
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMarks(false)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      <X size={12} />
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMarks}
+                      disabled={marksSaving}
+                      className="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50"
+                    >
+                      <Check size={12} />
+                      {marksSaving ? "Saving…" : "Save"}
+                    </button>
                   </div>
                 )}
               </div>
 
+              {isEditingMarks ? (
+                <div className="divide-y divide-gray-50">
+                  {editMarks.map((s, i) => (
+                    <div key={s.subjectName} className="flex items-center justify-between px-5 py-3 gap-3">
+                      <p className="flex-1 min-w-0 truncate text-sm font-medium text-gray-800">{s.subjectName}</p>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={s.mark || ""}
+                        onChange={(e) =>
+                          setEditMarks((prev) =>
+                            prev.map((x, idx) => idx === i ? { ...x, mark: Number(e.target.value) } : x)
+                          )
+                        }
+                        className="w-20 rounded-xl border border-gray-200 px-3 py-1.5 text-center text-sm font-bold text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </div>
+                  ))}
+                  {marksError && (
+                    <p className="px-5 py-3 text-xs text-red-500">{marksError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {scoredSubjects.map((s) => (
+                    <div key={s.subjectName} className="flex items-center justify-between px-5 py-3">
+                      <p className="flex-1 min-w-0 truncate pr-3 text-sm font-medium text-gray-800">
+                        {s.subjectName}
+                      </p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <MarkBadge mark={s.mark} />
+                        <span className="w-4 text-right text-xs font-black text-orange-500">{s.apsPoints}</span>
+                        <span className="text-[10px] font-medium text-gray-400">pts</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {loSubject && (
+                    <div className="flex items-center justify-between bg-gray-50/60 px-5 py-3">
+                      <p className="flex-1 min-w-0 truncate pr-3 text-sm font-medium text-gray-400 line-through">
+                        {loSubject.subjectName}
+                      </p>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <MarkBadge mark={loSubject.mark} />
+                        <span className="text-[10px] font-medium text-gray-400">excluded</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {marksSuccess && !isEditingMarks && (
+                <div className="border-t border-emerald-100 bg-emerald-50 px-5 py-2.5">
+                  <p className="text-xs font-semibold text-emerald-700">Marks updated — projected APS recalculated.</p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between border-t border-orange-100 bg-orange-50 px-5 py-3">
                 <p className="text-sm font-bold text-orange-700">Total APS</p>
-                <p className="text-lg font-black text-orange-500">{aps}</p>
+                <p className="text-lg font-black text-orange-500">{displayAps}</p>
               </div>
             </div>
           </section>

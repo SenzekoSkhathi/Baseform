@@ -5,6 +5,8 @@ import {
   ArrowRight,
   ArrowLeft,
   AlertTriangle,
+  Bookmark,
+  BookmarkCheck,
   BookOpen,
   Building2,
   CheckCircle2,
@@ -20,6 +22,7 @@ import {
 import { parseProgrammeRequirements, checkQualifications, sortProgrammesByQualification } from "@/lib/dashboard/qualifications";
 import { getUniversityLogo } from "@/lib/dashboard/universityLogos";
 import { Programme, type QualificationCheckResult, StudentSubject } from "@/lib/dashboard/types";
+import ApsSimulator from "@/components/programmes/ApsSimulator";
 
 type University = {
   id: string;
@@ -41,6 +44,7 @@ type Props = {
   universities: University[];
   programmes: Programme[];
   isGrade11?: boolean;
+  initialTargets?: Record<number, number>; // facultyId -> targetId
 };
 
 type StatusFilter = "all" | "qualified" | "marginal" | "not-qualified";
@@ -171,8 +175,18 @@ export default function ProgrammesClient({
   universities,
   programmes,
   isGrade11 = false,
+  initialTargets = {},
 }: Props) {
   const STATUS_COPY = isGrade11 ? STATUS_COPY_GRADE11 : STATUS_COPY_GRADE12;
+  // targets: facultyId -> targetId (null means not saved)
+  const [targets, setTargets] = useState<Record<number, number | null>>(() => {
+    const map: Record<number, number | null> = {};
+    for (const [k, v] of Object.entries(initialTargets)) {
+      map[Number(k)] = v;
+    }
+    return map;
+  });
+  const [targetLoading, setTargetLoading] = useState<Record<number, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<StatusFilter>("all");
   const [openUniversityIds, setOpenUniversityIds] = useState<Record<string, boolean>>({});
@@ -181,6 +195,34 @@ export default function ProgrammesClient({
   const [mobileDetailProgrammeId, setMobileDetailProgrammeId] = useState<string | null>(null);
   const [mobileDetailPresented, setMobileDetailPresented] = useState(false);
   const hasSetInitialOpenState = useRef(false);
+
+  async function toggleTarget(facultyId: number, universityId: string) {
+    if (targetLoading[facultyId]) return;
+    setTargetLoading((prev) => ({ ...prev, [facultyId]: true }));
+
+    const existingId = targets[facultyId];
+
+    if (existingId) {
+      // Remove
+      const res = await fetch(`/api/targets/${existingId}`, { method: "DELETE" });
+      if (res.ok) {
+        setTargets((prev) => ({ ...prev, [facultyId]: null }));
+      }
+    } else {
+      // Add
+      const res = await fetch("/api/targets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facultyId, universityId }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setTargets((prev) => ({ ...prev, [facultyId]: json.id }));
+      }
+    }
+
+    setTargetLoading((prev) => ({ ...prev, [facultyId]: false }));
+  }
 
   const universityMap = useMemo(
     () => new Map(universities.map((university) => [university.id, university])),
@@ -436,6 +478,15 @@ export default function ProgrammesClient({
             )}
           </div>
         </div>
+
+        {isGrade11 && studentSubjects.length > 0 && (
+          <div className="mb-6">
+            <ApsSimulator
+              subjects={studentSubjects.map((s) => ({ name: s.subjectName, mark: s.mark }))}
+              currentAps={aps}
+            />
+          </div>
+        )}
 
         <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <label className="relative block">
@@ -701,6 +752,9 @@ export default function ProgrammesClient({
               onBack={closeMobileProgramme}
               variant="desktop"
               isGrade11={isGrade11}
+              isSaved={selectedProgramme ? Boolean(targets[selectedProgramme.programme.id as unknown as number]) : false}
+              onToggleTarget={selectedProgramme ? () => toggleTarget(selectedProgramme.programme.id as unknown as number, selectedProgramme.programme.universityId) : undefined}
+              targetLoading={selectedProgramme ? Boolean(targetLoading[selectedProgramme.programme.id as unknown as number]) : false}
             />
           </aside>
         </div>
@@ -720,6 +774,9 @@ export default function ProgrammesClient({
               onBack={closeMobileProgramme}
               variant="mobile"
               isGrade11={isGrade11}
+              isSaved={mobileSelectedProgramme ? Boolean(targets[mobileSelectedProgramme.programme.id as unknown as number]) : false}
+              onToggleTarget={mobileSelectedProgramme ? () => toggleTarget(mobileSelectedProgramme.programme.id as unknown as number, mobileSelectedProgramme.programme.universityId) : undefined}
+              targetLoading={mobileSelectedProgramme ? Boolean(targetLoading[mobileSelectedProgramme.programme.id as unknown as number]) : false}
               />
             </div>
           </div>
@@ -790,6 +847,9 @@ function ProgrammeDetailsPanel({
   onBack,
   variant,
   isGrade11 = false,
+  isSaved = false,
+  onToggleTarget,
+  targetLoading = false,
 }: {
   aps: number;
   selectedProgramme: QualificationCheckResult | null;
@@ -798,6 +858,9 @@ function ProgrammeDetailsPanel({
   onBack: () => void;
   variant: "desktop" | "mobile";
   isGrade11?: boolean;
+  isSaved?: boolean;
+  onToggleTarget?: () => void;
+  targetLoading?: boolean;
 }) {
   const isMobile = variant === "mobile";
 
@@ -945,9 +1008,21 @@ function ProgrammeDetailsPanel({
 
           {isGrade11 ? (
             <div className="space-y-3">
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm leading-6 text-blue-900">
-                <p className="font-bold">This is a target programme</p>
-                <p className="mt-1 text-blue-700">Applications open in Grade 12. For now, focus on improving your marks to meet or exceed the APS requirement.</p>
+              <button
+                type="button"
+                onClick={onToggleTarget}
+                disabled={targetLoading || !onToggleTarget}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold shadow-sm transition disabled:opacity-60 ${
+                  isSaved
+                    ? "border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {isSaved ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+                {targetLoading ? "Saving…" : isSaved ? "Saved as target" : "Save as target"}
+              </button>
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-700">
+                Applications open in Grade 12. Focus on improving your marks to meet or exceed the APS requirement.
               </div>
               {selectedUniversity.websiteUrl && (
                 <a

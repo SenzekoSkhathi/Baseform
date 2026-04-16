@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavigationTile from "@/components/dashboard/NavigationTile";
 import ApsProgressCard from "@/components/dashboard/ApsProgressCard";
+import SubjectGapCard from "@/components/dashboard/SubjectGapCard";
+import CountdownCard from "@/components/dashboard/CountdownCard";
 import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
 
@@ -19,11 +21,12 @@ type Profile = {
 type Props = {
   profile: Profile;
   aps: number;
+  subjects: { name: string; mark: number }[];
   totalInstitutionCount: number;
   submittedInstitutionCount: number;
 };
 
-const tiles = [
+const TILES_GRADE12 = [
   {
     href: "/basebot",
     title: "BaseBot",
@@ -76,6 +79,52 @@ const tiles = [
   },
 ];
 
+const TILES_GRADE11 = [
+  {
+    href: "/basebot",
+    title: "BaseBot",
+    icon: "/icon.svg",
+    iconBg: "bg-purple-50",
+    accentColor: "border-purple-200",
+    isImage: true,
+  },
+  {
+    href: "/targets",
+    title: "My Targets",
+    icon: "🎯",
+    iconBg: "bg-blue-50",
+    accentColor: "border-blue-200",
+  },
+  {
+    href: "/programmes",
+    title: "Programmes",
+    icon: "🎓",
+    iconBg: "bg-orange-50",
+    accentColor: "border-orange-200",
+  },
+  {
+    href: "/bursaries",
+    title: "Bursaries",
+    icon: "💰",
+    iconBg: "bg-pink-50",
+    accentColor: "border-pink-200",
+  },
+  {
+    href: "/vault",
+    title: "Documents",
+    icon: "🗂️",
+    iconBg: "bg-teal-50",
+    accentColor: "border-teal-200",
+  },
+  {
+    href: "/profile",
+    title: "Profile",
+    icon: "👤",
+    iconBg: "bg-amber-50",
+    accentColor: "border-amber-200",
+  },
+];
+
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good Morning";
@@ -92,12 +141,13 @@ function formatDate() {
   });
 }
 
-export default function DashboardClient({ profile, aps, totalInstitutionCount, submittedInstitutionCount }: Props) {
+export default function DashboardClient({ profile, aps, subjects, totalInstitutionCount, submittedInstitutionCount }: Props) {
   const firstName = profile?.full_name?.trim().split(" ")[0] || null;
   const rating = apsRating(aps);
   const gradeYear = profile?.grade_year ?? null;
   const schoolName = profile?.school_name ?? null;
   const profileIncomplete = !firstName;
+  const tiles = gradeYear === "Grade 11" ? TILES_GRADE11 : TILES_GRADE12;
 
   const [greeting, setGreeting] = useState("Welcome");
   const [date, setDate] = useState("");
@@ -196,7 +246,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
               </p>
             </div>
             <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-orange-600">
-              {tiles.length} tools
+              {tiles.length} {gradeYear === "Grade 11" ? "tools" : "tools"}
             </span>
 
           </div>
@@ -207,6 +257,16 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
             ))}
           </div>
         </section>
+
+        {gradeYear === "Grade 11" && (
+          <section className="mt-5 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Planning Tools</h2>
+            </div>
+            <CountdownCard />
+            {subjects.length > 0 && <SubjectGapCard subjects={subjects} />}
+          </section>
+        )}
       </div>
     </div>
   );

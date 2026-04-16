@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const [{ data: profile }, { data: subjects }, { data: memories }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, province, field_of_interest")
+      .select("full_name, province, field_of_interest, grade_year")
       .eq("id", session.user.id)
       .maybeSingle(),
     supabase
@@ -71,6 +71,9 @@ export async function POST(req: NextRequest) {
   if (aps > 0) context.aps = aps;
   if (profile?.field_of_interest) context.field = profile.field_of_interest;
   if (profile?.province) context.province = profile.province;
+  if (profile?.grade_year) context.grade = profile.grade_year;
+  if (profile?.grade_year === "Grade 11") context.mode = "planning";
+  if (subjects?.length) context.subjects = subjects.map((s) => ({ subject: s.subject_name, mark: s.mark }));
   if (memories?.length) context.memories = memories;
 
   // Build full conversation: cap history at last 20 messages to control token usage
