@@ -9,6 +9,56 @@ import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 
 type PlanId = "free" | "essential" | "pro" | "ultra";
 
+// ── Grade 11 plans ─────────────────────────────────────────────────────────────
+const GRADE11_PLANS: Plan[] = [
+  {
+    id: "free",
+    name: "Free",
+    price: "R0",
+    period: "/month",
+    tagline: "Get started",
+    features: [
+      "Projected APS calculator",
+      "Basic degree & university discovery",
+      "Subject requirement checker",
+      "Secure document vault",
+    ],
+    available: true,
+    recommended: false,
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "R39.99",
+    period: "/month",
+    tagline: "Most popular",
+    features: [
+      "Everything in Free",
+      "Comprehensive subject gap analysis",
+      "Interactive AI Planning Coach (BaseBot)",
+      "Early bursary matching & preparation",
+      "Unlimited program compatibility tracking",
+    ],
+    available: true,
+    recommended: true,
+  },
+  {
+    id: "ultra",
+    name: "Ultra",
+    price: "R299",
+    period: "/month",
+    tagline: "Coming soon",
+    features: [
+      "Everything in Pro",
+      "1-on-1 career exploration & mentorship",
+      "Customized academic roadmap for Grade 12",
+      "Dedicated WhatsApp planning bot",
+    ],
+    available: false,
+    recommended: false,
+  },
+];
+
 type Plan = {
   id: PlanId;
   name: string;
@@ -86,9 +136,12 @@ function PlansPageInner() {
 
   const isGrade11 = gradeYear === "Grade 11";
 
+  // Grade 11 users see a different plan set optimised for planning/preparation
+  const activePlans = isGrade11 ? GRADE11_PLANS : plans;
+
   const selectedPlan = useMemo(
-    () => plans.find((p) => p.id === selected) ?? plans[0],
-    [plans, selected]
+    () => activePlans.find((p) => p.id === selected) ?? activePlans[0],
+    [activePlans, selected]
   );
 
   useEffect(() => {
@@ -149,7 +202,8 @@ function PlansPageInner() {
       return;
     }
 
-    if (selected === "essential") {
+    // Grade 12: essential plan has its own dedicated page
+    if (!isGrade11 && selected === "essential") {
       router.push("/plans/essential");
       return;
     }
@@ -216,7 +270,7 @@ function PlansPageInner() {
 
         <section className="mt-6 lg:col-span-8 lg:mt-0">
           <div className="grid gap-3 sm:grid-cols-2">
-            {plans.map((plan) => {
+            {activePlans.map((plan) => {
               const isSelected = selected === plan.id;
               const isLocked = !plan.available;
 
@@ -225,7 +279,8 @@ function PlansPageInner() {
                   key={plan.id}
                   onClick={() => {
                     if (!plan.available) return;
-                    if (plan.id === "essential") {
+                    // Grade 12 essential has its own page; all other plans just select
+                    if (!isGrade11 && plan.id === "essential") {
                       router.push("/plans/essential");
                       return;
                     }

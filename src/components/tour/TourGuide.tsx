@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { X, ChevronRight } from "lucide-react";
 
 type Guide = "skhathi" | "ande";
-type TourState = { guide: Guide; completed: boolean; step: number };
+type TourState = { guide: Guide; completed: boolean; step: number; userId?: string };
 type GradeYear = "Grade 11" | "Grade 12" | null;
 
 // ── Avatars ───────────────────────────────────────────────────────────────────
@@ -191,6 +191,24 @@ function buildSteps(guide: "skhathi" | "ande", gradeYear: GradeYear): Step[] {
         ? { title: "Profile 👤", text: "Your personal details, subjects, and marks all live here. Keeping this up to date means better programme matches and a smoother application experience.", target: "tile-profile" }
         : { title: "Profile 👤", text: "Update your subjects, marks, school, and personal info here. The more accurate your profile, the more relevant your programme suggestions and APS calculations will be.", target: "tile-profile" },
 
+    planningTools: isGrade11
+      ? guide === "skhathi"
+        ? { title: "Planning Tools 🛠️", text: "Scroll down to find your Grade 11 planning tools. These are built to help you track your time and improve your marks before applications open.", target: "planning-tools" }
+        : { title: "Planning Tools 🛠️", text: "Below the tiles you'll find tools designed just for Grade 11. Use them to track deadlines and know exactly where to focus your energy.", target: "planning-tools" }
+      : null,
+
+    countdownCard: isGrade11
+      ? guide === "skhathi"
+        ? { title: "Application Countdown ⏳", text: "This shows exactly how many months and days you have until university applications open. The clock is ticking — use this time to build your APS.", target: "countdown-card" }
+        : { title: "Application Countdown ⏳", text: "A live countdown to the start of application season. It updates daily so you always know how much runway you have to improve your marks.", target: "countdown-card" }
+      : null,
+
+    subjectGapCard: isGrade11
+      ? guide === "skhathi"
+        ? { title: "APS Gap Analyser 📊", text: "This shows which of your subjects are closest to earning you another APS point. Focus on the smallest gaps first — that's your fastest path to a higher score.", target: "subject-gap-card" }
+        : { title: "APS Gap Analyser 📊", text: "See exactly how many marks separate you from your next APS point in each subject. It's your shortcut to knowing where to study hardest.", target: "subject-gap-card" }
+      : null,
+
     done:
       guide === "skhathi"
         ? { title: "You're ready! 🎓", text: isGrade11 ? "That's the full tour! Start by setting your targets and exploring programmes — build your APS and you'll be well ahead when applications open." : "That's it! Now let's get those university applications sorted. I'm rooting for you!", target: null }
@@ -209,6 +227,9 @@ function buildSteps(guide: "skhathi" | "ande", gradeYear: GradeYear): Step[] {
     ...(shared.progress ? [shared.progress] : []),
     shared.documents,
     shared.profile,
+    ...(shared.planningTools ? [shared.planningTools] : []),
+    ...(shared.countdownCard ? [shared.countdownCard] : []),
+    ...(shared.subjectGapCard ? [shared.subjectGapCard] : []),
     shared.done,
   ];
 }
@@ -222,13 +243,17 @@ const GUIDE_META = {
 
 const KEY = "bf_tour_v1";
 
-function loadTour(): TourState {
+function loadTour(userId: string): TourState {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as TourState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as TourState;
+      // Only reuse stored state if it belongs to this user
+      if (parsed.userId === userId) return parsed;
+    }
   } catch { /* ignore */ }
   const guide: Guide = Math.random() < 0.5 ? "skhathi" : "ande";
-  const fresh: TourState = { guide, completed: false, step: 0 };
+  const fresh: TourState = { guide, completed: false, step: 0, userId };
   saveTour(fresh);
   return fresh;
 }
@@ -239,12 +264,13 @@ function saveTour(s: TourState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function TourGuide({ gradeYear }: { gradeYear?: GradeYear }) {
+export default function TourGuide({ userId, gradeYear }: { userId?: string; gradeYear?: GradeYear }) {
   const [tour, setTour] = useState<TourState | null>(null);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const state = loadTour();
+    if (!userId) return;
+    const state = loadTour(userId);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTour(state);
     if (!state.completed) {

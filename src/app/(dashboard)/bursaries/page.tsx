@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS } from "@/lib/aps/calculator";
+import { isGrade11FreeTier } from "@/lib/access/tiers";
+import LockedFeature from "@/components/access/LockedFeature";
 import BursariesClient from "./BursariesClient";
 
 export default async function BursariesPage() {
@@ -11,6 +13,28 @@ export default async function BursariesPage() {
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+
+  // Gate bursaries for Grade 11 free users — it's a Pro feature in their plan
+  const { data: accessProfile } = await supabase
+    .from("profiles")
+    .select("grade_year, tier")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (isGrade11FreeTier(accessProfile?.grade_year, accessProfile?.tier)) {
+    return (
+      <LockedFeature
+        title="Bursary Matching"
+        description="Find bursaries and funding opportunities that match your profile, field of study, and province — and prepare your applications early."
+        features={[
+          "Early bursary matching based on your APS & interests",
+          "Filter by province, field of study, and financial need",
+          "Save bursaries to track and apply later",
+          "Get notified before closing dates",
+        ]}
+      />
+    );
+  }
 
   let province: string | null = null;
   let aps = 0;

@@ -8,6 +8,7 @@ import SubjectGapCard from "@/components/dashboard/SubjectGapCard";
 import CountdownCard from "@/components/dashboard/CountdownCard";
 import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
+import { Lock, TrendingUp } from "lucide-react";
 
 type Profile = {
   full_name: string;
@@ -19,6 +20,7 @@ type Profile = {
 } | null;
 
 type Props = {
+  userId: string;
   profile: Profile;
   aps: number;
   subjects: { name: string; mark: number }[];
@@ -154,10 +156,11 @@ function formatDate() {
   });
 }
 
-export default function DashboardClient({ profile, aps, subjects, totalInstitutionCount, submittedInstitutionCount }: Props) {
+export default function DashboardClient({ userId, profile, aps, subjects, totalInstitutionCount, submittedInstitutionCount }: Props) {
   const firstName = profile?.full_name?.trim().split(" ")[0] || null;
   const rating = apsRating(aps);
   const gradeYear = profile?.grade_year ?? null;
+  const isGrade11Free = gradeYear === "Grade 11" && (profile?.tier ?? "free") === "free";
   const schoolName = profile?.school_name ?? null;
   const profileIncomplete = !firstName;
   const tiles = gradeYear === "Grade 11" ? TILES_GRADE11 : TILES_GRADE12;
@@ -174,7 +177,7 @@ export default function DashboardClient({ profile, aps, subjects, totalInstituti
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
-      <TourGuide gradeYear={gradeYear as "Grade 11" | "Grade 12" | null} />
+      <TourGuide userId={userId} gradeYear={gradeYear as "Grade 11" | "Grade 12" | null} />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(65%_55%_at_10%_5%,rgba(251,146,60,0.18),transparent_62%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(45%_40%_at_92%_16%,rgba(56,189,248,0.10),transparent_70%)]" />
@@ -272,12 +275,47 @@ export default function DashboardClient({ profile, aps, subjects, totalInstituti
         </section>
 
         {gradeYear === "Grade 11" && (
-          <section className="mt-5 space-y-3">
+          <section className="mt-5 space-y-3" data-tour="planning-tools">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Planning Tools</h2>
             </div>
-            <CountdownCard />
-            {subjects.length > 0 && <SubjectGapCard subjects={subjects} />}
+            <div data-tour="countdown-card">
+              <CountdownCard />
+            </div>
+            {subjects.length > 0 && (
+              <div data-tour="subject-gap-card">
+                {isGrade11Free ? (
+                  <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-gray-50 px-4 py-3">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50">
+                        <TrendingUp size={14} className="text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900">APS Gap Analyser</p>
+                        <p className="text-[10px] font-medium text-gray-400">Subjects closest to the next APS point</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-600">
+                        <Lock size={9} />
+                        Pro
+                      </span>
+                    </div>
+                    <div className="px-4 py-5 text-center">
+                      <p className="text-sm text-gray-500 leading-relaxed">
+                        See which subjects are closest to earning you another APS point — and where to focus first.
+                      </p>
+                      <Link
+                        href="/plans?plan=pro"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
+                      >
+                        Unlock with Pro
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <SubjectGapCard subjects={subjects} />
+                )}
+              </div>
+            )}
           </section>
         )}
       </div>

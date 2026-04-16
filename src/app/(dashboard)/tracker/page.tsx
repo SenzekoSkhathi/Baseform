@@ -9,6 +9,14 @@ export default async function TrackerPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: gradeProfile } = await supabase
+    .from("profiles")
+    .select("grade_year")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (gradeProfile?.grade_year === "Grade 11") redirect("/dashboard");
+
   const [{ data: applications }, { data: activityRows }] = await Promise.all([
     supabase
       .from("applications")

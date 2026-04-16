@@ -10,7 +10,7 @@ export default async function DashboardDetailPage() {
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: subjects }, { data: raw }] = await Promise.all([
-    supabase.from("profiles").select("tier").eq("id", user.id).single(),
+    supabase.from("profiles").select("tier, grade_year").eq("id", user.id).single(),
     supabase.from("student_subjects").select("subject_name, mark").eq("profile_id", user.id),
     supabase
       .from("applications")
@@ -100,6 +100,10 @@ export default async function DashboardDetailPage() {
       return aTime - bTime;
     }),
   }));
+
+  if ((profile as { grade_year?: string } | null)?.grade_year === "Grade 11") {
+    redirect("/dashboard");
+  }
 
   const tier = String((profile as { tier?: string } | null)?.tier ?? "free").trim().toLowerCase();
 

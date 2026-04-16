@@ -51,6 +51,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
+      userId={user.id}
       profile={profile}
       aps={aps}
       subjects={studentSubjects}
