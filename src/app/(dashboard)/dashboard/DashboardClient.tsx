@@ -128,7 +128,9 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
                 {greeting}{firstName ? <>, <span className="text-orange-500">{firstName}</span></> : null}
               </h1>
               <p className="mt-1 text-xs text-gray-500 md:text-sm">
-                Keep moving. Your applications and APS progress are all in one place.
+                {gradeYear === "Grade 11"
+                  ? "You're in planning mode. Build your APS now so you're ready to apply next year."
+                  : "Keep moving. Your applications and APS progress are all in one place."}
               </p>
             </div>
 
@@ -161,6 +163,14 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
                 <p className="text-[11px] font-medium text-gray-500">School</p>
                 <p className="truncate text-sm font-semibold text-gray-800">{schoolName ?? "—"}</p>
               </div>
+              {gradeYear === "Grade 11" && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-gray-300" />
+                  <span className="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700">
+                    Planning Mode
+                  </span>
+                </>
+              )}
             </div>
           )}
 
@@ -170,6 +180,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
               rating={rating}
               totalInstitutionCount={totalInstitutionCount}
               submittedInstitutionCount={submittedInstitutionCount}
+              isGrade11={gradeYear === "Grade 11"}
             />
           </div>
         </section>
@@ -181,7 +192,7 @@ export default function DashboardClient({ profile, aps, totalInstitutionCount, s
                 Quick Access
               </h2>
               <p className="mt-0.5 text-xs font-medium text-gray-400">
-                Jump into your key application tools
+                {gradeYear === "Grade 11" ? "Explore your planning and preparation tools" : "Jump into your key application tools"}
               </p>
             </div>
             <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-orange-600">

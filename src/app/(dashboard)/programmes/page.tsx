@@ -60,7 +60,7 @@ export default async function ProgrammesPage() {
   const [{ data: profile }, { data: subjects }, { data: universities }, rawProgrammes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("field_of_interest")
+      .select("field_of_interest, grade_year")
       .eq("id", user.id)
       .single(),
     supabase.from("student_subjects").select("*").eq("profile_id", user.id),
@@ -119,6 +119,7 @@ export default async function ProgrammesPage() {
       fieldOfInterest={profile?.field_of_interest ?? null}
       universities={universityRows}
       programmes={programmeRows}
+      isGrade11={profile?.grade_year === "Grade 11"}
     />
   );
 }

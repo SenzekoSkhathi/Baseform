@@ -18,15 +18,17 @@ interface Props {
   rating: string;
   totalInstitutionCount: number;
   submittedInstitutionCount: number;
+  isGrade11?: boolean;
 }
 
-export default function ApsProgressCard({ aps, rating, totalInstitutionCount, submittedInstitutionCount }: Props) {
+export default function ApsProgressCard({ aps, rating, totalInstitutionCount, submittedInstitutionCount, isGrade11 = false }: Props) {
   const apsPct = Math.min(Math.round((aps / MAX_APS) * 100), 100);
   // Progress = institutions with at least one submitted/completed app out of tracked institutions
   const progressPct = totalInstitutionCount === 0 ? 0 : Math.min(Math.round((submittedInstitutionCount / totalInstitutionCount) * 100), 100);
   const [animatedAps, setAnimatedAps] = useState(0);
   const [animatedProgress, setAnimatedProgress] = useState(0);
-  const [activeView, setActiveView] = useState<View>("progress");
+  // Grade 11 planning mode: default to APS view since they have no real applications
+  const [activeView, setActiveView] = useState<View>(isGrade11 ? "aps" : "progress");
 
   useEffect(() => {
     const t1 = setTimeout(() => setAnimatedAps(apsPct), 120);
@@ -46,20 +48,22 @@ export default function ApsProgressCard({ aps, rating, totalInstitutionCount, su
       {/* Header row with tabs */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-gray-900">
-          {isProgressView ? "Applications Progress" : "APS"}
+          {isProgressView ? "Applications Progress" : (isGrade11 ? "Projected APS" : "APS")}
         </span>
         <div className="flex gap-1.5">
-          <button
-            onClick={() => setActiveView("progress")}
-            className={[
-              "px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors",
-              isProgressView
-                ? "bg-orange-500 text-white"
-                : "bg-gray-100 text-gray-400",
-            ].join(" ")}
-          >
-            Progress
-          </button>
+          {!isGrade11 && (
+            <button
+              onClick={() => setActiveView("progress")}
+              className={[
+                "px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors",
+                isProgressView
+                  ? "bg-orange-500 text-white"
+                  : "bg-gray-100 text-gray-400",
+              ].join(" ")}
+            >
+              Progress
+            </button>
+          )}
           <button
             onClick={() => setActiveView("aps")}
             className={[
@@ -118,7 +122,7 @@ export default function ApsProgressCard({ aps, rating, totalInstitutionCount, su
           <>
             <div className="flex-1 text-center">
               <p className="text-sm font-bold text-gray-900">{aps}</p>
-              <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">Your APS</p>
+              <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">{isGrade11 ? "Projected APS" : "Your APS"}</p>
             </div>
             <div className="flex-1 text-center">
               <p className="text-sm font-bold text-gray-900">{pointsAway}</p>

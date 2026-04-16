@@ -140,7 +140,9 @@ export default function StepSubjects({ data, onNext, onBack }: Props) {
         </button>
         <h1 className="text-2xl font-bold text-gray-900">Your subjects</h1>
         <p className="text-gray-500 text-sm">
-          Enter your Grade 12 subjects and marks. You need at least 6 subjects excluding Life Orientation, and every subject must have a mark filled in.
+          {data.gradeYear === "Grade 11"
+            ? "Enter your current interim marks. We'll use these to project your APS and show which programmes you're on track for. You can update them anytime."
+            : "Enter your Grade 12 subjects and marks. You need at least 6 subjects excluding Life Orientation, and every subject must have a mark filled in."}
         </p>
       </div>
 

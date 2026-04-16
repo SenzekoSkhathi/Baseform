@@ -40,6 +40,7 @@ type Props = {
   fieldOfInterest: string | null;
   universities: University[];
   programmes: Programme[];
+  isGrade11?: boolean;
 };
 
 type StatusFilter = "all" | "qualified" | "marginal" | "not-qualified";
@@ -53,11 +54,18 @@ type UniversityGroup = {
   }>;
 };
 
-const STATUS_COPY: Record<StatusFilter, string> = {
+const STATUS_COPY_GRADE12: Record<StatusFilter, string> = {
   all: "All",
   qualified: "Qualified",
   marginal: "Marginal",
   "not-qualified": "Not qualified",
+};
+
+const STATUS_COPY_GRADE11: Record<StatusFilter, string> = {
+  all: "All",
+  qualified: "On Track",
+  marginal: "Close",
+  "not-qualified": "Not Yet",
 };
 
 function formatCurrency(amount: number | null) {
@@ -104,7 +112,12 @@ function getStatusStyles(status: StatusFilter) {
   }
 }
 
-function getStatusLabel(status: QualificationCheckResult["status"]) {
+function getStatusLabel(status: QualificationCheckResult["status"], isGrade11 = false) {
+  if (isGrade11) {
+    if (status === "qualified") return "On Track";
+    if (status === "marginal") return "Close";
+    return "Not Yet";
+  }
   if (status === "qualified") return "Qualified";
   if (status === "marginal") return "Marginal";
   return "Not qualified";
@@ -157,7 +170,9 @@ export default function ProgrammesClient({
   fieldOfInterest,
   universities,
   programmes,
+  isGrade11 = false,
 }: Props) {
+  const STATUS_COPY = isGrade11 ? STATUS_COPY_GRADE11 : STATUS_COPY_GRADE12;
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<StatusFilter>("all");
   const [openUniversityIds, setOpenUniversityIds] = useState<Record<string, boolean>>({});
@@ -397,14 +412,19 @@ export default function ProgrammesClient({
                   <h1 className="text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
                     Programmes and Admission Requirements
                   </h1>
+                  {isGrade11 && (
+                    <p className="mt-2 text-sm font-medium text-blue-700">
+                      Planning Mode — statuses are based on your current interim marks. Keep improving to reach your target.
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-136">
                 <StatCard label="Universities" value={stats.universities} icon={<Building2 size={16} />} />
                 <StatCard label="Programmes" value={stats.programmes} icon={<GraduationCap size={16} />} />
-                <StatCard label="Qualified" value={stats.qualified} icon={<CheckCircle2 size={16} />} accent="emerald" />
-                <StatCard label="APS" value={aps} icon={<Target size={16} />} accent="orange" />
+                <StatCard label={isGrade11 ? "On Track" : "Qualified"} value={stats.qualified} icon={<CheckCircle2 size={16} />} accent="emerald" />
+                <StatCard label={isGrade11 ? "Projected APS" : "APS"} value={aps} icon={<Target size={16} />} accent="orange" />
               </div>
             </div>
 
@@ -457,9 +477,9 @@ export default function ProgrammesClient({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs font-semibold text-stone-500">
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{stats.qualified} qualified</span>
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">{stats.marginal} marginal</span>
-                    <span className="rounded-full bg-red-50 px-3 py-1 text-red-700">{stats.notQualified} not qualified</span>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{stats.qualified} {isGrade11 ? "on track" : "qualified"}</span>
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">{stats.marginal} {isGrade11 ? "close" : "marginal"}</span>
+                    <span className="rounded-full bg-red-50 px-3 py-1 text-red-700">{stats.notQualified} {isGrade11 ? "not yet" : "not qualified"}</span>
                   </div>
                 </div>
               </div>
@@ -634,7 +654,7 @@ export default function ProgrammesClient({
                                       <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${getStatusStylesForResult(result.status)}`}>
-                                            {getStatusLabel(result.status)}
+                                            {getStatusLabel(result.status, isGrade11)}
                                           </span>
                                           <span className="text-xs font-semibold text-stone-400">
                                             APS {result.programme.apsMinimum}
@@ -680,6 +700,7 @@ export default function ProgrammesClient({
               selectedRequirements={selectedRequirements}
               onBack={closeMobileProgramme}
               variant="desktop"
+              isGrade11={isGrade11}
             />
           </aside>
         </div>
@@ -698,6 +719,7 @@ export default function ProgrammesClient({
               selectedRequirements={mobileSelectedRequirements}
               onBack={closeMobileProgramme}
               variant="mobile"
+              isGrade11={isGrade11}
               />
             </div>
           </div>
@@ -767,6 +789,7 @@ function ProgrammeDetailsPanel({
   selectedRequirements,
   onBack,
   variant,
+  isGrade11 = false,
 }: {
   aps: number;
   selectedProgramme: QualificationCheckResult | null;
@@ -774,6 +797,7 @@ function ProgrammeDetailsPanel({
   selectedRequirements: ReturnType<typeof parseProgrammeRequirements>;
   onBack: () => void;
   variant: "desktop" | "mobile";
+  isGrade11?: boolean;
 }) {
   const isMobile = variant === "mobile";
 
@@ -812,7 +836,7 @@ function ProgrammeDetailsPanel({
         <div className="space-y-5 px-5 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${getStatusStylesForResult(selectedProgramme.status)}`}>
-              {getStatusLabel(selectedProgramme.status)}
+              {getStatusLabel(selectedProgramme.status, isGrade11)}
             </span>
             <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
               {selectedProgramme.programme.universityAbbreviation}
@@ -824,7 +848,7 @@ function ProgrammeDetailsPanel({
 
           <div className="grid grid-cols-2 gap-3">
             <DetailMetric label="APS required" value={selectedProgramme.programme.apsMinimum.toString()} />
-            <DetailMetric label="Your APS" value={aps.toString()} tone={aps >= selectedProgramme.programme.apsMinimum ? "emerald" : "rose"} />
+            <DetailMetric label={isGrade11 ? "Projected APS" : "Your APS"} value={aps.toString()} tone={aps >= selectedProgramme.programme.apsMinimum ? "emerald" : "rose"} />
             <DetailMetric label="Duration" value={`${selectedProgramme.programme.durationYears} years`} />
             <DetailMetric label="Qualification" value={formatQualificationType(selectedProgramme.programme.qualificationType)} />
             <DetailMetric label="NQF" value={selectedProgramme.programme.nqfLevel.toString()} />
@@ -919,44 +943,64 @@ function ProgrammeDetailsPanel({
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {selectedUniversity.applicationUrl ? (
-              <a
-                href={selectedUniversity.applicationUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-              >
-                Open application portal
-                <ExternalLink size={16} />
-              </a>
-            ) : (
-              <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
-                Application link not listed
+          {isGrade11 ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm leading-6 text-blue-900">
+                <p className="font-bold">This is a target programme</p>
+                <p className="mt-1 text-blue-700">Applications open in Grade 12. For now, focus on improving your marks to meet or exceed the APS requirement.</p>
               </div>
-            )}
+              {selectedUniversity.websiteUrl && (
+                <a
+                  href={selectedUniversity.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
+                >
+                  Visit university website
+                  <ExternalLink size={16} />
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {selectedUniversity.applicationUrl ? (
+                <a
+                  href={selectedUniversity.applicationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                >
+                  Open application portal
+                  <ExternalLink size={16} />
+                </a>
+              ) : (
+                <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
+                  Application link not listed
+                </div>
+              )}
 
-            {selectedUniversity.websiteUrl ? (
-              <a
-                href={selectedUniversity.websiteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
-              >
-                Visit university website
-                <ExternalLink size={16} />
-              </a>
-            ) : (
-              <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
-                Website not listed
-              </div>
-            )}
-          </div>
+              {selectedUniversity.websiteUrl ? (
+                <a
+                  href={selectedUniversity.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
+                >
+                  Visit university website
+                  <ExternalLink size={16} />
+                </a>
+              ) : (
+                <div className="rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-center text-sm font-semibold text-stone-500">
+                  Website not listed
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
             <div className="mb-2 flex items-center gap-2 font-bold text-stone-900">
               <Sparkles size={16} className="text-orange-500" />
-              Fit summary
+              {isGrade11 ? "Planning summary" : "Fit summary"}
             </div>
             <p className="leading-6">{selectedProgramme.overallMessage}</p>
           </div>
@@ -964,7 +1008,9 @@ function ProgrammeDetailsPanel({
       ) : (
         <div className="space-y-4 px-5 py-5">
           <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5 text-sm leading-6 text-stone-500">
-            Use the programme list on the left to inspect admission details. The panel will update with APS, subject requirements, and application links.
+            {isGrade11
+              ? "Tap a programme to see its APS requirement, subject requirements, and how your current marks compare. Use this to set your study targets."
+              : "Use the programme list on the left to inspect admission details. The panel will update with APS, subject requirements, and application links."}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <DetailMetric label="APS required" value="—" />
