@@ -51,13 +51,17 @@ function PlansPageInner() {
   const [gradeYear, setGradeYear] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("bf_onboarding");
-      const onboarding = raw ? JSON.parse(raw) : null;
-      if (onboarding?.gradeYear) setGradeYear(onboarding.gradeYear);
-    } catch {
-      // ignore
+    async function readOnboarding() {
+      await Promise.resolve();
+      try {
+        const raw = localStorage.getItem("bf_onboarding");
+        const onboarding = raw ? JSON.parse(raw) : null;
+        if (onboarding?.gradeYear) setGradeYear(onboarding.gradeYear);
+      } catch {
+        // ignore
+      }
     }
+    void readOnboarding();
   }, []);
 
   const isGrade11 = gradeYear === "Grade 11";
@@ -101,6 +105,7 @@ function PlansPageInner() {
     void loadPlanConfig();
 
     return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleContinue() {
