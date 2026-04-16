@@ -34,6 +34,7 @@ const TILES_GRADE12 = [
     iconBg: "bg-purple-50",
     accentColor: "border-purple-200",
     isImage: true,
+    dataTour: "tile-basebot",
   },
   {
     href: "/dashboard/detail",
@@ -41,6 +42,7 @@ const TILES_GRADE12 = [
     icon: "📝",
     iconBg: "bg-blue-50",
     accentColor: "border-blue-200",
+    dataTour: "tile-applications",
   },
   {
     href: "/programmes",
@@ -48,6 +50,7 @@ const TILES_GRADE12 = [
     icon: "🎓",
     iconBg: "bg-orange-50",
     accentColor: "border-orange-200",
+    dataTour: "tile-programmes",
   },
   {
     href: "/bursaries",
@@ -55,6 +58,7 @@ const TILES_GRADE12 = [
     icon: "💰",
     iconBg: "bg-pink-50",
     accentColor: "border-pink-200",
+    dataTour: "tile-bursaries",
   },
   {
     href: "/tracker",
@@ -62,6 +66,7 @@ const TILES_GRADE12 = [
     icon: "📈",
     iconBg: "bg-green-50",
     accentColor: "border-green-200",
+    dataTour: "tile-progress",
   },
   {
     href: "/vault",
@@ -69,6 +74,7 @@ const TILES_GRADE12 = [
     icon: "🗂️",
     iconBg: "bg-teal-50",
     accentColor: "border-teal-200",
+    dataTour: "tile-documents",
   },
   {
     href: "/profile",
@@ -76,6 +82,7 @@ const TILES_GRADE12 = [
     icon: "👤",
     iconBg: "bg-amber-50",
     accentColor: "border-amber-200",
+    dataTour: "tile-profile",
   },
 ];
 
@@ -87,6 +94,7 @@ const TILES_GRADE11 = [
     iconBg: "bg-purple-50",
     accentColor: "border-purple-200",
     isImage: true,
+    dataTour: "tile-basebot",
   },
   {
     href: "/targets",
@@ -94,6 +102,7 @@ const TILES_GRADE11 = [
     icon: "🎯",
     iconBg: "bg-blue-50",
     accentColor: "border-blue-200",
+    dataTour: "tile-targets",
   },
   {
     href: "/programmes",
@@ -101,6 +110,7 @@ const TILES_GRADE11 = [
     icon: "🎓",
     iconBg: "bg-orange-50",
     accentColor: "border-orange-200",
+    dataTour: "tile-programmes",
   },
   {
     href: "/bursaries",
@@ -108,6 +118,7 @@ const TILES_GRADE11 = [
     icon: "💰",
     iconBg: "bg-pink-50",
     accentColor: "border-pink-200",
+    dataTour: "tile-bursaries",
   },
   {
     href: "/vault",
@@ -115,6 +126,7 @@ const TILES_GRADE11 = [
     icon: "🗂️",
     iconBg: "bg-teal-50",
     accentColor: "border-teal-200",
+    dataTour: "tile-documents",
   },
   {
     href: "/profile",
@@ -122,6 +134,7 @@ const TILES_GRADE11 = [
     icon: "👤",
     iconBg: "bg-amber-50",
     accentColor: "border-amber-200",
+    dataTour: "tile-profile",
   },
 ];
 
@@ -161,7 +174,7 @@ export default function DashboardClient({ profile, aps, subjects, totalInstituti
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
-      <TourGuide />
+      <TourGuide gradeYear={gradeYear as "Grade 11" | "Grade 12" | null} />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(65%_55%_at_10%_5%,rgba(251,146,60,0.18),transparent_62%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(45%_40%_at_92%_16%,rgba(56,189,248,0.10),transparent_70%)]" />

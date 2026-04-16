@@ -5,6 +5,7 @@ import { X, ChevronRight } from "lucide-react";
 
 type Guide = "skhathi" | "ande";
 type TourState = { guide: Guide; completed: boolean; step: number };
+type GradeYear = "Grade 11" | "Grade 12" | null;
 
 // ── Avatars ───────────────────────────────────────────────────────────────────
 
@@ -126,63 +127,95 @@ function AndeAvatar() {
 
 // ── Characters ────────────────────────────────────────────────────────────────
 
-const GUIDES = {
-  skhathi: {
-    name: "Skhathi",
-    Avatar: SkhathiAvatar,
-    accentColor: "#f97316",
-    role: "Your Baseform guide",
-    steps: [
-      {
-        title: "Hey, welcome! 👋",
-        text: "I'm Skhathi, your Baseform guide. Let me show you around so you can hit the ground running!",
-        target: null,
-      },
-      {
-        title: "Applications Progress",
-        text: "This card tracks how many of your applications have been submitted and how many are still remaining. Tap the APS tab to also see your score.",
-        target: "aps-card",
-      },
-      {
-        title: "Your Tools",
-        text: "These tiles give you quick access to programmes, bursaries, applications, documents and more — everything you need in one place.",
-        target: "quick-access",
-      },
-      {
-        title: "You're ready! 🎓",
-        text: "That's it! Now let's get those university applications sorted. I'm rooting for you!",
-        target: null,
-      },
-    ],
-  },
-  ande: {
-    name: "Ande",
-    Avatar: AndeAvatar,
-    accentColor: "#3b82f6",
-    role: "Your Baseform guide",
-    steps: [
-      {
-        title: "Hey there! 👋",
-        text: "I'm Ande, and I'll be your Baseform guide. Let me walk you through the app — it'll only take a minute!",
-        target: null,
-      },
-      {
-        title: "Applications Progress",
-        text: "This card shows your submitted, remaining, and total applications at a glance. You can also flip to your APS score using the tab.",
-        target: "aps-card",
-      },
-      {
-        title: "Your Tools",
-        text: "Tap any tile to explore — find qualifying programmes, search for bursaries, upload your documents and more.",
-        target: "quick-access",
-      },
-      {
-        title: "You're all set! 💪",
-        text: "Every application counts. Take it one step at a time — you've got this. I'll be here if you need me!",
-        target: null,
-      },
-    ],
-  },
+type Step = { title: string; text: string; target: string | null };
+
+function buildSteps(guide: "skhathi" | "ande", gradeYear: GradeYear): Step[] {
+  const isGrade11 = gradeYear === "Grade 11";
+
+  const shared = {
+    welcome:
+      guide === "skhathi"
+        ? { title: "Hey, welcome! 👋", text: "I'm Skhathi, your Baseform guide. Let me show you around so you can hit the ground running!", target: null }
+        : { title: "Hey there! 👋", text: "I'm Ande, and I'll be your Baseform guide. Let me walk you through the app — it'll only take a minute!", target: null },
+
+    apsCard:
+      guide === "skhathi"
+        ? { title: "Applications Progress", text: isGrade11 ? "This card shows your current APS score and how you're tracking. Build it up now so you're ready to apply next year." : "This card tracks how many of your applications have been submitted and how many are still remaining. Tap the APS tab to also see your score.", target: "aps-card" }
+        : { title: "Applications Progress", text: isGrade11 ? "Here you can see your APS score at a glance. The stronger your APS, the more doors open when you apply next year." : "This card shows your submitted, remaining, and total applications at a glance. You can also flip to your APS score using the tab.", target: "aps-card" },
+
+    toolsIntro:
+      guide === "skhathi"
+        ? { title: "Your Tools", text: "Here are all the tools you need. Let me walk you through each one quickly.", target: "quick-access" }
+        : { title: "Your Tools", text: "These tiles are your command centre. I'll explain each one so you know exactly where to go.", target: "quick-access" },
+
+    basebot:
+      guide === "skhathi"
+        ? { title: "BaseBot 🤖", text: "This is your AI study and application assistant. Ask it anything — which programmes you qualify for, what documents you need, or how to write a strong motivation letter.", target: "tile-basebot" }
+        : { title: "BaseBot 🤖", text: "Meet your personal AI guide. Ask BaseBot about programmes, APS requirements, application tips, bursaries, or anything else on your mind.", target: "tile-basebot" },
+
+    applications: isGrade11
+      ? null
+      : guide === "skhathi"
+        ? { title: "Applications 📝", text: "See all the universities you're applying to, track which ones are submitted, pending, or still to do — and manage everything from one place.", target: "tile-applications" }
+        : { title: "Applications 📝", text: "Your full list of university applications lives here. Check statuses, see what's still outstanding, and keep your applications on track.", target: "tile-applications" },
+
+    targets: isGrade11
+      ? guide === "skhathi"
+        ? { title: "My Targets 🎯", text: "Set the universities and programmes you're aiming for. This keeps you focused now so that when applications open, you know exactly where to apply.", target: "tile-targets" }
+        : { title: "My Targets 🎯", text: "Pin the programmes you want to get into. Use this as your planning board — the earlier you lock in your targets, the better prepared you'll be.", target: "tile-targets" }
+      : null,
+
+    programmes:
+      guide === "skhathi"
+        ? { title: "Programmes 🎓", text: "Browse thousands of university programmes across South Africa. Filter by faculty, institution, or your APS score to find the ones you actually qualify for.", target: "tile-programmes" }
+        : { title: "Programmes 🎓", text: "Search and explore university programmes that match your APS and subjects. Find your best-fit course across SA institutions — all in one place.", target: "tile-programmes" },
+
+    bursaries:
+      guide === "skhathi"
+        ? { title: "Bursaries 💰", text: "Find bursaries and funding opportunities that match your profile, field of study, and province. Don't leave money on the table — there's a lot out there.", target: "tile-bursaries" }
+        : { title: "Bursaries 💰", text: "Money shouldn't stop you from studying. Browse bursaries filtered by your field of interest and location — and apply directly from here.", target: "tile-bursaries" },
+
+    progress: isGrade11
+      ? null
+      : guide === "skhathi"
+        ? { title: "Progress 📈", text: "Track your overall application journey — deadlines, submission statuses, and what still needs attention. Stay ahead of every due date.", target: "tile-progress" }
+        : { title: "Progress 📈", text: "Your application timeline at a glance. See upcoming deadlines, which institutions are still waiting on you, and how close you are to finishing.", target: "tile-progress" },
+
+    documents:
+      guide === "skhathi"
+        ? { title: "Documents 🗂️", text: "Upload and store your ID, matric results, proof of residence, and other important documents. Access them instantly whenever an application asks for them.", target: "tile-documents" }
+        : { title: "Documents 🗂️", text: "Keep all your application documents in one safe place. Upload once — ID, results, proof of address — and attach them to any application without hunting for files.", target: "tile-documents" },
+
+    profile:
+      guide === "skhathi"
+        ? { title: "Profile 👤", text: "Your personal details, subjects, and marks all live here. Keeping this up to date means better programme matches and a smoother application experience.", target: "tile-profile" }
+        : { title: "Profile 👤", text: "Update your subjects, marks, school, and personal info here. The more accurate your profile, the more relevant your programme suggestions and APS calculations will be.", target: "tile-profile" },
+
+    done:
+      guide === "skhathi"
+        ? { title: "You're ready! 🎓", text: isGrade11 ? "That's the full tour! Start by setting your targets and exploring programmes — build your APS and you'll be well ahead when applications open." : "That's it! Now let's get those university applications sorted. I'm rooting for you!", target: null }
+        : { title: "You're all set! 💪", text: isGrade11 ? "You're all set! Use your targets and programmes to plan ahead — next year's application season will be much easier if you start building now." : "Every application counts. Take it one step at a time — you've got this. I'll be here if you need me!", target: null },
+  };
+
+  return [
+    shared.welcome,
+    shared.apsCard,
+    shared.toolsIntro,
+    shared.basebot,
+    ...(shared.applications ? [shared.applications] : []),
+    ...(shared.targets ? [shared.targets] : []),
+    shared.programmes,
+    shared.bursaries,
+    ...(shared.progress ? [shared.progress] : []),
+    shared.documents,
+    shared.profile,
+    shared.done,
+  ];
+}
+
+const GUIDE_META = {
+  skhathi: { name: "Skhathi", Avatar: SkhathiAvatar, accentColor: "#f97316", role: "Your Baseform guide" },
+  ande:    { name: "Ande",    Avatar: AndeAvatar,    accentColor: "#3b82f6", role: "Your Baseform guide" },
 } as const;
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -206,7 +239,7 @@ function saveTour(s: TourState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function TourGuide() {
+export default function TourGuide({ gradeYear }: { gradeYear?: GradeYear }) {
   const [tour, setTour] = useState<TourState | null>(null);
   const [show, setShow] = useState(false);
 
@@ -223,18 +256,19 @@ export default function TourGuide() {
   // Add / remove highlight ring on the target element
   useEffect(() => {
     if (!tour || tour.completed || !show) return;
-    const step = GUIDES[tour.guide].steps[tour.step];
+    const steps = buildSteps(tour.guide, gradeYear ?? null);
+    const step = steps[tour.step];
     if (!step.target) return;
     const el = document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`);
     if (!el) return;
     el.classList.add("tour-highlight");
     el.scrollIntoView({ behavior: "smooth", block: "nearest" });
     return () => el.classList.remove("tour-highlight");
-  }, [tour, show]);
+  }, [tour, show, gradeYear]);
 
   function advance() {
     if (!tour) return;
-    const steps = GUIDES[tour.guide].steps;
+    const steps = buildSteps(tour.guide, gradeYear ?? null);
     const next = tour.step + 1;
     if (next >= steps.length) {
       dismiss();
@@ -255,11 +289,12 @@ export default function TourGuide() {
 
   if (!tour || tour.completed || !show) return null;
 
-  const guide = GUIDES[tour.guide];
+  const guide = GUIDE_META[tour.guide];
   const { Avatar } = guide;
-  const step = guide.steps[tour.step];
-  const isLast = tour.step === guide.steps.length - 1;
-  const totalSteps = guide.steps.length;
+  const steps = buildSteps(tour.guide, gradeYear ?? null);
+  const step = steps[tour.step];
+  const isLast = tour.step === steps.length - 1;
+  const totalSteps = steps.length;
 
   return (
     <>

@@ -11,6 +11,7 @@ interface NavigationTileProps {
   iconBg?: string;
   accentColor?: string;
   isImage?: boolean;
+  dataTour?: string;
 }
 
 export default function NavigationTile({
@@ -20,12 +21,14 @@ export default function NavigationTile({
   iconBg = "bg-orange-50",
   accentColor = "border-orange-200",
   isImage = false,
+  dataTour,
 }: NavigationTileProps) {
   const [pressed, setPressed] = useState(false);
 
   return (
     <Link
       href={href}
+      data-tour={dataTour}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       onMouseLeave={() => setPressed(false)}
