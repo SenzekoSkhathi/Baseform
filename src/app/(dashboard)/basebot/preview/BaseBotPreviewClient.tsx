@@ -123,13 +123,6 @@ function EmptyState({
         </h2>
       </div>
 
-      <div className="w-full max-w-2xl rounded-2xl border border-orange-100 bg-orange-50/60 px-4 py-3 text-center">
-        <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-1">Preview mode</p>
-        <p className="text-sm text-orange-800">
-          You&apos;re on the Free plan. Try a prompt below to see what BaseBot can do — then upgrade to get real answers.
-        </p>
-      </div>
-
       <div className="flex w-full max-w-2xl flex-col gap-2 sm:grid sm:grid-cols-2">
         {SUGGESTED_PROMPTS.map((prompt) => (
           <button
