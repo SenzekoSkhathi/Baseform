@@ -51,8 +51,28 @@ function PlansPageInner() {
   const [gradeYear, setGradeYear] = useState<string | null>(null);
 
   useEffect(() => {
-    async function readOnboarding() {
+    async function resolveGradeYear() {
       await Promise.resolve();
+      try {
+        // Prefer the authenticated profile — localStorage can be stale from a
+        // previous session or a different user on the same browser.
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("grade_year")
+            .eq("id", user.id)
+            .maybeSingle();
+          setGradeYear(profile?.grade_year ?? null);
+          return;
+        }
+      } catch {
+        // fall through to localStorage
+      }
+
+      // Unauthenticated users (onboarding → plans flow): read from localStorage.
       try {
         const raw = localStorage.getItem("bf_onboarding");
         const onboarding = raw ? JSON.parse(raw) : null;
@@ -61,7 +81,7 @@ function PlansPageInner() {
         // ignore
       }
     }
-    void readOnboarding();
+    void resolveGradeYear();
   }, []);
 
   const isGrade11 = gradeYear === "Grade 11";
