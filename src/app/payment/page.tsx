@@ -185,8 +185,22 @@ export default function PaymentPage() {
       return;
     }
 
-    // 3. Open the PayFast modal
+    // 3. Open the PayFast modal.
+    // Safety timeout: if the PayFast callback never fires (modal blocked, sandbox
+    // issue, network problem) reset the button so the user isn't stuck forever.
+    let callbackFired = false;
+    const safetyTimer = setTimeout(() => {
+      if (!callbackFired) {
+        setLoading(false);
+        setError(
+          "The payment window didn't open. Check that pop-ups aren't blocked and try again."
+        );
+      }
+    }, 30_000);
+
     window.payfast_do_onsite_payment({ uuid: payload.uuid }, (result) => {
+      callbackFired = true;
+      clearTimeout(safetyTimer);
       setLoading(false);
       if (result) {
         setNotice("Payment received — verifying your plan upgrade...");
