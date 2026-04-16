@@ -211,9 +211,9 @@ test.describe("Admin API security", () => {
 test.describe("Admin assignment grant/revoke", () => {
   test.skip(!ADMIN_EMAIL || !ADMIN_PASSWORD, "Set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD (or TEST_USER_*) to run admin tests");
 
-  test("admin assignment requires reason field", async ({ request }) => {
-    // Get admin session cookie by logging in
-    const loginPage = request.context().newPage();
+  test("admin assignment requires reason field", async ({ browser }) => {
+    // Get admin session cookie by logging in via a real page context
+    const loginPage = await browser.newPage();
     await loginPage.goto("/login");
     await loginPage.getByLabel("Email address").fill(ADMIN_EMAIL);
     await loginPage.getByLabel("Password").fill(ADMIN_PASSWORD);

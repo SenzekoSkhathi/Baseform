@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -12,7 +13,7 @@ export async function GET() {
       .order("name");
 
     if (error) {
-      console.error("Database error:", error);
+      Sentry.captureException(error);
       return NextResponse.json(
         { error: "Failed to fetch universities" },
         { status: 500 }
@@ -33,7 +34,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("API error:", error);
+    Sentry.captureException(error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

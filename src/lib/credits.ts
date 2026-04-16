@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const CREDIT_CAP = 300;
@@ -124,7 +125,7 @@ export async function deductCredits(
   });
 
   if (error) {
-    console.error("[credits] deduct_credits rpc error:", error.message);
+    Sentry.captureException(error);
     return { ok: false };
   }
 
@@ -154,6 +155,6 @@ export async function initializeUserCredits(
   });
 
   if (error) {
-    console.error("[credits] initialize_user_credits rpc error:", error.message);
+    Sentry.captureException(error);
   }
 }

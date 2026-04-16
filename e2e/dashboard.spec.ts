@@ -60,6 +60,61 @@ test.describe("Dashboard + core navigation (authenticated)", () => {
   });
 });
 
+test.describe("Dashboard — missing page coverage (authenticated)", () => {
+  test.skip(!TEST_EMAIL, "Set TEST_USER_EMAIL + TEST_USER_PASSWORD to run dashboard tests");
+
+  test("vault page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/vault");
+    await expect(page).not.toHaveURL(/login/);
+    await expect(page.getByText(/vault|document|upload/i).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("notifications page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/notifications");
+    await expect(page).not.toHaveURL(/login/);
+    // Either has notifications or shows empty state
+    await expect(page.getByText(/notification|alert|all caught up/i).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("programmes page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/programmes");
+    await expect(page).not.toHaveURL(/login/);
+    await expect(page.getByText(/programme|university|APS/i).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("settings/appearance page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/settings/appearance");
+    await expect(page).not.toHaveURL(/login/);
+    await expect(page.getByText(/appearance|theme|dark|light/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("settings/about page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/settings/about");
+    await expect(page).not.toHaveURL(/login/);
+    await expect(page.getByText(/Baseform|version|about/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("settings/usage page renders without error", async ({ page }) => {
+    await loginOnce(page);
+    await page.goto("/settings/usage");
+    await expect(page).not.toHaveURL(/login/);
+    await expect(page.getByText(/usage|credit|plan/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("error boundary recovers — navigating to dashboard after error shows no crash", async ({ page }) => {
+    await loginOnce(page);
+    // Navigate to a non-existent sub-route to trigger a 404/not-found
+    await page.goto("/dashboard/nonexistent-page-xyz");
+    // Should not fully crash — either 404 page or redirect
+    await expect(page).not.toHaveTitle(/500|Internal Server Error/i);
+  });
+});
+
 test.describe("Public pages load without auth", () => {
   test("share card 404 for unknown token", async ({ page }) => {
     await page.goto("/share/00000000-0000-0000-0000-000000000000");

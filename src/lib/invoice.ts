@@ -6,6 +6,7 @@
  * Server-only — never import this from client components.
  */
 
+import * as Sentry from "@sentry/nextjs";
 import PDFDocument from "pdfkit";
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -343,9 +344,9 @@ export async function sendInvoiceEmail(
     });
 
     if (error) {
-      console.error("[invoice] Resend error:", error);
+      Sentry.captureException(error);
     }
   } catch (err) {
-    console.error("[invoice] Failed to send invoice email:", err);
+    Sentry.captureException(err);
   }
 }

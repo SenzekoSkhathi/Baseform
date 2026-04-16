@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS } from "@/lib/aps/calculator";
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("Backend AI error:", err);
+    Sentry.captureException(new Error(err));
     return Response.json({ error: "AI service temporarily unavailable" }, { status: 502 });
   }
 

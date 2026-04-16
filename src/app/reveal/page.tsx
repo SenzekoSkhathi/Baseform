@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { apsRating } from "@/lib/aps/calculator";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/client";
 import { GraduationCap, Trophy, Clock, ArrowRight, Sparkles, ChevronLeft, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -114,7 +115,7 @@ function RevealContent() {
         window.URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error("Failed to share APS card:", error);
+      Sentry.captureException(error);
     } finally {
       setSharing(false);
     }

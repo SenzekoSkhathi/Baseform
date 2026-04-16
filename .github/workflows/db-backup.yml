@@ -1,0 +1,98 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: "0 2 * * *"  # 02:00 UTC daily
+  workflow_dispatch:        # allow manual trigger from the Actions tab
+
+jobs:
+  backup:
+    name: pg_dump → Supabase Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      # DATABASE_URL must be the DIRECT connection string (port 5432), not the
+      # pooler (port 6543).  Find it in Supabase → Settings → Database →
+      # "Connection string" → URI (Session mode / Direct).
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+          FILENAME="backup-${TIMESTAMP}.sql.gz"
+          echo "FILENAME=${FILENAME}" >> "$GITHUB_ENV"
+          pg_dump "$DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --format=plain \
+            | gzip -9 > "/tmp/${FILENAME}"
+          echo "Backup size: $(du -sh /tmp/${FILENAME} | cut -f1)"
+
+      # Requires a bucket named "db-backups" in Supabase Storage.
+      # Create it once: Supabase dashboard → Storage → New bucket → "db-backups"
+      # (private, no public access).
+      - name: Upload to Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            "${SUPABASE_URL}/storage/v1/object/db-backups/${FILENAME}" \
+            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/gzip" \
+            --data-binary "@/tmp/${FILENAME}")
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "Upload failed with HTTP ${HTTP_STATUS}"
+            exit 1
+          fi
+          echo "Uploaded ${FILENAME} (HTTP ${HTTP_STATUS})"
+
+      # Deletes any backup whose filename date is more than 30 days old.
+      # Parses the date from the filename (backup-YYYY-MM-DD…) so no metadata
+      # parsing is needed.
+      - name: Prune backups older than 30 days
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          OBJECTS=$(curl -fsSL \
+            -X POST \
+            "${SUPABASE_URL}/storage/v1/object/list/db-backups" \
+            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"prefix":"","limit":1000,"offset":0}')
+
+          OLD_NAMES=$(echo "$OBJECTS" | python3 - <<'PYEOF'
+import sys, json, re
+from datetime import datetime, timezone, timedelta
+
+cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+raw = sys.stdin.read()
+objects = json.loads(raw) if raw.strip() else []
+for obj in objects:
+    name = obj.get("name", "")
+    m = re.search(r"backup-(\d{4}-\d{2}-\d{2})", name)
+    if m:
+        file_date = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if file_date < cutoff:
+            print(name)
+PYEOF
+)
+
+          if [ -z "$OLD_NAMES" ]; then
+            echo "No old backups to prune."
+          else
+            echo "$OLD_NAMES" | while IFS= read -r name; do
+              echo "Deleting: $name"
+              curl -fsSL -X DELETE \
+                "${SUPABASE_URL}/storage/v1/object/db-backups/${name}" \
+                -H "Authorization: Bearer ${SERVICE_ROLE_KEY}"
+            done
+          fi

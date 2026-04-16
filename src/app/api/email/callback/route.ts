@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/sender";
@@ -167,7 +168,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    console.error("[email/callback] Token exchange failed:", await tokenRes.text());
+    Sentry.captureException(new Error(`[email/callback] Token exchange failed: ${await tokenRes.text()}`));
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
   }
 
@@ -196,7 +197,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!emailAddress) {
-    console.error("[email/callback] Could not resolve connected Gmail email address");
+    Sentry.captureMessage("[email/callback] Could not resolve connected Gmail email address", "error");
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
   }
 
@@ -220,7 +221,7 @@ export async function GET(req: NextRequest) {
     );
 
   if (dbError) {
-    console.error("[email/callback] DB upsert failed:", dbError);
+    Sentry.captureException(dbError);
     return NextResponse.redirect(`${redirectBase}/profile?gmail=error`);
   }
 
@@ -239,7 +240,7 @@ export async function GET(req: NextRequest) {
     }
   } catch (e) {
     mailStatus = "error";
-    console.error("[email/callback] Welcome email failed:", e);
+    Sentry.captureException(e);
   }
 
   return NextResponse.redirect(`${redirectBase}/profile?gmail=connected&mail=${mailStatus}`);

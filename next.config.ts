@@ -20,14 +20,47 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
+    // Content-Security-Policy — built from individual directives so each line
+    // is readable and easy to extend.
+    //
+    // 'unsafe-inline' in script-src is required by Next.js inline hydration
+    // scripts. To harden further, replace with a nonce-based approach once
+    // traffic justifies the middleware overhead.
+    const csp = [
+      "default-src 'self'",
+      // Next.js inline scripts + PayFast engine.js (onsite payments)
+      "script-src 'self' 'unsafe-inline' https://www.payfast.co.za https://sandbox.payfast.co.za",
+      // Tailwind / CSS-in-JS inline styles
+      "style-src 'self' 'unsafe-inline'",
+      // University logos (Wikimedia), Supabase storage, blob/data URLs for share card
+      "img-src 'self' data: blob: https://upload.wikimedia.org https://*.supabase.co",
+      // No external fonts — system stack only
+      "font-src 'self' data:",
+      // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend, PayFast
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform.onrender.com https://www.payfast.co.za https://sandbox.payfast.co.za",
+      // Vault PDF (blob:), Office preview, PayFast onsite modal
+      "frame-src blob: https://view.officeapps.live.com https://www.payfast.co.za https://sandbox.payfast.co.za",
+      // Service worker (PWA)
+      "worker-src 'self' blob:",
+      // Block all plugin content
+      "object-src 'none'",
+      // Prevent base-tag hijacking
+      "base-uri 'self'",
+      // Restrict form submissions to own origin + PayFast redirect flow
+      "form-action 'self' https://www.payfast.co.za https://sandbox.payfast.co.za",
+      // Upgrade any accidental http:// sub-resource requests
+      "upgrade-insecure-requests",
+    ].join("; ");
+
     return [
       {
         source: "/(.*)",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+          { key: "Content-Security-Policy",   value: csp },
+          { key: "X-Content-Type-Options",    value: "nosniff" },
+          { key: "X-Frame-Options",           value: "DENY" },
+          { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy",        value: "camera=(self), microphone=(), geolocation=()" },
         ],
       },
     ];

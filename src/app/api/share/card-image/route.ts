@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { createElement as h } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "edge";
 
@@ -454,7 +455,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
-    console.error("Error generating APS card image:", error);
+    Sentry.captureException(error);
     return NextResponse.json({ error: "Failed to generate image" }, { status: 500 });
   }
 }

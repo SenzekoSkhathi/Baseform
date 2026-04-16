@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { sendEmail } from "@/lib/email/sender";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com";
@@ -79,6 +80,6 @@ export async function sendWelcomeEmail(to: string, firstName: string): Promise<v
     });
   } catch (err) {
     // Non-fatal — account is created regardless
-    console.error("[sendWelcomeEmail] Resend error:", err);
+    Sentry.captureException(err);
   }
 }

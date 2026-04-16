@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,7 +64,7 @@ export async function POST() {
 
     return NextResponse.json({ sent: true });
   } catch (err) {
-    console.error("[email/welcome] Failed:", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Failed to send welcome email" }, { status: 500 });
   }
 }

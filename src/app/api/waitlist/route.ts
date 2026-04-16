@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   );
 
   if (error) {
-    console.error("[waitlist] insert error:", error.message);
+    Sentry.captureException(error);
     return NextResponse.json({ error: "Could not save. Please try again." }, { status: 500 });
   }
 

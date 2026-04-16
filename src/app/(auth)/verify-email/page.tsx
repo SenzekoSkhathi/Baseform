@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/client";
 
 export default function VerifyEmailPage() {
@@ -24,7 +25,7 @@ export default function VerifyEmailPage() {
     try {
       await fetch("/api/email/welcome", { method: "POST" });
     } catch (e) {
-      console.error("[verify-email] Welcome trigger failed:", e);
+      Sentry.captureException(e);
     }
   }
 
@@ -106,7 +107,7 @@ export default function VerifyEmailPage() {
 
         setVerifyingLink(false);
       } catch (e) {
-        console.error("[verify-email] Link verification failed:", e);
+        Sentry.captureException(e);
         setError(e instanceof Error ? e.message : "Could not complete verification.");
         setVerifyingLink(false);
       }

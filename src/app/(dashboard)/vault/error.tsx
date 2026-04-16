@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 
 export default function VaultError({
@@ -11,7 +12,7 @@ export default function VaultError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[vault]", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

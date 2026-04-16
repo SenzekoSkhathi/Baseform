@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle } from "lucide-react";
 
 export default function TrackerError({
@@ -11,7 +12,7 @@ export default function TrackerError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[tracker]", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

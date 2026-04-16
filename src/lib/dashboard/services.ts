@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { Programme } from "./types";
 
@@ -14,7 +15,7 @@ export async function fetchUniversities() {
     .order("name");
   
   if (error) {
-    console.error("Failed to fetch universities:", error);
+    Sentry.captureException(error);
     return [];
   }
   
@@ -42,7 +43,7 @@ export async function fetchProgrammes(universityId?: string): Promise<Programme[
   const { data, error } = await query.order("universities(name)").order("name");
   
   if (error) {
-    console.error("Failed to fetch programmes:", error);
+    Sentry.captureException(error);
     return [];
   }
   
@@ -81,7 +82,7 @@ export async function searchProgrammes(query: string): Promise<Programme[]> {
     .order("name");
   
   if (error) {
-    console.error("Failed to search programmes:", error);
+    Sentry.captureException(error);
     return [];
   }
   

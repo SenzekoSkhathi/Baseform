@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/ui/Logo";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
@@ -88,7 +89,7 @@ export default function ResetPasswordPage() {
           setLinkError("This link may have expired.");
         }
       } catch (recoveryError) {
-        console.error("[reset-password] Recovery bootstrap failed:", recoveryError);
+        Sentry.captureException(recoveryError);
         if (!cancelled) {
           setChecking(false);
           setReady(false);

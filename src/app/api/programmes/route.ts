@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
 
       const { data, error } = await dbQuery;
       if (error) {
-        console.error("Database error:", error);
+        Sentry.captureException(error);
         return NextResponse.json({ error: "Failed to fetch programmes" }, { status: 500 });
       }
 
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
 
       const { data, error } = await dbQuery;
       if (error) {
-        console.error("Database error:", error);
+        Sentry.captureException(error);
         return NextResponse.json({ error: "Failed to fetch programmes" }, { status: 500 });
       }
 
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=600" },
     });
   } catch (error) {
-    console.error("API error:", error);
+    Sentry.captureException(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

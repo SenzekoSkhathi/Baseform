@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
 
   if (!pfRes.ok) {
     const text = await pfRes.text().catch(() => "");
-    console.error("PayFast onsite error:", pfRes.status, text);
+    Sentry.captureException(new Error(`PayFast onsite error ${pfRes.status}: ${text}`));
     return NextResponse.json(
       { error: "PayFast rejected the payment request. Check your credentials and passphrase." },
       { status: 502 }
