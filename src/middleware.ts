@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isFreePlanTier } from "@/lib/access/tiers";
 import { hasAdminAccess } from "@/lib/admin/access";
-import { checkRateLimit, strictLimiter, standardLimiter, aiLimiter } from "@/lib/ratelimit";
 
 // ---------------------------------------------------------------------------
 // Route-tier classification for rate limiting
@@ -13,6 +12,12 @@ import { checkRateLimit, strictLimiter, standardLimiter, aiLimiter } from "@/lib
 const STRICT_ROUTES   = ["/api/waitlist", "/api/auth/signup/profile"];
 const AI_ROUTES       = ["/api/basebot"];
 const STANDARD_ROUTES = ["/api/"]; // catch-all for remaining API routes
+
+const RATE_LIMITS: Record<string, { requests: number; window: string }> = {
+  strict:   { requests: 10,  window: "1 m" },
+  ai:       { requests: 10,  window: "1 m" },
+  standard: { requests: 60,  window: "1 m" },
+};
 
 function classifyRoute(pathname: string) {
   if (STRICT_ROUTES.some((p) => pathname.startsWith(p)))   return "strict";
@@ -29,6 +34,33 @@ function getIp(req: NextRequest): string {
   );
 }
 
+// Dynamically imports Upstash only when env vars are present, keeping the
+// Edge bundle free of the package when Upstash is not configured.
+async function applyRateLimit(tier: string, ip: string): Promise<boolean> {
+  const url   = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return false; // not configured — allow all
+
+  try {
+    const { Ratelimit } = await import("@upstash/ratelimit");
+    const { Redis }     = await import("@upstash/redis");
+
+    const redis   = new Redis({ url, token });
+    const { requests, window } = RATE_LIMITS[tier];
+    const limiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(requests, window as `${number} ${"s" | "m" | "h" | "d"}`),
+      analytics: false,
+      prefix: "bf_rl",
+    });
+
+    const { success } = await limiter.limit(`${tier}:${ip}`);
+    return !success; // true = limited
+  } catch {
+    return false; // if Upstash is unreachable, fail open
+  }
+}
+
 const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin"];
 const AUTH_PAGES = ["/login", "/signup"];
 
@@ -38,14 +70,7 @@ export async function middleware(request: NextRequest) {
   // --- Rate limiting (runs before auth, no DB hit required) ----------------
   const tier = classifyRoute(pathname);
   if (tier) {
-    const limiter =
-      tier === "strict"   ? strictLimiter   :
-      tier === "ai"       ? aiLimiter       :
-      standardLimiter;
-
-    const ip = getIp(request);
-    const { limited } = await checkRateLimit(limiter, `${tier}:${ip}`);
-
+    const limited = await applyRateLimit(tier, getIp(request));
     if (limited) {
       return new NextResponse(
         JSON.stringify({ error: "Too many requests. Please slow down." }),
