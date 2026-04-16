@@ -29,17 +29,17 @@ const nextConfig: NextConfig = {
     const csp = [
       "default-src 'self'",
       // Next.js inline scripts + PayFast engine.js (onsite payments)
-      "script-src 'self' 'unsafe-inline' https://www.payfast.co.za https://sandbox.payfast.co.za",
-      // Tailwind / CSS-in-JS inline styles
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
+      // Tailwind / CSS-in-JS inline styles + PayFast engine.css
+      "style-src 'self' 'unsafe-inline' https://payment.payfast.io",
       // University logos (Wikimedia), Supabase storage, blob/data URLs for share card
       "img-src 'self' data: blob: https://upload.wikimedia.org https://*.supabase.co",
       // No external fonts — system stack only
       "font-src 'self' data:",
       // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend, PayFast
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform.onrender.com https://www.payfast.co.za https://sandbox.payfast.co.za",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform.onrender.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Vault PDF (blob:), Office preview, PayFast onsite modal
-      "frame-src blob: https://view.officeapps.live.com https://www.payfast.co.za https://sandbox.payfast.co.za",
+      "frame-src blob: https://view.officeapps.live.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Service worker (PWA)
       "worker-src 'self' blob:",
       // Block all plugin content
