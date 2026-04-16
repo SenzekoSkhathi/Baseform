@@ -61,7 +61,7 @@ async function applyRateLimit(tier: string, ip: string): Promise<boolean> {
   }
 }
 
-const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin"];
+const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin", "/targets", "/vault", "/discover"];
 const AUTH_PAGES = ["/login", "/signup"];
 
 export async function middleware(request: NextRequest) {

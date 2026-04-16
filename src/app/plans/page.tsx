@@ -48,6 +48,19 @@ function PlansPageInner() {
   const [plans, setPlans] = useState<Plan[]>(() => mapPlans(DEFAULT_PLANS));
   const [selected, setSelected] = useState<PlanId>(paramPlan);
   const [loading, setLoading] = useState(false);
+  const [gradeYear, setGradeYear] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("bf_onboarding");
+      const onboarding = raw ? JSON.parse(raw) : null;
+      if (onboarding?.gradeYear) setGradeYear(onboarding.gradeYear);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const isGrade11 = gradeYear === "Grade 11";
 
   const selectedPlan = useMemo(
     () => plans.find((p) => p.id === selected) ?? plans[0],
@@ -148,11 +161,22 @@ function PlansPageInner() {
             <Logo variant="lockup" size="md" className="mb-7" />
 
             <h1 className="text-3xl font-black leading-tight text-slate-900">
-              Choose your plan
+              {isGrade11 ? "Choose your planning tier" : "Choose your plan"}
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Start free and upgrade when you need more power. You can change your plan anytime.
+              {isGrade11
+                ? "Start free and unlock more tools as you prepare. You can upgrade anytime before applications open."
+                : "Start free and upgrade when you need more power. You can change your plan anytime."}
             </p>
+
+            {isGrade11 && (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Planning Mode</p>
+                <p className="mt-1 text-sm text-blue-800">
+                  Your account is set up for Grade 11. You&apos;ll get your projected APS, target programmes, subject gap analysis, and planning tools — all designed to get you ready for Grade 12 applications.
+                </p>
+              </div>
+            )}
 
             <div className="mt-6 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Selected plan</p>

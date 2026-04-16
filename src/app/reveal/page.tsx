@@ -332,18 +332,20 @@ function RevealContent() {
           {gradeYear === "Grade 11" ? (
             <>
               <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-center">
-                <p className="text-sm font-bold text-blue-800">You&apos;re Grade 11 — applications open in 2027</p>
-                <p className="mt-1 text-xs text-blue-600">Join the waitlist and we&apos;ll guide you when the season opens.</p>
+                <p className="text-sm font-bold text-blue-800">You&apos;re in Grade 11 — start planning now</p>
+                <p className="mt-1 text-xs text-blue-600">
+                  Track your projected APS, save target programmes, and build your application strategy before Grade 12.
+                </p>
               </div>
               <Link
-                href={`/waitlist?aps=${aps}&name=${encodeURIComponent(name)}`}
+                href="/signup"
                 className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-4 text-base font-bold text-white shadow-[0_12px_30px_rgba(249,115,22,0.35)] transition-all hover:-translate-y-0.5 hover:bg-orange-600"
               >
-                Join the 2027 waitlist
+                Start planning for free
                 <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
               </Link>
               <p className="mt-3 text-center text-xs text-slate-500">
-                Free · We&apos;ll remind you when applications open
+                Free · No credit card needed · Takes 2 minutes
               </p>
             </>
           ) : (
