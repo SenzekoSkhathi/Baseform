@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const CREDIT_CAP = 300;
 export const WEEKLY_TOP_UP = 100;
+export const GRADE11_WEEKLY_TOP_UP = 150;
 export const PLAN_BONUS = 100;
 
 /** Thresholds (% of weekly allowance used) that trigger notifications. */
@@ -53,7 +54,9 @@ export async function getUserCredits(userId: string): Promise<CreditBalance | nu
   if (!data) return null;
 
   const weeklyUsed = Math.max(0, data.week_start_balance - data.balance);
-  const pctUsed = (weeklyUsed / WEEKLY_TOP_UP) * 100;
+  // Use week_start_balance as denominator so the % is correct for any weekly allowance
+  const allowance = data.week_start_balance > 0 ? data.week_start_balance : WEEKLY_TOP_UP;
+  const pctUsed = (weeklyUsed / allowance) * 100;
   const highestThresholdCrossed = [...CREDIT_THRESHOLDS]
     .reverse()
     .find((t) => pctUsed >= t) ?? null;

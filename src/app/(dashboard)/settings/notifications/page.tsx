@@ -9,5 +9,11 @@ export default async function NotificationsSettingsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  return <NotificationsClient />;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("grade_year")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return <NotificationsClient gradeYear={profile?.grade_year ?? null} />;
 }

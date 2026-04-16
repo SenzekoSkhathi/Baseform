@@ -365,6 +365,7 @@ export async function GET() {
   if (userCredits?.highestThresholdCrossed != null) {
     const pct = userCredits.highestThresholdCrossed;
     const remaining = Math.max(0, userCredits.weekStartBalance - userCredits.weeklyUsed);
+    const weekly = userCredits.weekStartBalance || 100;
 
     // Use last_topped_up_at as timestamp so the ID changes each week
     const weekKey = userCredits.lastToppedUpAt
@@ -372,11 +373,11 @@ export async function GET() {
       : userCredits.planStartDate.slice(0, 10);
 
     const messages: Record<number, { title: string; message: string }> = {
-      25:  { title: "You've used 25% of your weekly credits", message: `${remaining} of your 100 weekly Base Credits remain. You're pacing well — keep it up.` },
+      25:  { title: "You've used 25% of your weekly credits", message: `${remaining} of your ${weekly} weekly Base Credits remain. You're pacing well — keep it up.` },
       50:  { title: "Halfway through your weekly credits", message: `${remaining} Base Credits left this week. Use them wisely and they'll roll over if you don't spend them all.` },
       80:  { title: "80% of weekly credits used", message: `Only ${remaining} Base Credits left for this week. Your next top-up lands next Monday.` },
       90:  { title: "90% of weekly credits used — running low", message: `Just ${remaining} Base Credits remaining. AI features will pause if you hit zero before Monday's top-up.` },
-      95:  { title: "Almost out of weekly credits", message: `Only ${remaining} Base Credit${remaining === 1 ? "" : "s"} left. Monday's top-up of 100 credits is on its way.` },
+      95:  { title: "Almost out of weekly credits", message: `Only ${remaining} Base Credit${remaining === 1 ? "" : "s"} left. Monday's top-up of ${weekly} credits is on its way.` },
     };
 
     const content = messages[pct];

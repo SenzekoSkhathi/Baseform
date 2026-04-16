@@ -1036,8 +1036,8 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
               )}
             </div>
 
-            {/* Gmail connection card */}
-            <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+            {/* Gmail connection card — Grade 12 only (Grade 11 don't track application emails) */}
+            {profile?.grade_year !== "Grade 11" && <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50">
                   <Mail size={16} className="text-blue-500" />
@@ -1159,7 +1159,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
               {gmailScanMsg && (
                 <p className="mt-2 text-[11px] text-gray-500">{gmailScanMsg}</p>
               )}
-            </div>
+            </div>}
 
             <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm space-y-2">
               <button

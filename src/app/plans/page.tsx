@@ -5,59 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Lock, Zap, ChevronLeft } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { DEFAULT_PLANS, GRADE11_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 
 type PlanId = "free" | "essential" | "pro" | "ultra";
-
-// ── Grade 11 plans ─────────────────────────────────────────────────────────────
-const GRADE11_PLANS: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: "R0",
-    period: "/month",
-    tagline: "Get started",
-    features: [
-      "Projected APS calculator",
-      "Basic degree & university discovery",
-      "Subject requirement checker",
-      "Secure document vault",
-    ],
-    available: true,
-    recommended: false,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "R39.99",
-    period: "/month",
-    tagline: "Most popular",
-    features: [
-      "Everything in Free",
-      "Comprehensive subject gap analysis",
-      "Interactive AI Planning Coach (BaseBot)",
-      "Early bursary matching & preparation",
-      "Unlimited program compatibility tracking",
-    ],
-    available: true,
-    recommended: true,
-  },
-  {
-    id: "ultra",
-    name: "Ultra",
-    price: "R299",
-    period: "/month",
-    tagline: "Coming soon",
-    features: [
-      "Everything in Pro",
-      "1-on-1 career exploration & mentorship",
-      "Customized academic roadmap for Grade 12",
-      "Dedicated WhatsApp planning bot",
-    ],
-    available: false,
-    recommended: false,
-  },
-];
 
 type Plan = {
   id: PlanId;
@@ -284,7 +234,7 @@ function PlansPageInner() {
                       router.push("/plans/essential");
                       return;
                     }
-                    setSelected(plan.id);
+                    setSelected(plan.id as PlanId);
                   }}
                   disabled={isLocked}
                   className={`w-full text-left rounded-3xl border p-4 transition-all sm:p-5 ${

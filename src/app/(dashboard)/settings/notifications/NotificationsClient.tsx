@@ -20,7 +20,7 @@ const DEFAULT_PREFS: Prefs = {
 
 type SettingsResponse = { preferences?: Partial<Prefs> };
 
-const TOGGLES: { key: keyof Prefs; title: string; description: string }[] = [
+const TOGGLES_GRADE12: { key: keyof Prefs; title: string; description: string }[] = [
   {
     key: "deadlineAlerts",
     title: "Deadline alerts",
@@ -38,7 +38,26 @@ const TOGGLES: { key: keyof Prefs; title: string; description: string }[] = [
   },
 ];
 
-export default function NotificationsClient() {
+const TOGGLES_GRADE11: { key: keyof Prefs; title: string; description: string }[] = [
+  {
+    key: "deadlineAlerts",
+    title: "Deadline alerts",
+    description: "Get reminders before bursary and programme closing dates.",
+  },
+  {
+    key: "statusUpdates",
+    title: "Planning updates",
+    description: "Get notified when a target programme updates its requirements or APS minimum.",
+  },
+  {
+    key: "weeklySummary",
+    title: "Weekly summary",
+    description: "Receive a compact summary of your planning progress each week.",
+  },
+];
+
+export default function NotificationsClient({ gradeYear }: { gradeYear: string | null }) {
+  const TOGGLES = gradeYear === "Grade 11" ? TOGGLES_GRADE11 : TOGGLES_GRADE12;
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

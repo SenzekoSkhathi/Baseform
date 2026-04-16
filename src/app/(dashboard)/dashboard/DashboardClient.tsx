@@ -8,7 +8,6 @@ import SubjectGapCard from "@/components/dashboard/SubjectGapCard";
 import CountdownCard from "@/components/dashboard/CountdownCard";
 import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
-import { Lock, TrendingUp } from "lucide-react";
 
 type Profile = {
   full_name: string;
@@ -160,7 +159,6 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
   const firstName = profile?.full_name?.trim().split(" ")[0] || null;
   const rating = apsRating(aps);
   const gradeYear = profile?.grade_year ?? null;
-  const isGrade11Free = gradeYear === "Grade 11" && (profile?.tier ?? "free") === "free";
   const schoolName = profile?.school_name ?? null;
   const profileIncomplete = !firstName;
   const tiles = gradeYear === "Grade 11" ? TILES_GRADE11 : TILES_GRADE12;
@@ -284,36 +282,7 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
             </div>
             {subjects.length > 0 && (
               <div data-tour="subject-gap-card">
-                {isGrade11Free ? (
-                  <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-2 border-b border-gray-50 px-4 py-3">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50">
-                        <TrendingUp size={14} className="text-emerald-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900">APS Gap Analyser</p>
-                        <p className="text-[10px] font-medium text-gray-400">Subjects closest to the next APS point</p>
-                      </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-600">
-                        <Lock size={9} />
-                        Pro
-                      </span>
-                    </div>
-                    <div className="px-4 py-5 text-center">
-                      <p className="text-sm text-gray-500 leading-relaxed">
-                        See which subjects are closest to earning you another APS point — and where to focus first.
-                      </p>
-                      <Link
-                        href="/plans?plan=pro"
-                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
-                      >
-                        Unlock with Pro
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <SubjectGapCard subjects={subjects} />
-                )}
+                <SubjectGapCard subjects={subjects} />
               </div>
             )}
           </section>

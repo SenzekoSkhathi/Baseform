@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/components/ui/Logo";
-import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { DEFAULT_PLANS, GRADE11_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 import {
   ESSENTIAL_BILLING_OPTIONS,
   normalizeBillingTermMonths,
@@ -54,6 +54,7 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [gradeYear, setGradeYear] = useState<string | null>(null);
   const [planMap, setPlanMap] = useState<Record<string, PublicPlan>>(() =>
     mapPlans(DEFAULT_PLANS)
   );
@@ -81,23 +82,44 @@ export default function PaymentPage() {
     return planData?.period ?? "";
   }, [plan, essentialOption, planData]);
 
-  // Load plan config from site API
+  // Resolve grade year from profile, then set the correct plan prices
   useEffect(() => {
-    const controller = new AbortController();
-    async function load() {
+    async function resolveGrade() {
       try {
-        const res = await fetch("/api/site-config", { signal: controller.signal });
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("grade_year")
+          .eq("id", user.id)
+          .maybeSingle();
+        const grade = profile?.grade_year ?? null;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setGradeYear(grade);
+        if (grade === "Grade 11") {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setPlanMap(mapPlans(GRADE11_PLANS));
+          return;
+        }
+      } catch {
+        // fall through to site-config fetch
+      }
+
+      // Grade 12 / unknown: load from site config
+      try {
+        const res = await fetch("/api/site-config");
         if (!res.ok) return;
         const payload = await res.json();
         if (Array.isArray(payload?.plans)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setPlanMap(mapPlans(payload.plans as PublicPlan[]));
         }
       } catch {
         // keep defaults
       }
     }
-    void load();
-    return () => controller.abort();
+    void resolveGrade();
   }, []);
 
   // Handle PayFast return callbacks via URL status param

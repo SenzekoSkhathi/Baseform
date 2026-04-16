@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
-import { getUserCredits, getCreditTransactions, CREDIT_CAP } from "@/lib/credits";
+import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
+import { getUserCredits, getCreditTransactions, CREDIT_CAP, WEEKLY_TOP_UP, GRADE11_WEEKLY_TOP_UP } from "@/lib/credits";
 import { BarChart2, FileText, FolderOpen, Layers, Zap } from "lucide-react";
 
 export const metadata = { title: "Usage — Settings" };
@@ -113,19 +113,26 @@ export default async function UsagePage() {
   // Fetch profile (tier + joined date)
   const { data: profile } = await admin
     .from("profiles")
-    .select("tier, created_at")
+    .select("tier, grade_year, created_at")
     .eq("id", user.id)
     .maybeSingle();
 
   const tier = normalizeTier((profile as { tier?: unknown } | null)?.tier);
-  const plan = DEFAULT_PLANS.find((p) => p.slug === tier) ?? DEFAULT_PLANS[0];
+  const isGrade11 = (profile as { grade_year?: string } | null)?.grade_year === "Grade 11";
+  const planPool = isGrade11 ? GRADE11_PLANS : DEFAULT_PLANS;
+  const plan = planPool.find((p) => p.slug === tier) ?? planPool[0];
   const joinedAt = (profile as { created_at?: string } | null)?.created_at;
 
-  // Fetch application count
-  const { count: appCount } = await supabase
-    .from("applications")
-    .select("id", { count: "exact", head: true })
-    .eq("student_id", user.id);
+  // Fetch activity count — applications for Grade 12, targets for Grade 11
+  const { count: appCount } = isGrade11
+    ? await supabase
+        .from("targets")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+    : await supabase
+        .from("applications")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", user.id);
 
   // Fetch vault files
   const VALID_CATEGORIES = [
@@ -155,8 +162,10 @@ export default async function UsagePage() {
   const vaultPct = vaultLimit ? Math.round((vaultBytes / vaultLimit) * 100) : null;
   const vaultLocked = tier === "free";
 
-  // Credits (essential plan only)
-  const [userCredits, creditTransactions] = tier === "essential"
+  // Credits: Essential (Grade 12) or Pro (Grade 11)
+  const hasCredits = (!isGrade11 && tier === "essential") || (isGrade11 && tier === "pro");
+  const weeklyAllowance = isGrade11 ? GRADE11_WEEKLY_TOP_UP : WEEKLY_TOP_UP;
+  const [userCredits, creditTransactions] = hasCredits
     ? await Promise.all([getUserCredits(user.id), getCreditTransactions(user.id, 10)])
     : [null, []];
 
@@ -188,7 +197,7 @@ export default async function UsagePage() {
       <div className="grid gap-3 sm:grid-cols-2">
         <UsageStat
           icon={Layers}
-          label="Applications tracked"
+          label={isGrade11 ? "Targets saved" : "Applications tracked"}
           value={String(appCount ?? 0)}
           sub={appLimit ? `${appLimit - (appCount ?? 0)} remaining` : "Unlimited"}
           used={appPct ?? undefined}
@@ -221,8 +230,8 @@ export default async function UsagePage() {
         />
       </div>
 
-      {/* Base Credits (essential only) */}
-      {tier === "essential" && (
+      {/* Base Credits — Grade 12 Essential or Grade 11 Pro */}
+      {hasCredits && (
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -231,7 +240,7 @@ export default async function UsagePage() {
               </span>
               <div>
                 <p className="text-sm font-bold text-gray-900">Base Credits</p>
-                <p className="text-[11px] text-gray-400">Powers AI features — refills 100/week, capped at {CREDIT_CAP}</p>
+                <p className="text-[11px] text-gray-400">Powers AI features — refills {weeklyAllowance}/week, capped at {CREDIT_CAP}</p>
               </div>
             </div>
             <span className="text-2xl font-black text-gray-900">
@@ -252,9 +261,9 @@ export default async function UsagePage() {
                   style={{ width: `${Math.round((userCredits.balance / CREDIT_CAP) * 100)}%` }}
                 />
               </div>
-              {userCredits.balance <= 20 && (
+              {userCredits.balance <= Math.round(weeklyAllowance * 0.2) && (
                 <p className="mt-1.5 text-xs text-red-500 font-medium">
-                  Running low — your weekly top-up of 100 credits lands every Monday.
+                  Running low — your weekly top-up of {weeklyAllowance} credits lands every Monday.
                 </p>
               )}
             </div>

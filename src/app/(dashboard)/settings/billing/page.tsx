@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CreditCard, Download, ShieldCheck, Sparkles } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { DEFAULT_PLANS, GRADE11_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
 
 export const metadata = { title: "Billing — Settings" };
 
@@ -23,12 +23,12 @@ function normalizeTier(value: string | undefined): string {
   return ["essential", "pro", "ultra", "free"].includes(tier) ? tier : "free";
 }
 
-function findPlan(slug: string): PublicPlan | undefined {
-  return DEFAULT_PLANS.find((p) => p.slug === slug);
+function findPlanInPool(slug: string, pool: PublicPlan[]): PublicPlan | undefined {
+  return pool.find((p) => p.slug === slug);
 }
 
-function toPlanLabel(slug: string): string {
-  return findPlan(slug)?.name ?? slug;
+function toPlanLabel(slug: string, pool: PublicPlan[]): string {
+  return findPlanInPool(slug, pool)?.name ?? slug;
 }
 
 function statusBadge(status: string) {
@@ -46,7 +46,7 @@ export default async function BillingPage() {
 
   const admin = createAdminClient();
   const [{ data: profile }, { data: history }] = await Promise.all([
-    admin.from("profiles").select("tier").eq("id", user.id).maybeSingle(),
+    admin.from("profiles").select("tier, grade_year").eq("id", user.id).maybeSingle(),
     admin
       .from("billing_events")
       .select("id, plan_slug, amount_zar, status, term_months, term_label, payfast_payment_id, created_at")
@@ -56,7 +56,9 @@ export default async function BillingPage() {
   ]);
 
   const tier = normalizeTier((profile as { tier?: string } | null)?.tier);
-  const currentPlan = findPlan(tier) ?? DEFAULT_PLANS[0];
+  const isGrade11 = (profile as { grade_year?: string } | null)?.grade_year === "Grade 11";
+  const planPool = isGrade11 ? GRADE11_PLANS : DEFAULT_PLANS;
+  const currentPlan = planPool.find((p) => p.slug === tier) ?? planPool[0];
   const paymentHistory = (history ?? []) as BillingEvent[];
   const latestPaid = paymentHistory.find((e) => e.status.toLowerCase() === "complete");
 
@@ -102,11 +104,11 @@ export default async function BillingPage() {
             </Link>
           ) : (
             <Link
-              href="/plans/essential"
+              href={isGrade11 ? "/plans?plan=pro" : "/plans/essential"}
               className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
             >
               <ShieldCheck size={14} />
-              Upgrade to Essential
+              {isGrade11 ? "Upgrade to Pro" : "Upgrade to Essential"}
             </Link>
           )}
         </div>
@@ -126,7 +128,7 @@ export default async function BillingPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-gray-900 truncate">
-                        {toPlanLabel(entry.plan_slug)}
+                        {toPlanLabel(entry.plan_slug, planPool)}
                       </p>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>
                         {badge.label}

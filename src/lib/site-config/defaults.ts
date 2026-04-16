@@ -25,6 +25,61 @@ export type SiteConfig = {
   homeStats: HomeStat[];
 };
 
+export const GRADE11_PLANS: PublicPlan[] = [
+  {
+    id: "free",
+    slug: "free",
+    name: "Free",
+    price: "R0",
+    period: "/month",
+    tagline: "Get started",
+    features: [
+      "Projected APS calculator",
+      "Basic degree & university discovery",
+      "Subject requirement checker",
+      "Secure document vault",
+      "APS gap analyser",
+    ],
+    available: true,
+    recommended: false,
+    sortOrder: 0,
+  },
+  {
+    id: "pro",
+    slug: "pro",
+    name: "Pro",
+    price: "R39.99",
+    period: "/month",
+    tagline: "Most popular",
+    features: [
+      "Everything in Free",
+      "Interactive AI Planning Coach (BaseBot)",
+      "Early bursary matching & preparation",
+      "Unlimited program compatibility tracking",
+    ],
+    available: true,
+    recommended: true,
+    sortOrder: 1,
+  },
+  {
+    id: "ultra",
+    slug: "ultra",
+    name: "Ultra",
+    price: "R299",
+    period: "/month",
+    tagline: "Coming soon",
+    features: [
+      "Everything in Pro",
+      "1-on-1 career exploration & mentorship",
+      "Customized academic roadmap for Grade 12",
+      "Dedicated WhatsApp planning bot",
+    ],
+    available: false,
+    recommended: false,
+    sortOrder: 2,
+  },
+];
+
 export const DEFAULT_PLANS: PublicPlan[] = [
   {
     id: "free",
@@ -61,7 +116,7 @@ export const DEFAULT_PLANS: PublicPlan[] = [
     id: "pro",
     slug: "pro",
     name: "Pro",
-    price: "R129",
+    price: "R249.99",
     period: "/month",
     tagline: "Coming soon",
     features: [
