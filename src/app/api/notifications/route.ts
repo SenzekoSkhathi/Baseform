@@ -181,7 +181,7 @@ export async function GET() {
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [appsResult, emailLogsResult, emailConnResult, userCredits] = await Promise.all([
+  const [appsResult, emailLogsResult, emailConnResult, userCredits, profileResult] = await Promise.all([
     supabase
       .from("applications")
       .select(`
@@ -212,6 +212,12 @@ export async function GET() {
       .maybeSingle(),
 
     getUserCredits(user.id),
+
+    supabase
+      .from("profiles")
+      .select("notifications_last_read_at")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
   if (appsResult.error) {
@@ -406,5 +412,17 @@ export async function GET() {
   }
 
   notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  return NextResponse.json(notifications);
+
+  // Server-side read state: anything timestamped after notifications_last_read_at
+  // is unread. This survives across devices and localStorage wipes.
+  const lastReadAtRaw = (profileResult?.data as { notifications_last_read_at?: string | null } | null)
+    ?.notifications_last_read_at ?? null;
+  const lastReadAt = lastReadAtRaw ? new Date(lastReadAtRaw).getTime() : 0;
+  const unreadCount = notifications.filter((n) => new Date(n.timestamp).getTime() > lastReadAt).length;
+
+  return NextResponse.json({
+    items: notifications,
+    lastReadAt: lastReadAtRaw,
+    unreadCount,
+  });
 }

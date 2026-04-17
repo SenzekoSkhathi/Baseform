@@ -14,26 +14,13 @@ type NotificationItem = {
   href: string;
 };
 
-const READ_KEY = "baseform.notifications.read";
-
-function readIdsFromStorage(): string[] {
-  try {
-    const raw = window.localStorage.getItem(READ_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveReadIds(ids: string[]) {
-  window.localStorage.setItem(READ_KEY, JSON.stringify(ids));
-}
-
 export default function NotificationsClient() {
   const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [readIds, setReadIds] = useState<string[]>([]);
+  // Timestamp captured from the server when the page loads — any notification
+  // whose timestamp exceeds this was unread at the moment we arrived, which is
+  // what the per-item "unread" indicator should reflect for this session.
+  const [initialLastReadAt, setInitialLastReadAt] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   function handleBack() {
@@ -45,19 +32,18 @@ export default function NotificationsClient() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReadIds(readIdsFromStorage());
     fetch("/api/notifications")
       .then((r) => r.json())
       .then((data) => {
-        const fetched: NotificationItem[] = Array.isArray(data) ? data : [];
+        const fetched: NotificationItem[] = Array.isArray(data?.items) ? data.items : [];
         setItems(fetched);
-        // Auto-mark all as read the moment the page is opened
-        const allIds = fetched.map((i) => i.id);
-        saveReadIds(allIds);
-        setReadIds(allIds);
-        // Tell the bell icon in the same tab to clear its badge immediately
-        window.dispatchEvent(new CustomEvent("notifications:read"));
+        setInitialLastReadAt(data?.lastReadAt ? new Date(data.lastReadAt).getTime() : 0);
+
+        // Mark everything read on the server, then tell the bell icon in the
+        // same tab to clear its badge immediately.
+        void fetch("/api/notifications/mark-read", { method: "POST" }).then(() => {
+          window.dispatchEvent(new CustomEvent("notifications:read"));
+        });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -99,7 +85,7 @@ export default function NotificationsClient() {
             </div>
           ) : (
             items.map((item) => {
-              const wasUnread = !readIds.includes(item.id);
+              const wasUnread = new Date(item.timestamp).getTime() > initialLastReadAt;
               const accent =
                 item.type === "deadline"
                   ? "border-l-rose-400"

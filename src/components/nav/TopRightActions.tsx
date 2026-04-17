@@ -3,50 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Settings } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-
-type NotificationItem = {
-  id: string;
-};
-
-const READ_KEY = "baseform.notifications.read";
-
-function getReadIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(READ_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+import { useEffect, useState } from "react";
 
 export default function TopRightActions() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [readIds, setReadIds] = useState<string[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const pathname = usePathname();
   const showActions = pathname === "/dashboard" || pathname === "/profile";
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReadIds(getReadIds());
-    fetch("/api/notifications")
-      .then((r) => r.json())
-      .then((data) => setNotifications(Array.isArray(data) ? data : []))
-      .catch(() => setNotifications([]));
+    const load = () =>
+      fetch("/api/notifications")
+        .then((r) => r.json())
+        .then((data) => setUnreadCount(typeof data?.unreadCount === "number" ? data.unreadCount : 0))
+        .catch(() => setUnreadCount(0));
+
+    void load();
 
     // Clear badge immediately when the notifications page marks everything read
-    const handleRead = () => setReadIds(getReadIds());
+    const handleRead = () => setUnreadCount(0);
     window.addEventListener("notifications:read", handleRead);
     return () => window.removeEventListener("notifications:read", handleRead);
   }, []);
-
-  const unreadCount = useMemo(() => {
-    const read = new Set(readIds);
-    return notifications.filter((n) => !read.has(n.id)).length;
-  }, [notifications, readIds]);
 
   if (!showActions) return null;
 
