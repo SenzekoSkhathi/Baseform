@@ -42,12 +42,22 @@ type Category = (typeof CATEGORIES)[number]["id"];
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 const MAX_SCAN_PAGES = 8;
+
+// Scanner output is optimised for *readability* rather than aggressive
+// compression. 2000 px on the long side + q=0.88 yields ~0.8–1.4 MB per page
+// and renders clean body text in the final PDF. The web-worker flag keeps
+// the main thread responsive on low-end Android devices.
 const SCAN_IMAGE_COMPRESSION_OPTIONS = {
-  maxSizeMB: 0.55,
-  maxWidthOrHeight: 1280,
+  maxSizeMB: 1.4,
+  maxWidthOrHeight: 2000,
   useWebWorker: true,
-  initialQuality: 0.74,
+  initialQuality: 0.88,
 } as const;
+
+// Long side used when rendering the final PDF page. Matches A4 at ~200 DPI,
+// which is the sweet spot for scanned documents — text stays crisp without
+// inflating file size.
+const PDF_PAGE_MAX_SIDE = 2000;
 
 function categoryMeta(id: Category) {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
@@ -163,69 +173,14 @@ function clampByte(value: number): number {
   return Math.round(value);
 }
 
-function detectDocumentBounds(gray: Uint8ClampedArray, width: number, height: number) {
-  const cornerSample = Math.max(8, Math.round(Math.min(width, height) * 0.04));
-  const sampleStep = 2;
-
-  const read = (x: number, y: number) => gray[y * width + x];
-  let sum = 0;
-  let count = 0;
-
-  for (let y = 0; y < cornerSample; y += sampleStep) {
-    for (let x = 0; x < cornerSample; x += sampleStep) {
-      sum += read(x, y);
-      sum += read(width - 1 - x, y);
-      sum += read(x, height - 1 - y);
-      sum += read(width - 1 - x, height - 1 - y);
-      count += 4;
-    }
-  }
-
-  const background = count > 0 ? sum / count : 240;
-  const delta = 18;
-
-  let minX = width;
-  let minY = height;
-  let maxX = -1;
-  let maxY = -1;
-  let matches = 0;
-
-  for (let y = 0; y < height; y += 2) {
-    for (let x = 0; x < width; x += 2) {
-      const pixel = read(x, y);
-      if (Math.abs(pixel - background) <= delta) continue;
-
-      matches += 1;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-  }
-
-  if (matches < 80 || maxX <= minX || maxY <= minY) {
-    return { x: 0, y: 0, width, height };
-  }
-
-  const detectedWidth = maxX - minX + 1;
-  const detectedHeight = maxY - minY + 1;
-  const detectedArea = detectedWidth * detectedHeight;
-  const fullArea = width * height;
-
-  // Fallback when detection is unreliable (too small/too large relative to frame).
-  if (detectedArea < fullArea * 0.18 || detectedArea > fullArea * 0.98) {
-    return { x: 0, y: 0, width, height };
-  }
-
-  const pad = Math.max(10, Math.round(Math.min(width, height) * 0.02));
-  const x = Math.max(0, minX - pad);
-  const y = Math.max(0, minY - pad);
-  const w = Math.min(width - x, detectedWidth + pad * 2);
-  const h = Math.min(height - y, detectedHeight + pad * 2);
-
-  return { x, y, width: w, height: h };
-}
-
+/**
+ * Load an already-edited scan page into a canvas for the PDF writer.
+ *
+ * Important: this function does NOT re-crop or re-enhance the image. The
+ * editor has already produced a finished page; re-processing it would stomp
+ * on the user's filter/quad-crop choices and compound contrast enhancements.
+ * We only downscale if the image is larger than PDF_PAGE_MAX_SIDE.
+ */
 async function loadImageForPdf(file: File): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   const objectUrl = URL.createObjectURL(file);
 
@@ -237,9 +192,7 @@ async function loadImageForPdf(file: File): Promise<{ canvas: HTMLCanvasElement;
       img.src = objectUrl;
     });
 
-    // Keep scan pages lightweight for lower-memory phones.
-    const maxSide = 1100;
-    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const scale = Math.min(1, PDF_PAGE_MAX_SIDE / Math.max(image.width, image.height));
     const width = Math.max(1, Math.round(image.width * scale));
     const height = Math.max(1, Math.round(image.height * scale));
 
@@ -247,55 +200,14 @@ async function loadImageForPdf(file: File): Promise<{ canvas: HTMLCanvasElement;
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not process image.");
 
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, width, height);
     context.drawImage(image, 0, 0, width, height);
 
-    const source = context.getImageData(0, 0, width, height);
-    const rgba = source.data;
-    const gray = new Uint8ClampedArray(width * height);
-
-    for (let i = 0, p = 0; i < rgba.length; i += 4, p += 1) {
-      gray[p] = clampByte(rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114);
-    }
-
-    const bounds = detectDocumentBounds(gray, width, height);
-    const outputCanvas = document.createElement("canvas");
-    outputCanvas.width = bounds.width;
-    outputCanvas.height = bounds.height;
-    const outputContext = outputCanvas.getContext("2d", { willReadFrequently: true });
-    if (!outputContext) throw new Error("Could not process image.");
-
-    const output = outputContext.createImageData(bounds.width, bounds.height);
-    const outputRgba = output.data;
-
-    for (let y = 0; y < bounds.height; y += 1) {
-      for (let x = 0; x < bounds.width; x += 1) {
-        const sourceIndex = (bounds.y + y) * width + (bounds.x + x);
-        const targetIndex = (y * bounds.width + x) * 4;
-        const base = gray[sourceIndex];
-
-        // Scanner-style cleanup: grayscale + boosted contrast with brighter whites.
-        let enhanced = clampByte((base - 128) * 1.45 + 128 + 6);
-        if (enhanced > 222) enhanced = 255;
-
-        outputRgba[targetIndex] = enhanced;
-        outputRgba[targetIndex + 1] = enhanced;
-        outputRgba[targetIndex + 2] = enhanced;
-        outputRgba[targetIndex + 3] = 255;
-      }
-    }
-
-    outputContext.putImageData(output, 0, 0);
-
-    return {
-      canvas: outputCanvas,
-      width: bounds.width,
-      height: bounds.height,
-    };
+    return { canvas, width, height };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -323,7 +235,8 @@ async function buildPdfFromImages(images: File[]): Promise<Blob> {
     const y = (pageHeight - renderHeight) / 2;
 
     // Pass canvas directly to avoid huge Base64 strings in JS memory.
-    pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "FAST");
+    // MEDIUM compression keeps scanned text readable without bloating the PDF.
+    pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "MEDIUM");
 
     // Release backing pixels as soon as page has been added.
     image.canvas.width = 1;
@@ -406,13 +319,13 @@ async function rotateScanImageFile(input: File, direction: "left" | "right"): Pr
           return;
         }
         resolve(result);
-      }, "image/jpeg", 0.84);
+      }, "image/jpeg", 0.92);
     });
 
-    const normalizedBlob = await imageCompression(new File([rotatedBlob], input.name, { type: "image/jpeg" }), {
-      ...SCAN_IMAGE_COMPRESSION_OPTIONS,
-      maxSizeMB: 0.45,
-    });
+    const normalizedBlob = await imageCompression(
+      new File([rotatedBlob], input.name, { type: "image/jpeg" }),
+      SCAN_IMAGE_COMPRESSION_OPTIONS,
+    );
 
     const baseName = input.name.replace(/\.[^.]+$/, "") || "scan";
     return new File([normalizedBlob], `${baseName}.jpg`, {
@@ -667,7 +580,11 @@ export default function VaultClient({ initialFiles }: Props) {
 
     setCameraLoading(true);
     try {
-      const maxSide = 1280;
+      // Capture at near-native camera resolution so the editor has enough
+      // pixels for quad-warp + filters without upsampling. 2400 px on the
+      // long side is large enough for readable text after cropping yet
+      // stays within typical Android Chrome canvas memory limits.
+      const maxSide = 2400;
       const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
       const width = Math.max(1, Math.round(sourceWidth * scale));
       const height = Math.max(1, Math.round(sourceHeight * scale));
@@ -689,7 +606,7 @@ export default function VaultClient({ initialFiles }: Props) {
             return;
           }
           resolve(result);
-        }, "image/jpeg", 0.74);
+        }, "image/jpeg", 0.92);
       });
 
       // Release canvas backing pixels immediately after encoding.
@@ -1161,57 +1078,68 @@ export default function VaultClient({ initialFiles }: Props) {
             {scanDraftPages.length === 0 ? (
               <p className="mt-3 text-xs text-gray-500">No pages yet. Tap Scan to PDF to capture pages.</p>
             ) : (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {scanDraftPages.map((page, index) => (
-                  <div key={page.id} className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white p-2">
-                    <img
-                      src={page.previewUrl}
-                      alt={`Scanned page ${index + 1}`}
-                      className="h-14 w-14 shrink-0 rounded-lg border border-gray-200 object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-gray-800">Page {index + 1}</p>
-                      <p className="truncate text-[11px] text-gray-400">{page.file.name}</p>
-                      <div className="mt-1 flex items-center gap-2">
+                  <div
+                    key={page.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditingPage(page)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setEditingPage(page);
+                      }
+                    }}
+                    className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm transition hover:border-orange-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  >
+                    {/* Page preview */}
+                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-gray-100">
+                      <img
+                        src={page.previewUrl}
+                        alt={`Scanned page ${index + 1}`}
+                        className="h-full w-full object-contain"
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/55 to-transparent" />
+                      <span className="absolute left-2 top-2 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
+                        {index + 1}
+                      </span>
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/90">
+                        Tap to edit
+                      </span>
+                      {(page.isTextEnhanced || page.isEdited) && (
+                        <span className="absolute right-2 top-2 rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                          {page.isTextEnhanced ? "Enhanced" : "Edited"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Action row — stopPropagation so taps don't open the editor */}
+                    <div
+                      className="flex items-center justify-between border-t border-gray-100 bg-white px-2 py-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => setEditingPage(page)}
-                          disabled={scannerConverting}
-                          className="rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                          onClick={() => moveScanDraftPage(page.id, "up")}
+                          disabled={index === 0 || scannerConverting}
+                          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+                          aria-label={`Move page ${index + 1} up`}
                         >
-                          Edit page
+                          <ArrowUp size={12} />
                         </button>
-                        {page.isTextEnhanced && (
-                          <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                            Enhanced
-                          </span>
-                        )}
-                        {page.isEdited && (
-                          <span className="rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
-                            Edited
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => moveScanDraftPage(page.id, "down")}
+                          disabled={index === scanDraftPages.length - 1 || scannerConverting}
+                          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+                          aria-label={`Move page ${index + 1} down`}
+                        >
+                          <ArrowDown size={12} />
+                        </button>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveScanDraftPage(page.id, "up")}
-                        disabled={index === 0 || scannerConverting}
-                        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                        aria-label={`Move page ${index + 1} up`}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveScanDraftPage(page.id, "down")}
-                        disabled={index === scanDraftPages.length - 1 || scannerConverting}
-                        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                        aria-label={`Move page ${index + 1} down`}
-                      >
-                        <ArrowDown size={14} />
-                      </button>
                       <button
                         type="button"
                         onClick={() => removeScanDraftPage(page.id)}
@@ -1219,7 +1147,7 @@ export default function VaultClient({ initialFiles }: Props) {
                         className="rounded-md p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
                         aria-label={`Remove page ${index + 1}`}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>

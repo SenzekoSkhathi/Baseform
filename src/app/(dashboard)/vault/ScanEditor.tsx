@@ -1,23 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Cropper, { type Area } from "react-easy-crop";
-import { ChevronLeft, Check, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  Check,
+  Loader2,
+  RotateCcw,
+  RotateCw,
+  Crop,
+  Palette,
+  Maximize2,
+  Wand2,
+} from "lucide-react";
 import type { ScanDraftPage } from "./VaultClient";
 
-// ---------------------------------------------------------------------------
-// Pure canvas helpers — no base64, no imageCompression between operations
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Types
+// ===========================================================================
+
+type Point = { x: number; y: number };
+type FilterMode = "original" | "auto" | "magic" | "grayscale" | "bw";
+type Tab = "crop" | "filter" | "rotate";
+
+export type ScanEditorSavePayload = {
+  pageId: string;
+  newFile: File;
+  isTextEnhanced: boolean;
+  fallbackFile: File | null;
+};
+
+type Props = {
+  page: ScanDraftPage;
+  onSave: (payload: ScanEditorSavePayload) => void;
+  onClose: () => void;
+};
+
+// ===========================================================================
+// Canvas I/O helpers — binary only, no base64 round-trips
+// ===========================================================================
 
 function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
 }
 
-/**
- * Load a File into a canvas using a temporary ObjectURL.
- * The URL is revoked immediately once the image has decoded — it is never
- * stored or returned, so there is no dangling handle.
- */
 async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(file);
   try {
@@ -31,7 +56,7 @@ async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("Canvas context unavailable.");
+    if (!ctx) throw new Error("Canvas unavailable.");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, img.width, img.height);
     ctx.drawImage(img, 0, 0);
@@ -41,10 +66,6 @@ async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
   }
 }
 
-/**
- * Encode a canvas to a File using toBlob (binary — not base64, so no 33 %
- * overhead). The canvas backing store is released immediately after encoding.
- */
 async function canvasToFile(
   canvas: HTMLCanvasElement,
   name: string,
@@ -62,72 +83,43 @@ async function canvasToFile(
   return new File([blob], name, { type: "image/jpeg", lastModified: Date.now() });
 }
 
-function detectDocumentBounds(
+function releaseCanvas(c: HTMLCanvasElement) {
+  c.width = 1;
+  c.height = 1;
+}
+
+// ===========================================================================
+// Auto document-edge detection — seeds the initial quad
+// ===========================================================================
+
+function detectDocumentQuad(
   gray: Uint8ClampedArray,
   width: number,
   height: number,
-) {
-  // ── Background estimation ────────────────────────────────────────────────
-  // Sample the outermost 12-px border strip on all 4 sides and take the
-  // median.  A corner-average fails on dark or coloured table surfaces;
-  // the median is robust to document corners that overlap the border strip.
-  const BORDER = Math.max(12, Math.round(Math.min(width, height) * 0.03));
-  const bgSamples: number[] = [];
-  const bStep = 3;
-  for (let x = 0; x < width; x += bStep) {
+): Point[] | null {
+  const BORDER = Math.max(10, Math.round(Math.min(width, height) * 0.03));
+  const samples: number[] = [];
+  for (let x = 0; x < width; x += 4) {
     for (let d = 0; d < BORDER; d++) {
-      bgSamples.push(gray[d * width + x]);
-      bgSamples.push(gray[(height - 1 - d) * width + x]);
+      samples.push(gray[d * width + x]);
+      samples.push(gray[(height - 1 - d) * width + x]);
     }
   }
-  for (let y = 0; y < height; y += bStep) {
+  for (let y = 0; y < height; y += 4) {
     for (let d = 0; d < BORDER; d++) {
-      bgSamples.push(gray[y * width + d]);
-      bgSamples.push(gray[y * width + (width - 1 - d)]);
+      samples.push(gray[y * width + d]);
+      samples.push(gray[y * width + (width - 1 - d)]);
     }
   }
-  bgSamples.sort((a, b) => a - b);
-  const bg = bgSamples[Math.floor(bgSamples.length / 2)] ?? 240;
+  samples.sort((a, b) => a - b);
+  const bg = samples[Math.floor(samples.length / 2)] ?? 240;
 
-  // ── Sobel gradient (2-px step for speed) ────────────────────────────────
-  const SS = 2; // sobel stride
-  const sw = Math.ceil(width / SS);
-  const sh = Math.ceil(height / SS);
-  const grad = new Float32Array(sw * sh);
-  const px = (x: number, y: number) =>
-    gray[
-      Math.min(height - 1, Math.max(0, y)) * width +
-        Math.min(width - 1, Math.max(0, x))
-    ];
-  for (let sy = 1; sy < sh - 1; sy++) {
-    for (let sx = 1; sx < sw - 1; sx++) {
-      const x = sx * SS, y = sy * SS;
-      const gx =
-        -px(x - SS, y - SS) + px(x + SS, y - SS) -
-        2 * px(x - SS, y)   + 2 * px(x + SS, y) -
-        px(x - SS, y + SS)  + px(x + SS, y + SS);
-      const gy =
-        -px(x - SS, y - SS) - 2 * px(x, y - SS) - px(x + SS, y - SS) +
-         px(x - SS, y + SS) + 2 * px(x, y + SS) + px(x + SS, y + SS);
-      grad[sy * sw + sx] = Math.sqrt(gx * gx + gy * gy);
-    }
-  }
-
-  // ── Bounding box ─────────────────────────────────────────────────────────
-  // A pixel counts as "document content" if it differs from bg OR sits on a
-  // strong edge (Sobel ≥ 22).  Using both signals handles: pale text on white
-  // paper (low gradient, high bg-diff) and document edges against a
-  // same-brightness background (high gradient, low bg-diff).
-  const BG_T = 28;   // background-difference threshold
-  const GRAD_T = 22; // gradient magnitude threshold
+  const BG_T = 26;
   const step = 2;
   let minX = width, minY = height, maxX = -1, maxY = -1, hits = 0;
-
   for (let y = BORDER; y < height - BORDER; y += step) {
     for (let x = BORDER; x < width - BORDER; x += step) {
-      const sy = Math.round(y / SS), sx = Math.round(x / SS);
-      const g = grad[Math.min(sh - 1, sy) * sw + Math.min(sw - 1, sx)] ?? 0;
-      if (Math.abs(gray[y * width + x] - bg) <= BG_T && g <= GRAD_T) continue;
+      if (Math.abs(gray[y * width + x] - bg) <= BG_T) continue;
       hits++;
       if (x < minX) minX = x;
       if (y < minY) minY = y;
@@ -136,208 +128,554 @@ function detectDocumentBounds(
     }
   }
 
-  if (hits < 60 || maxX <= minX || maxY <= minY)
-    return { x: 0, y: 0, width, height };
+  if (hits < 80 || maxX <= minX || maxY <= minY) return null;
+  const area = (maxX - minX) * (maxY - minY);
+  if (area < width * height * 0.1 || area > width * height * 0.98) return null;
 
-  const dw = maxX - minX + 1, dh = maxY - minY + 1;
-  const area = dw * dh;
-  if (area < width * height * 0.12 || area > width * height * 0.98)
-    return { x: 0, y: 0, width, height };
+  const pad = Math.round(Math.min(width, height) * 0.015);
+  const x0 = Math.max(0, minX - pad);
+  const y0 = Math.max(0, minY - pad);
+  const x1 = Math.min(width - 1, maxX + pad);
+  const y1 = Math.min(height - 1, maxY + pad);
+  return [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+}
 
-  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.025));
-  const rx = Math.max(0, minX - pad), ry = Math.max(0, minY - pad);
+// ===========================================================================
+// Perspective warp — 8-DOF homography, bilinear sampling
+// ===========================================================================
+
+function solveLinearSystem(matrix: number[][], b: number[]): number[] {
+  const n = matrix.length;
+  const a = matrix.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r;
+    }
+    if (pivot !== col) [a[col], a[pivot]] = [a[pivot], a[col]];
+    const diag = a[col][col];
+    if (Math.abs(diag) < 1e-10) throw new Error("Singular matrix.");
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = a[r][col] / diag;
+      for (let c = col; c <= n; c++) a[r][c] -= f * a[col][c];
+    }
+  }
+  return a.map((row, i) => row[n] / row[i]);
+}
+
+function computeHomography(src: Point[], dst: Point[]): number[] {
+  const A: number[][] = [];
+  const b: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const { x, y } = src[i];
+    const { x: X, y: Y } = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -X * x, -X * y]);
+    b.push(X);
+    A.push([0, 0, 0, x, y, 1, -Y * x, -Y * y]);
+    b.push(Y);
+  }
+  const h = solveLinearSystem(A, b);
+  return [...h, 1];
+}
+
+function dist(a: Point, b: Point) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function estimateOutputSize(quad: Point[]): { width: number; height: number } {
+  const top = dist(quad[0], quad[1]);
+  const bottom = dist(quad[3], quad[2]);
+  const left = dist(quad[0], quad[3]);
+  const right = dist(quad[1], quad[2]);
   return {
-    x: rx,
-    y: ry,
-    width: Math.min(width - rx, dw + pad * 2),
-    height: Math.min(height - ry, dh + pad * 2),
+    width: Math.max(1, Math.round(Math.max(top, bottom))),
+    height: Math.max(1, Math.round(Math.max(left, right))),
   };
 }
 
-function applyPerspective(
+function warpQuadToRect(
   src: HTMLCanvasElement,
-  p: number,
+  quad: Point[],
 ): HTMLCanvasElement {
-  if (Math.abs(p) < 0.001) return src;
-  const { width: w, height: h } = src;
+  const { width: outW, height: outH } = estimateOutputSize(quad);
+  const dst: Point[] = [
+    { x: 0, y: 0 },
+    { x: outW - 1, y: 0 },
+    { x: outW - 1, y: outH - 1 },
+    { x: 0, y: outH - 1 },
+  ];
+
+  // H maps dst → src (so we can inverse-warp for each output pixel).
+  const H = computeHomography(dst, quad);
   const srcCtx = src.getContext("2d", { willReadFrequently: true })!;
-  const { data: input } = srcCtx.getImageData(0, 0, w, h);
+  const srcData = srcCtx.getImageData(0, 0, src.width, src.height).data;
+  const sw = src.width, sh = src.height;
 
   const out = document.createElement("canvas");
-  out.width = w;
-  out.height = h;
-  const outCtx = out.getContext("2d", { willReadFrequently: true })!;
-  const outImg = outCtx.createImageData(w, h);
-  const output = outImg.data;
+  out.width = outW;
+  out.height = outH;
+  const outCtx = out.getContext("2d")!;
+  const outImg = outCtx.createImageData(outW, outH);
+  const od = outImg.data;
 
-  const inset = Math.round(w * 0.22 * Math.min(1, Math.abs(p)));
-  const topInset = p > 0 ? inset : 0;
-  const botInset = p < 0 ? inset : 0;
-
-  const sample = (x: number, y: number, ch: number) => {
-    const x0 = Math.max(0, Math.min(w - 1, Math.floor(x)));
-    const y0 = Math.max(0, Math.min(h - 1, Math.floor(y)));
-    const x1 = Math.min(w - 1, x0 + 1),
-      y1 = Math.min(h - 1, y0 + 1);
-    const fx = x - x0,
-      fy = y - y0;
-    const i = (r: number, c: number) => (r * w + c) * 4 + ch;
-    return (
-      (input[i(y0, x0)] * (1 - fx) + input[i(y0, x1)] * fx) * (1 - fy) +
-      (input[i(y1, x0)] * (1 - fx) + input[i(y1, x1)] * fx) * fy
-    );
-  };
-
-  for (let y = 0; y < h; y++) {
-    const t = h <= 1 ? 0 : y / (h - 1);
-    const left = topInset * (1 - t) + botInset * t;
-    const right = (w - 1 - topInset) * (1 - t) + (w - 1 - botInset) * t;
-    const span = Math.max(1, right - left);
-    for (let x = 0; x < w; x++) {
-      const sx = left + (w <= 1 ? 0 : x / (w - 1)) * span;
-      const ti = (y * w + x) * 4;
-      output[ti] = clampByte(sample(sx, y, 0));
-      output[ti + 1] = clampByte(sample(sx, y, 1));
-      output[ti + 2] = clampByte(sample(sx, y, 2));
-      output[ti + 3] = 255;
+  for (let y = 0; y < outH; y++) {
+    for (let x = 0; x < outW; x++) {
+      const w = H[6] * x + H[7] * y + H[8];
+      const sx = (H[0] * x + H[1] * y + H[2]) / w;
+      const sy = (H[3] * x + H[4] * y + H[5]) / w;
+      const x0 = Math.max(0, Math.min(sw - 1, Math.floor(sx)));
+      const y0 = Math.max(0, Math.min(sh - 1, Math.floor(sy)));
+      const x1 = Math.min(sw - 1, x0 + 1);
+      const y1 = Math.min(sh - 1, y0 + 1);
+      const fx = sx - x0;
+      const fy = sy - y0;
+      const i00 = (y0 * sw + x0) * 4;
+      const i01 = (y0 * sw + x1) * 4;
+      const i10 = (y1 * sw + x0) * 4;
+      const i11 = (y1 * sw + x1) * 4;
+      const ti = (y * outW + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const v =
+          (srcData[i00 + c] * (1 - fx) + srcData[i01 + c] * fx) * (1 - fy) +
+          (srcData[i10 + c] * (1 - fx) + srcData[i11 + c] * fx) * fy;
+        od[ti + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+      od[ti + 3] = 255;
     }
   }
-
   outCtx.putImageData(outImg, 0, 0);
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Filters
+// ===========================================================================
 
-export type ScanEditorSavePayload = {
-  pageId: string;
-  newFile: File;
-  isTextEnhanced: boolean;
-  fallbackFile: File | null;
-};
+function applyAutoEnhance(src: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = src.width;
+  out.height = src.height;
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, out.width, out.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    let v = (g - 128) * 1.55 + 128 + 8;
+    if (v > 218) v = 255;
+    v = clampByte(v);
+    d[i] = d[i + 1] = d[i + 2] = v;
+    d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
 
-type Props = {
-  page: ScanDraftPage;
-  onSave: (payload: ScanEditorSavePayload) => void;
-  onClose: () => void;
-};
+function applyMagicColor(src: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = src.width;
+  out.height = src.height;
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, out.width, out.height);
+  const d = img.data;
 
-// ---------------------------------------------------------------------------
+  // Per-channel 1st/99th-percentile stretch removes yellow/blue casts from
+  // indoor lighting while preserving document colour.
+  const histR = new Uint32Array(256);
+  const histG = new Uint32Array(256);
+  const histB = new Uint32Array(256);
+  for (let i = 0; i < d.length; i += 4) {
+    histR[d[i]]++;
+    histG[d[i + 1]]++;
+    histB[d[i + 2]]++;
+  }
+  const total = d.length / 4;
+  const loCut = total * 0.01;
+  const hiCut = total * 0.01;
+
+  const bounds = (hist: Uint32Array): [number, number] => {
+    let cum = 0, lo = 0, hi = 255;
+    for (let v = 0; v < 256; v++) {
+      cum += hist[v];
+      if (cum >= loCut) { lo = v; break; }
+    }
+    cum = 0;
+    for (let v = 255; v >= 0; v--) {
+      cum += hist[v];
+      if (cum >= hiCut) { hi = v; break; }
+    }
+    return [lo, Math.max(hi, lo + 1)];
+  };
+
+  const [rLo, rHi] = bounds(histR);
+  const [gLo, gHi] = bounds(histG);
+  const [bLo, bHi] = bounds(histB);
+
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = clampByte(((d[i] - rLo) * 255) / (rHi - rLo));
+    d[i + 1] = clampByte(((d[i + 1] - gLo) * 255) / (gHi - gLo));
+    d[i + 2] = clampByte(((d[i + 2] - bLo) * 255) / (bHi - bLo));
+    d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+function applyGrayscale(src: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = src.width;
+  out.height = src.height;
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, out.width, out.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = clampByte(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+    d[i] = d[i + 1] = d[i + 2] = v;
+    d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+/**
+ * Sauvola adaptive threshold — the gold standard for document binarisation.
+ * Integral images give O(1) window statistics so the whole image runs in a
+ * single pass. Produces clean black text on pure white paper regardless of
+ * uneven lighting across the page (the main failure mode of a global threshold).
+ */
+function applySauvola(src: HTMLCanvasElement): HTMLCanvasElement {
+  const w = src.width, h = src.height;
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    gray[p] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  const iw = w + 1;
+  const ii = new Float64Array(iw * (h + 1));
+  const ii2 = new Float64Array(iw * (h + 1));
+  for (let y = 1; y <= h; y++) {
+    let rowSum = 0, rowSum2 = 0;
+    for (let x = 1; x <= w; x++) {
+      const v = gray[(y - 1) * w + (x - 1)];
+      rowSum += v;
+      rowSum2 += v * v;
+      const idx = y * iw + x;
+      const up = (y - 1) * iw + x;
+      ii[idx] = ii[up] + rowSum;
+      ii2[idx] = ii2[up] + rowSum2;
+    }
+  }
+
+  const R = Math.max(7, Math.round(Math.min(w, h) / 32));
+  const k = 0.34;
+  const dynamicRange = 128;
+
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - R);
+    const y1 = Math.min(h, y + R + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - R);
+      const x1 = Math.min(w, x + R + 1);
+      const n = (x1 - x0) * (y1 - y0);
+      const s = ii[y1 * iw + x1] - ii[y0 * iw + x1] - ii[y1 * iw + x0] + ii[y0 * iw + x0];
+      const s2 = ii2[y1 * iw + x1] - ii2[y0 * iw + x1] - ii2[y1 * iw + x0] + ii2[y0 * iw + x0];
+      const mean = s / n;
+      const variance = Math.max(0, s2 / n - mean * mean);
+      const std = Math.sqrt(variance);
+      const t = mean * (1 + k * (std / dynamicRange - 1));
+      const v = gray[y * w + x] > t ? 255 : 0;
+      const ti = (y * w + x) * 4;
+      d[ti] = d[ti + 1] = d[ti + 2] = v;
+      d[ti + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+function applyFilter(src: HTMLCanvasElement, mode: FilterMode): HTMLCanvasElement {
+  if (mode === "original") {
+    const out = document.createElement("canvas");
+    out.width = src.width;
+    out.height = src.height;
+    out.getContext("2d")!.drawImage(src, 0, 0);
+    return out;
+  }
+  if (mode === "auto") return applyAutoEnhance(src);
+  if (mode === "magic") return applyMagicColor(src);
+  if (mode === "grayscale") return applyGrayscale(src);
+  return applySauvola(src);
+}
+
+// ===========================================================================
 // Component
-// ---------------------------------------------------------------------------
+// ===========================================================================
+
+const FILTER_LABELS: Record<FilterMode, string> = {
+  original: "Original",
+  auto: "Auto",
+  magic: "Magic Color",
+  grayscale: "Grayscale",
+  bw: "B & W",
+};
+
+const FILTER_ORDER: FilterMode[] = ["original", "auto", "magic", "grayscale", "bw"];
 
 export default function ScanEditor({ page, onSave, onClose }: Props) {
-  // All image state is kept as File objects — never serialised to base64.
-  const [workingFile, setWorkingFileState] = useState<File>(page.file);
-  const [fallbackFile, setFallbackFileState] = useState<File | null>(
-    page.fallbackFile,
+  // workingFile = the baseline image we apply filters to (i.e. after any
+  // destructive crop or rotate). fallbackFile is what "Original" filter
+  // restores back to. isFilterEnhanced is true when current filter ≠ original.
+  const [workingFile, setWorkingFile] = useState<File>(page.fallbackFile ?? page.file);
+  const [activeFilter, setActiveFilter] = useState<FilterMode>(
+    page.isTextEnhanced ? "auto" : "original",
   );
-  const [isTextEnhanced, setIsTextEnhanced] = useState(page.isTextEnhanced);
+  const [displayedFile, setDisplayedFile] = useState<File>(page.file);
 
-  // ObjectURLs for display only — never passed to sessionStorage.
-  // We keep refs so we can revoke them without needing state.
-  const displayUrlRef = useRef<string>("");
-  const fallbackUrlRef = useRef<string>("");
   const [displayUrl, setDisplayUrl] = useState<string>("");
-  const [fallbackUrl, setFallbackUrl] = useState<string>("");
+  const displayUrlRef = useRef("");
+  const [imgDim, setImgDim] = useState<{ w: number; h: number } | null>(null);
 
+  const [tab, setTab] = useState<Tab>("crop");
+  const [quad, setQuad] = useState<Point[] | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCompare, setShowCompare] = useState(false);
 
-  // Crop / perspective state
-  const [cropPos, setCropPos] = useState({ x: 0, y: 0 });
-  const [cropZoom, setCropZoom] = useState(1);
-  const [cropAreaPx, setCropAreaPx] = useState<Area | null>(null);
-  const [perspectiveVal, setPerspectiveVal] = useState(0);
-  // undefined = free aspect ratio
-  const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
+  const [filterThumbs, setFilterThumbs] = useState<Record<FilterMode, string>>({
+    original: "",
+    auto: "",
+    magic: "",
+    grayscale: "",
+    bw: "",
+  });
 
-  // Create initial ObjectURLs after mount and clean up on unmount.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageBox, setStageBox] = useState<{ w: number; h: number } | null>(null);
+
+  // ---- Object URL lifecycle for the main displayed image ------------------
   useEffect(() => {
-    const url = URL.createObjectURL(page.file);
+    const url = URL.createObjectURL(displayedFile);
     displayUrlRef.current = url;
     setDisplayUrl(url);
-
-    if (page.fallbackFile) {
-      const fbUrl = URL.createObjectURL(page.fallbackFile);
-      fallbackUrlRef.current = fbUrl;
-      setFallbackUrl(fbUrl);
-    }
-
+    const el = new Image();
+    el.onload = () => setImgDim({ w: el.width, h: el.height });
+    el.src = url;
     return () => {
-      if (displayUrlRef.current) URL.revokeObjectURL(displayUrlRef.current);
-      if (fallbackUrlRef.current) URL.revokeObjectURL(fallbackUrlRef.current);
+      URL.revokeObjectURL(url);
+      if (displayUrlRef.current === url) displayUrlRef.current = "";
     };
+  }, [displayedFile]);
+
+  // ---- Stage size tracking ------------------------------------------------
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setStageBox({ w: r.width, h: r.height });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tab]);
+
+  // ---- Auto-seed the quad the first time we know image dimensions --------
+  useEffect(() => {
+    if (!imgDim || quad) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const canvas = await fileToCanvas(workingFile);
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const gray = new Uint8ClampedArray(canvas.width * canvas.height);
+        for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+          gray[p] = clampByte(
+            data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114,
+          );
+        }
+        const detected = detectDocumentQuad(gray, canvas.width, canvas.height);
+        releaseCanvas(canvas);
+        if (cancelled) return;
+        setQuad(
+          detected ?? [
+            { x: imgDim.w * 0.05, y: imgDim.h * 0.05 },
+            { x: imgDim.w * 0.95, y: imgDim.h * 0.05 },
+            { x: imgDim.w * 0.95, y: imgDim.h * 0.95 },
+            { x: imgDim.w * 0.05, y: imgDim.h * 0.95 },
+          ],
+        );
+      } catch {
+        if (cancelled) return;
+        setQuad([
+          { x: imgDim.w * 0.05, y: imgDim.h * 0.05 },
+          { x: imgDim.w * 0.95, y: imgDim.h * 0.05 },
+          { x: imgDim.w * 0.95, y: imgDim.h * 0.95 },
+          { x: imgDim.w * 0.05, y: imgDim.h * 0.95 },
+        ]);
+      }
+    })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [imgDim]);
 
-  /**
-   * Revoke a URL after the next two animation frames so the browser has
-   * definitely finished rendering with it before we invalidate it.
-   */
-  function deferRevoke(url: string) {
-    if (!url) return;
-    requestAnimationFrame(() => requestAnimationFrame(() => URL.revokeObjectURL(url)));
-  }
+  // ---- Filter thumbnails (regenerated whenever workingFile changes) -------
+  useEffect(() => {
+    let cancelled = false;
+    const urls: string[] = [];
+    (async () => {
+      try {
+        const full = await fileToCanvas(workingFile);
+        const THUMB_MAX = 180;
+        const scale = Math.min(1, THUMB_MAX / Math.max(full.width, full.height));
+        const tw = Math.max(1, Math.round(full.width * scale));
+        const th = Math.max(1, Math.round(full.height * scale));
+        const small = document.createElement("canvas");
+        small.width = tw;
+        small.height = th;
+        small.getContext("2d")!.drawImage(full, 0, 0, tw, th);
+        releaseCanvas(full);
 
-  /** Replace the working image. Creates a new ObjectURL, defers revocation of old. */
-  function setWorking(file: File) {
-    const old = displayUrlRef.current;
-    const url = URL.createObjectURL(file);
-    displayUrlRef.current = url;
-    setDisplayUrl(url);
-    setWorkingFileState(file);
-    deferRevoke(old);
-  }
+        const out: Record<FilterMode, string> = {
+          original: "",
+          auto: "",
+          magic: "",
+          grayscale: "",
+          bw: "",
+        };
+        for (const mode of FILTER_ORDER) {
+          if (cancelled) return;
+          const filtered = applyFilter(small, mode);
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            filtered.toBlob(
+              (b) => (b ? resolve(b) : reject(new Error("thumb"))),
+              "image/jpeg",
+              0.8,
+            );
+          });
+          releaseCanvas(filtered);
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          out[mode] = url;
+        }
+        releaseCanvas(small);
+        if (!cancelled) setFilterThumbs(out);
+      } catch {
+        // Thumbnails are cosmetic — failure is non-fatal.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      urls.forEach(URL.revokeObjectURL);
+    };
+  }, [workingFile]);
 
-  /** Set a new fallback (for enhance undo). */
-  function setFallback(file: File) {
-    const old = fallbackUrlRef.current;
-    const url = URL.createObjectURL(file);
-    fallbackUrlRef.current = url;
-    setFallbackUrl(url);
-    setFallbackFileState(file);
-    if (old) deferRevoke(old);
-  }
+  // ---- Display geometry (image letterboxed into the stage) ---------------
+  const displayGeom = useMemo(() => {
+    if (!imgDim || !stageBox) return null;
+    const scale = Math.min(stageBox.w / imgDim.w, stageBox.h / imgDim.h);
+    const w = imgDim.w * scale;
+    const h = imgDim.h * scale;
+    return {
+      scale,
+      w,
+      h,
+      offsetX: (stageBox.w - w) / 2,
+      offsetY: (stageBox.h - h) / 2,
+    };
+  }, [imgDim, stageBox]);
 
-  /** Clear the fallback (after rotate / crop clears undo history). */
-  function clearFallback() {
-    if (fallbackUrlRef.current) {
-      deferRevoke(fallbackUrlRef.current);
-      fallbackUrlRef.current = "";
+  // ---- Quad drag handlers ------------------------------------------------
+  const dragIndex = useRef<number | null>(null);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!quad || !displayGeom || !imgDim) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    let best = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < 4; i++) {
+      const cx = displayGeom.offsetX + quad[i].x * displayGeom.scale;
+      const cy = displayGeom.offsetY + quad[i].y * displayGeom.scale;
+      const dd = Math.hypot(cx - px, cy - py);
+      if (dd < bestDist) { bestDist = dd; best = i; }
     }
-    setFallbackUrl("");
-    setFallbackFileState(null);
-  }
+    if (bestDist > 40) return;
+    dragIndex.current = best;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
 
-  function resetCropState() {
-    setCropPos({ x: 0, y: 0 });
-    setCropZoom(1);
-    setCropAreaPx(null);
-    setPerspectiveVal(0);
-    setCropAspect(undefined);
-  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (dragIndex.current === null || !quad || !displayGeom || !imgDim) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const ix = Math.max(0, Math.min(imgDim.w, (px - displayGeom.offsetX) / displayGeom.scale));
+    const iy = Math.max(0, Math.min(imgDim.h, (py - displayGeom.offsetY) / displayGeom.scale));
+    const next = quad.slice();
+    next[dragIndex.current] = { x: ix, y: iy };
+    setQuad(next);
+  };
 
-  /** Wrap an async canvas operation with loading/error state. */
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (dragIndex.current === null) return;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    dragIndex.current = null;
+  };
+
+  // ---- Operation wrapper --------------------------------------------------
   const run = async (fn: () => Promise<void>) => {
     setError(null);
     setProcessing(true);
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed.");
-    } finally {
-      setProcessing(false);
-    }
+    try { await fn(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Operation failed."); }
+    finally { setProcessing(false); }
   };
 
-  // ---------------------------------------------------------------------------
-  // Operations
-  // ---------------------------------------------------------------------------
+  // ---- Apply quad crop + perspective warp --------------------------------
+  const handleApplyCrop = () =>
+    run(async () => {
+      if (!quad) return;
+      const src = await fileToCanvas(workingFile);
+      const warped = warpQuadToRect(src, quad);
+      releaseCanvas(src);
+      const baselineFile = await canvasToFile(
+        warped,
+        workingFile.name,
+        0.92,
+      );
+      const filtered = applyFilter(await fileToCanvas(baselineFile), activeFilter);
+      const displayed = activeFilter === "original"
+        ? baselineFile
+        : await canvasToFile(filtered, workingFile.name, 0.92);
+      releaseCanvas(filtered);
+      setWorkingFile(baselineFile);
+      setDisplayedFile(displayed);
+      setQuad(null);
+      setImgDim(null);
+    });
 
+  // ---- Rotate -------------------------------------------------------------
   const handleRotate = (dir: "left" | "right") =>
     run(async () => {
       const src = await fileToCanvas(workingFile);
@@ -350,354 +688,311 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
       ctx.translate(out.width / 2, out.height / 2);
       ctx.rotate((dir === "right" ? 90 : -90) * (Math.PI / 180));
       ctx.drawImage(src, -src.width / 2, -src.height / 2);
-      src.width = 1;
-      src.height = 1;
-      setWorking(await canvasToFile(out, workingFile.name));
-      clearFallback();
-      setIsTextEnhanced(false);
-      setShowCompare(false);
-      resetCropState();
+      releaseCanvas(src);
+      const baselineFile = await canvasToFile(out, workingFile.name, 0.92);
+      const filtered = applyFilter(await fileToCanvas(baselineFile), activeFilter);
+      const displayed = activeFilter === "original"
+        ? baselineFile
+        : await canvasToFile(filtered, workingFile.name, 0.92);
+      releaseCanvas(filtered);
+      setWorkingFile(baselineFile);
+      setDisplayedFile(displayed);
+      setQuad(null);
+      setImgDim(null);
     });
 
-  const handleEnhance = async () => {
-    // Instant revert — no canvas work needed.
-    if (isTextEnhanced && fallbackFile) {
-      const fb = fallbackFile;
-      clearFallback();
-      setWorking(fb);
-      setIsTextEnhanced(false);
-      setShowCompare(false);
-      resetCropState();
-      return;
-    }
-
-    await run(async () => {
-      const canvas = await fileToCanvas(workingFile);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const g = clampByte(
-          d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114,
-        );
-        let v = clampByte((g - 128) * 1.55 + 128 + 8);
-        if (v > 218) v = 255;
-        d[i] = d[i + 1] = d[i + 2] = v;
-        d[i + 3] = 255;
+  // ---- Apply filter -------------------------------------------------------
+  const pickFilter = useCallback((mode: FilterMode) => {
+    if (mode === activeFilter) return;
+    run(async () => {
+      if (mode === "original") {
+        setActiveFilter(mode);
+        setDisplayedFile(workingFile);
+        return;
       }
-      ctx.putImageData(imgData, 0, 0);
-      const enhanced = await canvasToFile(canvas, workingFile.name);
-      // Capture workingFile before setWorking changes it.
-      const prev = workingFile;
-      setFallback(prev);
-      setWorking(enhanced);
-      setIsTextEnhanced(true);
-      setShowCompare(false);
-      resetCropState();
+      const src = await fileToCanvas(workingFile);
+      const filtered = applyFilter(src, mode);
+      releaseCanvas(src);
+      const out = await canvasToFile(filtered, workingFile.name, 0.92);
+      setActiveFilter(mode);
+      setDisplayedFile(out);
     });
+  }, [activeFilter, workingFile]);
+
+  // ---- Reset crop to image edges -----------------------------------------
+  const handleResetQuad = () => {
+    if (!imgDim) return;
+    setQuad([
+      { x: 0, y: 0 },
+      { x: imgDim.w - 1, y: 0 },
+      { x: imgDim.w - 1, y: imgDim.h - 1 },
+      { x: 0, y: imgDim.h - 1 },
+    ]);
   };
-
-  const handleSmartCrop = () =>
-    run(async () => {
-      const canvas = await fileToCanvas(workingFile);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-      const { data: rgba } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const gray = new Uint8ClampedArray(canvas.width * canvas.height);
-      for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
-        gray[p] = clampByte(
-          rgba[i] * 0.299 + rgba[i + 1] * 0.587 + rgba[i + 2] * 0.114,
-        );
-      }
-      const b = detectDocumentBounds(gray, canvas.width, canvas.height);
-
-      const out = document.createElement("canvas");
-      out.width = b.width;
-      out.height = b.height;
-      const outCtx = out.getContext("2d")!;
-      outCtx.fillStyle = "#fff";
-      outCtx.fillRect(0, 0, b.width, b.height);
-      outCtx.drawImage(canvas, b.x, b.y, b.width, b.height, 0, 0, b.width, b.height);
-      canvas.width = 1;
-      canvas.height = 1;
-
-      setWorking(await canvasToFile(out, workingFile.name));
-      clearFallback();
-      setIsTextEnhanced(false);
-      setShowCompare(false);
-      resetCropState();
-    });
-
-  const handleApplyCrop = () =>
-    run(async () => {
-      if (!cropAreaPx) return;
-      const canvas = await fileToCanvas(workingFile);
-      const cx = Math.max(0, Math.round(cropAreaPx.x));
-      const cy = Math.max(0, Math.round(cropAreaPx.y));
-      const cw = Math.max(1, Math.round(cropAreaPx.width));
-      const ch = Math.max(1, Math.round(cropAreaPx.height));
-
-      const out = document.createElement("canvas");
-      out.width = cw;
-      out.height = ch;
-      const ctx = out.getContext("2d")!;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, cw, ch);
-      ctx.drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch);
-      canvas.width = 1;
-      canvas.height = 1;
-
-      let final = out;
-      if (Math.abs(perspectiveVal) >= 0.001) {
-        final = applyPerspective(out, perspectiveVal);
-        if (final !== out) {
-          out.width = 1;
-          out.height = 1;
-        }
-      }
-
-      setWorking(await canvasToFile(final, workingFile.name));
-      clearFallback();
-      setIsTextEnhanced(false);
-      setShowCompare(false);
-      resetCropState();
-    });
 
   const handleSave = () => {
     onSave({
       pageId: page.id,
-      newFile: workingFile,
-      isTextEnhanced,
-      fallbackFile,
+      newFile: displayedFile,
+      isTextEnhanced: activeFilter !== "original",
+      fallbackFile: activeFilter !== "original" ? workingFile : null,
     });
   };
 
-  if (!displayUrl) {
+  // ---- Render -------------------------------------------------------------
+
+  if (!displayUrl || !imgDim) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-        <Loader2 size={20} className="animate-spin text-orange-500" />
+        <Loader2 size={22} className="animate-spin text-orange-500" />
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+      <div className="flex items-center justify-between bg-black/90 px-4 py-3 pt-safe">
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700"
+          className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur-sm"
         >
           <ChevronLeft size={14} />
           Back
         </button>
-        <p className="truncate px-3 text-xs font-semibold text-gray-500">
-          Image Editor
+        <p className="text-xs font-bold uppercase tracking-wider text-white/80">
+          Edit Page
         </p>
         <button
           type="button"
           onClick={handleSave}
           disabled={processing}
-          className="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-2.5 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+          className="inline-flex items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
         >
           <Check size={14} />
-          Save
+          Done
         </button>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex gap-2 overflow-x-auto border-b border-gray-100 bg-gray-50 px-4 py-2 scrollbar-none">
-        <button
-          type="button"
-          onClick={handleEnhance}
-          disabled={processing}
-          className={[
-            "shrink-0 rounded-lg border px-3 py-1.5 text-[11px] font-bold disabled:opacity-60",
-            isTextEnhanced
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-emerald-100 bg-white text-emerald-700",
-          ].join(" ")}
-        >
-          {isTextEnhanced ? "Remove enhance" : "Enhance text"}
-        </button>
+      {/* Stage */}
+      <div
+        ref={stageRef}
+        onPointerDown={tab === "crop" ? onPointerDown : undefined}
+        onPointerMove={tab === "crop" ? onPointerMove : undefined}
+        onPointerUp={tab === "crop" ? onPointerUp : undefined}
+        onPointerCancel={tab === "crop" ? onPointerUp : undefined}
+        className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
+        style={{ touchAction: "none" }}
+      >
+        {/* image */}
+        {displayGeom && (
+          <img
+            src={displayUrl}
+            alt="Scan"
+            draggable={false}
+            className="pointer-events-none absolute"
+            style={{
+              left: displayGeom.offsetX,
+              top: displayGeom.offsetY,
+              width: displayGeom.w,
+              height: displayGeom.h,
+            }}
+          />
+        )}
 
-        <button
-          type="button"
-          onClick={() => handleRotate("left")}
-          disabled={processing}
-          className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-700 disabled:opacity-60"
-        >
-          Rotate left
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleRotate("right")}
-          disabled={processing}
-          className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-bold text-gray-700 disabled:opacity-60"
-        >
-          Rotate right
-        </button>
-
-        <button
-          type="button"
-          onClick={handleSmartCrop}
-          disabled={processing}
-          className="shrink-0 rounded-lg border border-orange-100 bg-orange-50 px-3 py-1.5 text-[11px] font-bold text-orange-700 disabled:opacity-60"
-        >
-          Smart crop
-        </button>
-      </div>
-
-      {/* Compare toggle row */}
-      {isTextEnhanced && fallbackUrl && (
-        <div className="flex items-center justify-end border-b border-gray-100 px-4 py-2">
-          <button
-            type="button"
-            onClick={() => setShowCompare((prev) => !prev)}
-            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700"
+        {/* quad overlay (only in CROP tab) */}
+        {tab === "crop" && quad && displayGeom && (
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            viewBox={`0 0 ${stageBox?.w ?? 0} ${stageBox?.h ?? 0}`}
           >
-            {showCompare ? "Hide compare" : "Show compare"}
-          </button>
-        </div>
-      )}
-
-      {/* Side-by-side compare strip */}
-      {showCompare && fallbackUrl && (
-        <div className="grid grid-cols-2 gap-2 border-b border-gray-100 bg-gray-50 p-3">
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-            <p className="border-b border-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-              Original
-            </p>
-            <img
-              src={fallbackUrl}
-              alt="Original scan"
-              className="h-24 w-full object-cover"
+            <defs>
+              <linearGradient id="quadStroke" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#f97316" />
+                <stop offset="100%" stopColor="#fb923c" />
+              </linearGradient>
+            </defs>
+            {/* dim outside the quad */}
+            <path
+              d={`M 0 0 H ${stageBox?.w ?? 0} V ${stageBox?.h ?? 0} H 0 Z M ${quad
+                .map(
+                  (p) =>
+                    `${displayGeom.offsetX + p.x * displayGeom.scale},${
+                      displayGeom.offsetY + p.y * displayGeom.scale
+                    }`,
+                )
+                .join(" L ")} Z`}
+              fill="rgba(0,0,0,0.55)"
+              fillRule="evenodd"
             />
-          </div>
-          <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
-            <p className="border-b border-emerald-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
-              Enhanced
-            </p>
-            <img
-              src={displayUrl}
-              alt="Enhanced scan"
-              className="h-24 w-full object-cover"
+            <polygon
+              points={quad
+                .map(
+                  (p) =>
+                    `${displayGeom.offsetX + p.x * displayGeom.scale},${
+                      displayGeom.offsetY + p.y * displayGeom.scale
+                    }`,
+                )
+                .join(" ")}
+              fill="none"
+              stroke="url(#quadStroke)"
+              strokeWidth={2.5}
             />
-          </div>
-        </div>
-      )}
+            {quad.map((p, i) => {
+              const cx = displayGeom.offsetX + p.x * displayGeom.scale;
+              const cy = displayGeom.offsetY + p.y * displayGeom.scale;
+              return (
+                <g key={i}>
+                  <circle cx={cx} cy={cy} r={18} fill="rgba(249,115,22,0.25)" />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={9}
+                    fill="#ffffff"
+                    stroke="#f97316"
+                    strokeWidth={2.5}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        )}
 
-      {/* Manual crop canvas — react-easy-crop receives an ObjectURL, not base64 */}
-      <div className="relative min-h-0 flex-1 bg-black">
-        <Cropper
-          image={displayUrl}
-          crop={cropPos}
-          zoom={cropZoom}
-          aspect={cropAspect}
-          onCropChange={setCropPos}
-          onZoomChange={setCropZoom}
-          onCropComplete={(_, area) => setCropAreaPx(area)}
-          showGrid
-          objectFit="contain"
-        />
-      </div>
-
-      {/* Controls */}
-      <div className="space-y-3 border-t border-gray-100 px-4 py-3">
         {processing && (
-          <div className="flex items-center gap-2 text-xs font-semibold text-orange-600">
-            <Loader2 size={12} className="animate-spin" />
-            Processing…
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40">
+            <Loader2 size={28} className="animate-spin text-orange-400" />
           </div>
         )}
-        {error && (
-          <p className="text-xs font-semibold text-red-600">{error}</p>
-        )}
+      </div>
 
-        {/* Aspect-ratio presets */}
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold text-gray-600">Aspect ratio</p>
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
-            {[
-              { label: "Free", value: undefined },
-              { label: "A4", value: 1 / Math.SQRT2 },
-              { label: "Square", value: 1 },
-              { label: "ID card", value: 85.6 / 54 },
-              { label: "4:3", value: 4 / 3 },
-            ].map(({ label, value }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => {
-                  setCropAspect(value);
-                  setCropPos({ x: 0, y: 0 });
-                  setCropZoom(1);
-                }}
-                className={[
-                  "shrink-0 rounded-lg border px-3 py-1 text-[11px] font-bold",
-                  cropAspect === value
-                    ? "border-orange-300 bg-orange-100 text-orange-700"
-                    : "border-gray-200 bg-white text-gray-600",
-                ].join(" ")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Zoom slider */}
-        <div>
-          <label className="text-[11px] font-semibold text-gray-600">
-            Zoom
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={3}
-            step={0.01}
-            value={cropZoom}
-            onChange={(e) => setCropZoom(Number(e.target.value))}
-            className="mt-1 w-full accent-orange-500"
-          />
-        </div>
-
-        {/* Perspective slider */}
-        <div>
-          <label className="text-[11px] font-semibold text-gray-600">
-            Perspective correction
-          </label>
-          <input
-            type="range"
-            min={-1}
-            max={1}
-            step={0.01}
-            value={perspectiveVal}
-            onChange={(e) => setPerspectiveVal(Number(e.target.value))}
-            className="mt-1 w-full accent-orange-500"
-          />
-        </div>
-
-        <div className="flex gap-2">
+      {/* Tab-specific controls */}
+      {tab === "crop" && (
+        <div className="flex items-center gap-2 bg-black/90 px-3 py-2.5">
           <button
             type="button"
-            onClick={resetCropState}
+            onClick={handleResetQuad}
             disabled={processing}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 disabled:opacity-60"
+            className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50"
           >
-            Reset
+            <Maximize2 size={12} />
+            Full page
           </button>
           <button
             type="button"
             onClick={handleApplyCrop}
-            disabled={!cropAreaPx || processing}
-            className="flex-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+            disabled={processing || !quad}
+            className="flex-1 rounded-lg bg-orange-500 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
           >
             Apply crop
           </button>
         </div>
-      </div>
+      )}
+
+      {tab === "filter" && (
+        <div className="bg-black/90 px-3 py-3">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none">
+            {FILTER_ORDER.map((mode) => {
+              const active = activeFilter === mode;
+              const thumb = filterThumbs[mode];
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => pickFilter(mode)}
+                  disabled={processing}
+                  className="group flex shrink-0 flex-col items-center gap-1 disabled:opacity-50"
+                >
+                  <div
+                    className={[
+                      "h-16 w-16 overflow-hidden rounded-xl border-2 bg-white/10",
+                      active ? "border-orange-400" : "border-white/20",
+                    ].join(" ")}
+                  >
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={FILTER_LABELS[mode]}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-white/40">
+                        …
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    className={[
+                      "text-[10px] font-bold",
+                      active ? "text-orange-400" : "text-white/70",
+                    ].join(" ")}
+                  >
+                    {FILTER_LABELS[mode]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {tab === "rotate" && (
+        <div className="flex items-center gap-2 bg-black/90 px-3 py-3">
+          <button
+            type="button"
+            onClick={() => handleRotate("left")}
+            disabled={processing}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            <RotateCcw size={14} />
+            Rotate left
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRotate("right")}
+            disabled={processing}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            <RotateCw size={14} />
+            Rotate right
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-500/90 px-4 py-1.5 text-center text-[11px] font-bold text-white">
+          {error}
+        </div>
+      )}
+
+      {/* Bottom tab bar */}
+      <nav className="flex items-stretch bg-black text-white pb-safe">
+        {(
+          [
+            { id: "crop" as Tab, icon: Crop, label: "Crop" },
+            { id: "filter" as Tab, icon: Palette, label: "Filter" },
+            { id: "rotate" as Tab, icon: Wand2, label: "Rotate" },
+          ]
+        ).map(({ id, icon: Icon, label }) => {
+          const active = tab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={[
+                "flex flex-1 flex-col items-center justify-center gap-0.5 py-3",
+                active ? "text-orange-400" : "text-white/60",
+              ].join(" ")}
+            >
+              <Icon size={18} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
