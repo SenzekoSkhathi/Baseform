@@ -1,10 +1,32 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { effectivePlanTier } from "@/lib/access/tiers";
+import { vaultLimitForTier, VAULT_MAX_UPLOAD_BYTES } from "@/lib/vault/limits";
 
 const BUCKET = "documents";
 
 const VALID_CATEGORIES = ["id-document", "matric-transcript", "proof-of-address", "motivational-letter", "other"] as const;
 type Category = typeof VALID_CATEGORIES[number];
+
+async function currentVaultBytes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<number> {
+  let total = 0;
+  for (const category of VALID_CATEGORIES) {
+    const { data } = await supabase.storage.from(BUCKET).list(`${userId}/${category}`, { limit: 200 });
+    if (!data) continue;
+    for (const f of data) {
+      if (!f.name || f.name === ".emptyFolderPlaceholder") continue;
+      total += (f.metadata?.size as number | undefined) ?? 0;
+    }
+  }
+  return total;
+}
+
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+}
 
 // GET /api/vault
 // Lists all files in the current user's folder, across all categories.
@@ -66,8 +88,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "valid category required" }, { status: 400 });
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "File exceeds 10 MB limit" }, { status: 400 });
+  if (file.size > VAULT_MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `File exceeds ${formatMb(VAULT_MAX_UPLOAD_BYTES)} per-file limit` },
+      { status: 400 }
+    );
+  }
+
+  // Enforce per-tier vault quota. Uses effective tier so a lapsed Pro
+  // subscription drops back to the free quota.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("tier, plan_expires_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const tier = effectivePlanTier(
+    (profile as { tier?: unknown } | null)?.tier,
+    (profile as { plan_expires_at?: string | null } | null)?.plan_expires_at
+  );
+  const quota = vaultLimitForTier(tier);
+  const currentUsage = await currentVaultBytes(supabase, user.id);
+
+  if (currentUsage + file.size > quota) {
+    return NextResponse.json(
+      {
+        error: `Vault is full. Your ${tier} plan allows up to ${formatMb(quota)}. Delete a file or upgrade to add more.`,
+      },
+      { status: 413 }
+    );
   }
 
   // Prefix filename with timestamp to avoid collisions

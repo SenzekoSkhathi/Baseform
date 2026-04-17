@@ -11,6 +11,7 @@ import {
   FileText,
   Trash2,
   Download,
+  Eye,
   X,
   CheckCircle2,
   AlertCircle,
@@ -1444,6 +1445,13 @@ export default function VaultClient({ initialFiles }: Props) {
                       onKeyDown={(event) => event.stopPropagation()}
                     >
                       <button
+                        onClick={() => void openReader(file)}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-orange-50 hover:text-orange-600"
+                        title="View"
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
                         onClick={() => handleDownload(file.path)}
                         className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                         title="Download"
@@ -1511,12 +1519,22 @@ export default function VaultClient({ initialFiles }: Props) {
                   </div>
                 ) : readerKind === "text" ? (
                   <pre className="h-full overflow-auto whitespace-pre-wrap p-4 text-xs text-gray-700">{readerText ?? "No text content found."}</pre>
-                ) : readerKind === "office" && readerUrl ? (
-                  <iframe
-                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(readerUrl)}`}
-                    className="h-full w-full border-0"
-                    title="Office document reader"
-                  />
+                ) : readerKind === "office" ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                    <FileText size={36} className="text-gray-300" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Office documents open in your device&apos;s app.</p>
+                      <p className="mt-1 text-xs text-gray-500">Download to open in Word, Pages, Google Docs, or your preferred viewer.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(readerFile.path)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                    >
+                      <Download size={14} />
+                      Download file
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                     <p className="text-sm font-semibold text-gray-700">This file type cannot be previewed here yet.</p>

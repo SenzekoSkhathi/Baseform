@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
 import { getUserCredits, getCreditTransactions, CREDIT_CAP, WEEKLY_TOP_UP, GRADE11_WEEKLY_TOP_UP } from "@/lib/credits";
+import { VAULT_LIMITS_BYTES } from "@/lib/vault/limits";
 import { BarChart2, FileText, FolderOpen, Layers, Zap } from "lucide-react";
 
 export const metadata = { title: "Usage — Settings" };
@@ -15,13 +16,9 @@ const APP_LIMITS: Record<string, number | null> = {
   ultra: null,
 };
 
-// Vault storage limits in bytes (approximate per-tier ceiling)
-const VAULT_LIMITS: Record<string, number | null> = {
-  free: null,               // vault not available on free
-  essential: 100 * 1024 * 1024,   // 100 MB
-  pro: 500 * 1024 * 1024,         // 500 MB
-  ultra: 1024 * 1024 * 1024,      // 1 GB
-};
+// Vault storage limits are sourced from src/lib/vault/limits so the UI and the
+// upload handler can never show different numbers.
+const VAULT_LIMITS = VAULT_LIMITS_BYTES;
 
 function normalizeTier(raw: unknown): string {
   const t = String(raw ?? "free").trim().toLowerCase();
@@ -160,7 +157,9 @@ export default async function UsagePage() {
 
   const vaultLimit = VAULT_LIMITS[tier];
   const vaultPct = vaultLimit ? Math.round((vaultBytes / vaultLimit) * 100) : null;
-  const vaultLocked = tier === "free";
+  // Vault + Scanner are now available on every tier — free users get a smaller
+  // quota but can still upload, scan, and read their documents.
+  const vaultLocked = false;
 
   // Credits: Essential (Grade 12) or Pro (Grade 11)
   const hasCredits = (!isGrade11 && tier === "essential") || (isGrade11 && tier === "pro");
