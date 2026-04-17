@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS } from "@/lib/aps/calculator";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { deductCredits } from "@/lib/credits";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
@@ -19,15 +19,17 @@ export async function POST(req: NextRequest) {
 
   const { data: profileTier } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, plan_expires_at")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isFreePlanTier(profileTier?.tier)) {
+  if (isEffectivelyFreeTier(profileTier?.tier, profileTier?.plan_expires_at)) {
     return Response.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
   }
 
-  const { message, history } = (await req.json()) as {
+  const body = await req.json().catch(() => null);
+  if (!body) return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  const { message, history } = body as {
     message: string;
     history?: HistoryMessage[];
   };

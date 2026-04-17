@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+
   const name = String(body?.name ?? "").trim();
   const universityId = String(body?.university_id ?? "").trim();
   const apsMinimum = Number(body?.aps_minimum ?? 0);
@@ -31,13 +33,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "aps_minimum must be a non-negative number" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { error } = await admin.from("faculties").insert({
-    ...body,
+  const row = {
     name,
     university_id: universityId,
     aps_minimum: apsMinimum,
-  });
+    field_of_study: body?.field_of_study ?? null,
+    qualification_type: body?.qualification_type ?? null,
+    duration_years: body?.duration_years ?? null,
+    additional_requirements: body?.additional_requirements ?? null,
+  };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("faculties").insert(row);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -46,12 +53,7 @@ export async function POST(req: Request) {
     entityKey: name,
     action: "create",
     beforeData: null,
-    afterData: {
-      ...body,
-      name,
-      university_id: universityId,
-      aps_minimum: apsMinimum,
-    },
+    afterData: row,
   });
 
   return NextResponse.json({ success: true });
@@ -61,7 +63,9 @@ export async function PATCH(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id, ...changes } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id, ...changes } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   if ("name" in changes) {
@@ -106,7 +110,9 @@ export async function DELETE(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   const admin = createAdminClient();

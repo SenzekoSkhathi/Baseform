@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+
   const name = String(body?.name ?? "").trim();
   if (!name) return NextResponse.json({ error: "University name is required" }, { status: 400 });
 
@@ -29,12 +31,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Application fee cannot be negative" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { error } = await admin.from("universities").insert({
-    ...body,
+  const row = {
     name,
     abbreviation: body?.abbreviation ? String(body.abbreviation).toUpperCase().slice(0, 16) : null,
-  });
+    province: body?.province ?? null,
+    city: body?.city ?? null,
+    application_fee: applicationFee ?? null,
+    closing_date: body?.closing_date ?? null,
+    website_url: body?.website_url ?? null,
+    application_url: body?.application_url ?? null,
+    is_active: body?.is_active ?? true,
+  };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("universities").insert(row);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -43,11 +53,7 @@ export async function POST(req: Request) {
     entityKey: name,
     action: "create",
     beforeData: null,
-    afterData: {
-      ...body,
-      name,
-      abbreviation: body?.abbreviation ? String(body.abbreviation).toUpperCase().slice(0, 16) : null,
-    },
+    afterData: row,
   });
 
   return NextResponse.json({ success: true });
@@ -57,7 +63,9 @@ export async function PATCH(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id, ...changes } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id, ...changes } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   if ("name" in changes) {
@@ -102,7 +110,9 @@ export async function DELETE(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   const admin = createAdminClient();

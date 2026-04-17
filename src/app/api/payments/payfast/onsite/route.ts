@@ -74,6 +74,21 @@ export async function POST(req: NextRequest) {
   const amount = planId === "essential" ? selectedOption?.price ?? plan.price : plan.price;
   const mPaymentId = `${user.id}:${planId}${term ? `:${term}` : ""}`;
 
+  // Grade 11 Pro is a monthly recurring subscription that auto-stops at end of
+  // November (Grade 11 academic year end). Cycles = remaining months of the year.
+  const isGrade11ProSubscription = isGrade11 && planId === "pro";
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1; // 1-12
+
+  if (isGrade11ProSubscription && currentMonth === 12) {
+    return NextResponse.json(
+      { error: "Grade 11 Pro is unavailable in December — subscribe again from January." },
+      { status: 400 }
+    );
+  }
+
+  const subscriptionCycles = isGrade11ProSubscription ? 12 - currentMonth : 0;
+
   const fields: Record<string, string> = {
     merchant_id: config.merchantId,
     merchant_key: config.merchantKey,
@@ -98,6 +113,14 @@ export async function POST(req: NextRequest) {
     custom_str2: user.id,
     custom_str3: term ? String(term) : "",
   };
+
+  if (isGrade11ProSubscription) {
+    fields.subscription_type = "1";
+    fields.billing_date = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    fields.recurring_amount = toPayFastAmount(amount);
+    fields.frequency = "3"; // Monthly
+    fields.cycles = String(subscriptionCycles);
+  }
 
   const signature = createPayFastSignature(fields, config.passphrase);
 

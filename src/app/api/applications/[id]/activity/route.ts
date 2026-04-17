@@ -10,7 +10,8 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: applicationId } = await context.params;
-  const body = (await req.json()) as { note?: string };
+  const body = (await req.json().catch(() => null)) as { note?: string } | null;
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   const note = body.note?.trim();
   if (!note) return NextResponse.json({ error: "Note is required." }, { status: 400 });
 

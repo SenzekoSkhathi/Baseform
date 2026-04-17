@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 
 async function isFreeUser(userId: string): Promise<boolean> {
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, plan_expires_at")
     .eq("id", userId)
     .maybeSingle();
-  return isFreePlanTier(profile?.tier);
+  return isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at);
 }
 
 // GET /api/basebot/threads — fetch all threads for the logged-in user

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { hasAdminAccess } from "@/lib/admin/access";
 
 // ---------------------------------------------------------------------------
@@ -153,11 +153,11 @@ export async function middleware(request: NextRequest) {
   if (isBaseBotRoute && !pathname.startsWith("/basebot/preview") && user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("tier")
+      .select("tier, plan_expires_at")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (isFreePlanTier(profile?.tier)) {
+    if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
       return NextResponse.redirect(new URL("/basebot/preview", request.url));
     }
   }
@@ -167,6 +167,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|.*\\.svg$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw\\.js|offline\\.html|.*\\.svg$).*)",
   ],
 };

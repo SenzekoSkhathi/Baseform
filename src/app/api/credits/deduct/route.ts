@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { deductCredits, CREDIT_COSTS, type CreditAction } from "@/lib/credits";
 import { sendPushToUser } from "@/lib/webpush";
 
@@ -26,11 +26,11 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, plan_expires_at")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isFreePlanTier(profile?.tier)) {
+  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
     // Free plan users can use BaseBot only if they have unlocked referral credits
     const { data: freeCredits } = await supabase
       .from("user_credits")
@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
     // Has unlocked referral credits — fall through to deduct
   }
 
-  const body = (await req.json()) as { action?: string; description?: string };
+  const body = (await req.json().catch(() => null)) as { action?: string; description?: string } | null;
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   if (!body.action || !isValidAction(body.action)) {
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   }

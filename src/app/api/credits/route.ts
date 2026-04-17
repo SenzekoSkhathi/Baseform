@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { getUserCredits, getCreditTransactions } from "@/lib/credits";
 
 export async function GET() {
@@ -10,11 +10,11 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, plan_expires_at")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isFreePlanTier(profile?.tier)) {
+  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
     return NextResponse.json({ error: "Credits are available on paid plans only." }, { status: 403 });
   }
 

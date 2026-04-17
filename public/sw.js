@@ -1,5 +1,16 @@
-const CACHE_NAME = "baseform-shell-v4";
-const PRECACHE_URLS = ["/", "/manifest.json", "/icon.png", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE_NAME = "baseform-shell-v5";
+const OFFLINE_URL = "/offline.html";
+
+// Only precache static assets that won't redirect or require auth.
+// Do NOT include "/" — it redirects to /dashboard for logged-in users and
+// that redirect response breaks cache.addAll, which aborts the entire install.
+const PRECACHE_URLS = [
+  OFFLINE_URL,
+  "/manifest.json",
+  "/icon.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+];
 
 function isStaticAsset(pathname) {
   return (
@@ -11,24 +22,39 @@ function isStaticAsset(pathname) {
   );
 }
 
+// Per-URL cache.put so one failure doesn't abort the whole install.
+async function precacheResilient(cache, urls) {
+  await Promise.allSettled(
+    urls.map(async (url) => {
+      try {
+        const res = await fetch(url, { cache: "reload", redirect: "follow" });
+        if (res.ok) await cache.put(url, res);
+      } catch {
+        // Swallow — SW install must still succeed even if a single asset fails.
+      }
+    })
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await precacheResilient(cache, PRECACHE_URLS);
+      await self.skipWaiting();
+    })()
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -65,7 +91,6 @@ self.addEventListener("notificationclick", (event) => {
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // If app is already open, focus it and navigate
         for (const client of clientList) {
           if ("focus" in client) {
             client.focus();
@@ -73,7 +98,6 @@ self.addEventListener("notificationclick", (event) => {
             return;
           }
         }
-        // Otherwise open a new tab
         if (self.clients.openWindow) return self.clients.openWindow(href);
       })
   );
@@ -81,9 +105,6 @@ self.addEventListener("notificationclick", (event) => {
 
 // ── Fetch handler ─────────────────────────────────────────────────────────────
 
-// Only cache a response if it is a successful, non-redirect, non-opaque response.
-// Caching redirects or opaque responses corrupts the cache and causes
-// "opaqueredirect" errors on subsequent navigations.
 function isCacheable(response) {
   return (
     response &&
@@ -95,67 +116,86 @@ function isCacheable(response) {
   );
 }
 
+// Always returns a valid Response — never undefined. Falls back to the
+// offline page for navigations and to a minimal error Response otherwise.
+async function fallbackResponse(request) {
+  if (request.mode === "navigate") {
+    const offline = await caches.match(OFFLINE_URL);
+    if (offline) return offline;
+  }
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  return new Response("", {
+    status: 503,
+    statusText: "Offline",
+    headers: { "Content-Type": "text/plain" },
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+
+  if (request.method !== "GET") return;
+
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api")) return;
+
   const acceptHeader = request.headers.get("accept") || "";
   const isRscRequest = url.searchParams.has("_rsc") || acceptHeader.includes("text/x-component");
   const shouldUseNetworkFirst = request.mode === "navigate" || isRscRequest;
 
-  if (request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api")) return;
-
   if (shouldUseNetworkFirst) {
     event.respondWith(
-      // Use redirect:"follow" so the SW never receives an opaqueredirect —
-      // the browser follows redirects and we see the final 200 response.
-      fetch(request, { redirect: "follow" })
-        .then((response) => {
+      (async () => {
+        try {
+          const response = await fetch(request, { redirect: "follow" });
           if (isCacheable(response)) {
             const cloned = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned)).catch(() => {});
           }
           return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          if (request.mode === "navigate") return caches.match("/");
-          return Response.error();
-        })
+        } catch {
+          return fallbackResponse(request);
+        }
+      })()
     );
     return;
   }
 
   if (!isStaticAsset(url.pathname)) {
     event.respondWith(
-      fetch(request, { redirect: "follow" })
-        .then((response) => {
+      (async () => {
+        try {
+          const response = await fetch(request, { redirect: "follow" });
           if (isCacheable(response)) {
             const cloned = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned)).catch(() => {});
           }
           return response;
-        })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
+        } catch {
+          return fallbackResponse(request);
+        }
+      })()
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
+    (async () => {
+      const cached = await caches.match(request);
       if (cached) return cached;
 
-      return fetch(request, { redirect: "follow" })
-        .then((response) => {
-          if (isCacheable(response)) {
-            const cloned = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
-          }
-          return response;
-        })
-        .catch(() => caches.match("/"));
-    })
+      try {
+        const response = await fetch(request, { redirect: "follow" });
+        if (isCacheable(response)) {
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned)).catch(() => {});
+        }
+        return response;
+      } catch {
+        return fallbackResponse(request);
+      }
+    })()
   );
 });

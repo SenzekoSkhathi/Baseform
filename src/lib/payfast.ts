@@ -5,10 +5,12 @@ const SANDBOX_PROCESS_URL = "https://sandbox.payfast.co.za/eng/process";
 const SANDBOX_VALIDATE_URL = "https://sandbox.payfast.co.za/eng/query/validate";
 const SANDBOX_ONSITE_URL = "https://sandbox.payfast.co.za/onsite/process";
 const SANDBOX_ENGINE_URL = "https://sandbox.payfast.co.za/onsite/engine.js";
+const SANDBOX_API_URL = "https://api.payfast.co.za"; // PayFast uses same API host; sandbox mode toggled via testing header
 const LIVE_PROCESS_URL = "https://www.payfast.co.za/eng/process";
 const LIVE_VALIDATE_URL = "https://www.payfast.co.za/eng/query/validate";
 const LIVE_ONSITE_URL = "https://www.payfast.co.za/onsite/process";
 const LIVE_ENGINE_URL = "https://www.payfast.co.za/onsite/engine.js";
+const LIVE_API_URL = "https://api.payfast.co.za";
 
 export type PayFastMode = "sandbox" | "live";
 
@@ -115,4 +117,49 @@ export function isAmountMatch(actual: string, expected: string): boolean {
   }
 
   return Math.abs(actualNumber - expectedNumber) < 0.01;
+}
+
+export function getPayFastApiUrl(config: PayFastConfig): string {
+  return config.mode === "sandbox" ? SANDBOX_API_URL : LIVE_API_URL;
+}
+
+/**
+ * Cancel a PayFast recurring subscription.
+ * https://developers.payfast.co.za/docs#subscriptions
+ * Auth is an md5 signature over timestamped merchant fields (same scheme as ITN).
+ */
+export async function cancelPayFastSubscription(
+  token: string
+): Promise<{ ok: boolean; error?: string }> {
+  const config = getPayFastConfig();
+  const timestamp = new Date().toISOString();
+  const authFields: Record<string, string> = {
+    "merchant-id": config.merchantId,
+    version: "v1",
+    timestamp,
+  };
+  const signature = createPayFastSignature(authFields, config.passphrase);
+
+  const url = `${getPayFastApiUrl(config)}/subscriptions/${encodeURIComponent(token)}/cancel${
+    config.mode === "sandbox" ? "?testing=true" : ""
+  }`;
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "merchant-id": config.merchantId,
+      version: "v1",
+      timestamp,
+      signature,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, error: `PayFast cancel failed (${res.status}): ${text.slice(0, 200)}` };
+  }
+
+  return { ok: true };
 }

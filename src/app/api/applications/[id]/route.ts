@@ -17,11 +17,13 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await context.params;
-  const body = (await req.json()) as {
+  const body = (await req.json().catch(() => null)) as {
     status?: string;
     notes?: string;
     checklist?: string[];
-  };
+  } | null;
+
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
   // Build update payload — only include fields that were sent
   const update: Record<string, unknown> = {};

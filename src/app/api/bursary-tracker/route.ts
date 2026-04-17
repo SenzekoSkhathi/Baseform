@@ -25,7 +25,9 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { bursaryId, bursaryName, status } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { bursaryId, bursaryName, status } = body;
 
   if (!bursaryId || !bursaryName || !["saved", "applied"].includes(status)) {
     return NextResponse.json({ error: "bursaryId, bursaryName, and status (saved|applied) required" }, { status: 400 });
@@ -56,7 +58,9 @@ export async function DELETE(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { bursaryId } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { bursaryId } = body;
   if (!bursaryId) return NextResponse.json({ error: "bursaryId required" }, { status: 400 });
 
   const { error } = await supabase

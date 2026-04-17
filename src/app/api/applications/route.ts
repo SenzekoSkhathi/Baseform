@@ -31,7 +31,9 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { facultyIds, universityId } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { facultyIds, universityId } = body;
   if (!Array.isArray(facultyIds) || facultyIds.length === 0 || !universityId) {
     return NextResponse.json({ error: "facultyIds and universityId required" }, { status: 400 });
   }
@@ -121,7 +123,9 @@ export async function PATCH(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { orderedApplicationIds } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { orderedApplicationIds } = body;
 
   if (!Array.isArray(orderedApplicationIds) || orderedApplicationIds.length < 2) {
     return NextResponse.json({ error: "orderedApplicationIds must contain at least 2 ids" }, { status: 400 });
@@ -182,7 +186,9 @@ export async function DELETE(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { applicationId } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { applicationId } = body;
   if (!applicationId) {
     return NextResponse.json({ error: "applicationId required" }, { status: 400 });
   }

@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/sender";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
   const html = `<!DOCTYPE html>
@@ -184,11 +184,11 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("full_name, email, tier")
+    .select("full_name, email, tier, plan_expires_at")
     .eq("id", state)
     .maybeSingle();
 
-  if (isFreePlanTier(profile?.tier)) {
+  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
     return NextResponse.redirect(`${redirectBase}/profile?gmail=locked`);
   }
 

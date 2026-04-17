@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+
   const title = String(body?.title ?? "").trim();
   const minimumAps = Number(body?.minimum_aps ?? 0);
 
@@ -29,12 +31,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "minimum_aps must be a non-negative number" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { error } = await admin.from("bursaries").insert({
-    ...body,
+  const row = {
     title,
+    provider: body?.provider ?? null,
+    description: body?.description ?? null,
     minimum_aps: minimumAps,
-  });
+    amount_per_year: body?.amount_per_year ?? null,
+    closing_date: body?.closing_date ?? null,
+    application_url: body?.application_url ?? null,
+    detail_page_url: body?.detail_page_url ?? null,
+    application_links: body?.application_links ?? null,
+    funding_value: body?.funding_value ?? null,
+    eligibility_requirements: body?.eligibility_requirements ?? null,
+    application_instructions: body?.application_instructions ?? null,
+    source_category: body?.source_category ?? null,
+    provinces_eligible: body?.provinces_eligible ?? null,
+    fields_of_study: body?.fields_of_study ?? null,
+    is_active: body?.is_active ?? true,
+  };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("bursaries").insert(row);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -43,11 +60,7 @@ export async function POST(req: Request) {
     entityKey: title,
     action: "create",
     beforeData: null,
-    afterData: {
-      ...body,
-      title,
-      minimum_aps: minimumAps,
-    },
+    afterData: row,
   });
 
   return NextResponse.json({ success: true });
@@ -57,7 +70,9 @@ export async function PATCH(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id, ...changes } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id, ...changes } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   if ("title" in changes) {
@@ -102,7 +117,9 @@ export async function DELETE(req: Request) {
   const guard = await requireAdminGuard();
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const { id } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const { id } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   const admin = createAdminClient();

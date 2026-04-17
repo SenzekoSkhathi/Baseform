@@ -11,6 +11,7 @@ import {
   normalizeBillingTermMonths,
   type BillingTermMonths,
 } from "@/lib/billing-options";
+import { cacheGradeYear, readCachedGradeYear } from "@/lib/onboarding/grade-year";
 
 declare global {
   interface Window {
@@ -54,9 +55,12 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [gradeYear, setGradeYear] = useState<string | null>(null);
+  // Seed from the onboarding cache so the order summary doesn't flash the
+  // Grade 12 price before the profile fetch resolves.
+  const [gradeYear, setGradeYear] = useState<string | null>(() => readCachedGradeYear());
+  const [gradeResolved, setGradeResolved] = useState<boolean>(() => readCachedGradeYear() !== null);
   const [planMap, setPlanMap] = useState<Record<string, PublicPlan>>(() =>
-    mapPlans(DEFAULT_PLANS)
+    mapPlans(readCachedGradeYear() === "Grade 11" ? GRADE11_PLANS : DEFAULT_PLANS)
   );
 
   const plan = useMemo(() => {
@@ -84,42 +88,54 @@ export default function PaymentPage() {
 
   // Resolve grade year from profile, then set the correct plan prices
   useEffect(() => {
+    let cancelled = false;
     async function resolveGrade() {
+      let grade: string | null = null;
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("grade_year")
-          .eq("id", user.id)
-          .maybeSingle();
-        const grade = profile?.grade_year ?? null;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setGradeYear(grade);
-        if (grade === "Grade 11") {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setPlanMap(mapPlans(GRADE11_PLANS));
-          return;
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("grade_year")
+            .eq("id", user.id)
+            .maybeSingle();
+          grade = profile?.grade_year ?? null;
         }
       } catch {
-        // fall through to site-config fetch
+        // fall through
+      }
+
+      if (cancelled) return;
+
+      if (grade) {
+        setGradeYear(grade);
+        cacheGradeYear(grade);
+      }
+
+      if (grade === "Grade 11") {
+        setPlanMap(mapPlans(GRADE11_PLANS));
+        setGradeResolved(true);
+        return;
       }
 
       // Grade 12 / unknown: load from site config
       try {
         const res = await fetch("/api/site-config");
-        if (!res.ok) return;
-        const payload = await res.json();
-        if (Array.isArray(payload?.plans)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setPlanMap(mapPlans(payload.plans as PublicPlan[]));
+        if (res.ok) {
+          const payload = await res.json();
+          if (!cancelled && Array.isArray(payload?.plans)) {
+            setPlanMap(mapPlans(payload.plans as PublicPlan[]));
+          }
         }
       } catch {
         // keep defaults
       }
+
+      if (!cancelled) setGradeResolved(true);
     }
     void resolveGrade();
+    return () => { cancelled = true; };
   }, []);
 
   // Handle PayFast return callbacks via URL status param
@@ -260,6 +276,19 @@ export default function PaymentPage() {
 
   const features = planData?.features ?? [];
   const planName = planData?.name ?? "Essential";
+
+  // Don't render the order summary until we know the grade year, otherwise
+  // Grade 11 users briefly see the Grade 12 price on first paint.
+  if (!gradeResolved && gradeYear === null) {
+    return (
+      <main className="min-h-screen w-full bg-[#fff9f2] flex items-center justify-center px-4">
+        <div className="flex items-center gap-3 text-slate-500">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-500" />
+          <span className="text-sm font-medium">Loading your plan…</span>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen w-full bg-[#fff9f2] flex items-center justify-center px-4 py-10">

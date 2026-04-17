@@ -6,6 +6,7 @@ import { Check, Lock, Zap, ChevronLeft } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_PLANS, GRADE11_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { cacheGradeYear, readCachedGradeYear } from "@/lib/onboarding/grade-year";
 
 type PlanId = "free" | "essential" | "pro" | "ultra";
 
@@ -43,16 +44,31 @@ function mapPlans(rows: PublicPlan[]): Plan[] {
 function PlansPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const paramPlan = toPlanId(searchParams.get("plan") ?? "essential");
+  const rawParamPlan = searchParams.get("plan");
+  const paramPlan: PlanId | null = rawParamPlan ? toPlanId(rawParamPlan) : null;
 
   const [plans, setPlans] = useState<Plan[]>(() => mapPlans(DEFAULT_PLANS));
-  const [selected, setSelected] = useState<PlanId>(paramPlan);
+  // Fall back to the recommended plan from the default pool so that, before
+  // anything else loads, the highlighted card already matches the badge.
+  const initialRecommendedSlug =
+    DEFAULT_PLANS.find((p) => p.recommended && p.available)?.slug ??
+    DEFAULT_PLANS.find((p) => p.available)?.slug;
+  const initialSelected: PlanId = paramPlan ?? (initialRecommendedSlug ? toPlanId(initialRecommendedSlug) : "free");
+  const [selected, setSelected] = useState<PlanId>(initialSelected);
+  // Tracks whether the user (or URL) has pinned a choice. When false, we keep
+  // re-picking the recommended plan as the active pool changes (e.g. Grade 11
+  // resolves, or site-config loads a different recommendation).
+  const [userPicked, setUserPicked] = useState<boolean>(paramPlan !== null);
   const [loading, setLoading] = useState(false);
-  const [gradeYear, setGradeYear] = useState<string | null>(null);
+  // Seed grade year synchronously from the onboarding cache so the first paint
+  // already shows the correct pool. gradeResolved tracks whether the profile
+  // fetch has verified/updated the cached value.
+  const [gradeYear, setGradeYear] = useState<string | null>(() => readCachedGradeYear());
+  const [gradeResolved, setGradeResolved] = useState<boolean>(() => readCachedGradeYear() !== null);
 
   useEffect(() => {
+    let cancelled = false;
     async function resolveGradeYear() {
-      await Promise.resolve();
       try {
         // Prefer the authenticated profile — localStorage can be stale from a
         // previous session or a different user on the same browser.
@@ -65,23 +81,19 @@ function PlansPageInner() {
             .select("grade_year")
             .eq("id", user.id)
             .maybeSingle();
-          setGradeYear(profile?.grade_year ?? null);
-          return;
+          if (cancelled) return;
+          const grade = profile?.grade_year ?? null;
+          setGradeYear(grade);
+          cacheGradeYear(grade);
         }
       } catch {
-        // fall through to localStorage
-      }
-
-      // Unauthenticated users (onboarding → plans flow): read from localStorage.
-      try {
-        const raw = localStorage.getItem("bf_onboarding");
-        const onboarding = raw ? JSON.parse(raw) : null;
-        if (onboarding?.gradeYear) setGradeYear(onboarding.gradeYear);
-      } catch {
-        // ignore
+        // keep whatever we seeded from cache
+      } finally {
+        if (!cancelled) setGradeResolved(true);
       }
     }
     void resolveGradeYear();
+    return () => { cancelled = true; };
   }, []);
 
   const isGrade11 = gradeYear === "Grade 11";
@@ -93,6 +105,16 @@ function PlansPageInner() {
     () => activePlans.find((p) => p.id === selected) ?? activePlans[0],
     [activePlans, selected]
   );
+
+  // Keep the selection aligned with the recommended plan until the user picks
+  // one explicitly. Re-runs when the pool flips (Grade 11 resolves, config loads).
+  useEffect(() => {
+    if (userPicked) return;
+    const recommended = activePlans.find((p) => p.recommended && p.available)?.id;
+    const fallback = activePlans.find((p) => p.available)?.id;
+    const next = recommended ?? fallback;
+    if (next && next !== selected) setSelected(toPlanId(String(next)));
+  }, [activePlans, userPicked, selected]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,18 +130,8 @@ function PlansPageInner() {
         if (incoming.length === 0) return;
 
         setPlans(incoming);
-
-        setSelected((prev) => {
-          // If the URL param plan exists and is available, keep it selected
-          const paramExists = incoming.some((p) => p.id === paramPlan && p.available);
-          if (paramExists) return paramPlan;
-          // Otherwise keep current selection if still valid
-          const stillExists = incoming.some((p) => p.id === prev && p.available);
-          if (stillExists) return prev;
-          const recommended = incoming.find((p) => p.recommended && p.available)?.id;
-          const available = incoming.find((p) => p.available)?.id;
-          return recommended ?? available ?? incoming[0].id;
-        });
+        // Don't touch `selected` here — the recommended-sync effect handles it
+        // when the user hasn't picked, and we must not override an explicit pick.
       } catch {
         // Keep defaults when config fetch fails.
       }
@@ -167,6 +179,25 @@ function PlansPageInner() {
       return;
     }
     router.push("/reveal");
+  }
+
+  // If we have no cached grade year and the profile fetch hasn't resolved yet,
+  // show a skeleton instead of rendering Grade 12 defaults momentarily.
+  if (!gradeResolved && gradeYear === null) {
+    return (
+      <main className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(65%_55%_at_12%_10%,rgba(251,146,60,0.18),transparent_62%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(50%_45%_at_90%_15%,rgba(56,189,248,0.10),transparent_70%)]" />
+        </div>
+        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-4">
+          <div className="flex items-center gap-3 text-slate-500">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-500" />
+            <span className="text-sm font-medium">Loading your plans…</span>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -235,6 +266,7 @@ function PlansPageInner() {
                       return;
                     }
                     setSelected(plan.id as PlanId);
+                    setUserPicked(true);
                   }}
                   disabled={isLocked}
                   className={`w-full text-left rounded-3xl border p-4 transition-all sm:p-5 ${

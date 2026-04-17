@@ -4,6 +4,7 @@ import { CreditCard, Download, ShieldCheck, Sparkles } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PLANS, GRADE11_PLANS, type PublicPlan } from "@/lib/site-config/defaults";
+import { CancelSubscriptionButton } from "./CancelSubscriptionButton";
 
 export const metadata = { title: "Billing — Settings" };
 
@@ -46,7 +47,11 @@ export default async function BillingPage() {
 
   const admin = createAdminClient();
   const [{ data: profile }, { data: history }] = await Promise.all([
-    admin.from("profiles").select("tier, grade_year").eq("id", user.id).maybeSingle(),
+    admin
+      .from("profiles")
+      .select("tier, grade_year, subscription_status, plan_expires_at, next_billing_date, subscription_cycles_remaining")
+      .eq("id", user.id)
+      .maybeSingle(),
     admin
       .from("billing_events")
       .select("id, plan_slug, amount_zar, status, term_months, term_label, payfast_payment_id, created_at")
@@ -55,12 +60,34 @@ export default async function BillingPage() {
       .limit(20),
   ]);
 
-  const tier = normalizeTier((profile as { tier?: string } | null)?.tier);
-  const isGrade11 = (profile as { grade_year?: string } | null)?.grade_year === "Grade 11";
+  type ProfileRow = {
+    tier?: string;
+    grade_year?: string;
+    subscription_status?: string | null;
+    plan_expires_at?: string | null;
+    next_billing_date?: string | null;
+    subscription_cycles_remaining?: number | null;
+  };
+  const profileRow = (profile ?? {}) as ProfileRow;
+  const tier = normalizeTier(profileRow.tier);
+  const isGrade11 = profileRow.grade_year === "Grade 11";
   const planPool = isGrade11 ? GRADE11_PLANS : DEFAULT_PLANS;
   const currentPlan = planPool.find((p) => p.slug === tier) ?? planPool[0];
   const paymentHistory = (history ?? []) as BillingEvent[];
   const latestPaid = paymentHistory.find((e) => e.status.toLowerCase() === "complete");
+
+  const isActiveSubscription =
+    profileRow.subscription_status === "active" && isGrade11 && tier === "pro";
+  const isCancelledSubscription = profileRow.subscription_status === "cancelled";
+
+  const formatDate = (value: string | null | undefined) =>
+    value
+      ? new Date(value).toLocaleDateString("en-ZA", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : null;
 
   return (
     <div className="space-y-4">
@@ -78,12 +105,43 @@ export default async function BillingPage() {
             <p className="mt-0.5 text-xl font-black text-gray-900">{currentPlan.name}</p>
             <p className="text-sm text-gray-500">{currentPlan.price}{currentPlan.period}</p>
           </div>
-          {latestPaid && (
+          {latestPaid && !isActiveSubscription && !isCancelledSubscription && (
             <p className="text-right text-xs text-orange-600 font-semibold">
               {latestPaid.term_label ?? `${latestPaid.term_months ?? 3} months`}
             </p>
           )}
         </div>
+
+        {/* Subscription details (Grade 11 Pro recurring) */}
+        {(isActiveSubscription || isCancelledSubscription) && (
+          <div className="mt-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm">
+            {isActiveSubscription ? (
+              <>
+                <p className="font-semibold text-gray-900">Auto-renewing monthly</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {profileRow.next_billing_date ? (
+                    <>Next charge: {formatDate(profileRow.next_billing_date)} · {currentPlan.price}</>
+                  ) : (
+                    "Your subscription ends with this billing period."
+                  )}
+                  {typeof profileRow.subscription_cycles_remaining === "number" && profileRow.subscription_cycles_remaining > 0 && (
+                    <> · {profileRow.subscription_cycles_remaining} billing
+                      {profileRow.subscription_cycles_remaining === 1 ? " cycle " : " cycles "}
+                      remaining (auto-stops end of November)
+                    </>
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-gray-900">Subscription cancelled</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  You keep Pro access until {formatDate(profileRow.plan_expires_at) ?? "the end of your current period"}.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="mt-4 flex flex-wrap gap-2">
@@ -94,7 +152,9 @@ export default async function BillingPage() {
             <Sparkles size={14} />
             Change plan
           </Link>
-          {tier !== "free" ? (
+          {isActiveSubscription ? (
+            <CancelSubscriptionButton />
+          ) : tier !== "free" ? (
             <Link
               href="/plans?plan=free"
               className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"

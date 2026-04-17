@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
+import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
 import {
   formatBillingTermLabel,
   getEssentialBillingOption,
@@ -28,24 +28,43 @@ type NotifyPayload = Record<string, string> & {
   custom_str2?: string;
   custom_str3?: string;
   signature?: string;
+  token?: string;
+  billing_date?: string;
 };
 
 function isAllowedPlan(plan: string): plan is PlanId {
   return plan === "essential" || plan === "pro" || plan === "ultra";
 }
 
-function expectedAmountForPlan(plan: PlanId): string {
-  const found = DEFAULT_PLANS.find((entry) => entry.slug === plan);
+function expectedAmountForPlan(plan: PlanId, isGrade11: boolean): string {
+  const pool = isGrade11 ? GRADE11_PLANS : DEFAULT_PLANS;
+  const found = pool.find((entry) => entry.slug === plan);
   return toPayFastAmount(found?.price ?? "0");
 }
 
-function expectedAmountForBilling(plan: PlanId, term: BillingTermMonths | null): string {
+function expectedAmountForBilling(
+  plan: PlanId,
+  term: BillingTermMonths | null,
+  isGrade11: boolean
+): string {
   if (plan === "essential") {
     const option = getEssentialBillingOption(term);
-    return option?.price ?? expectedAmountForPlan(plan);
+    return option?.price ?? expectedAmountForPlan(plan, isGrade11);
   }
 
-  return expectedAmountForPlan(plan);
+  return expectedAmountForPlan(plan, isGrade11);
+}
+
+function addMonthsToDate(date: Date, months: number): Date {
+  const d = new Date(date.getTime());
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+function addDaysToDate(date: Date, days: number): Date {
+  const d = new Date(date.getTime());
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
 async function verifyWithPayFast(payload: NotifyPayload): Promise<boolean> {
@@ -95,28 +114,108 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, message: "Payment not complete, no upgrade performed." });
   }
 
-  const plan = String(payload.custom_str1 ?? "").trim().toLowerCase();
-  const userId = String(payload.custom_str2 ?? "").trim();
-  const term = normalizeBillingTermMonths(payload.custom_str3);
+  const supabase = createAdminClient();
+  const token = String(payload.token ?? "").trim();
+  const isRecurringItn = Boolean(token);
 
-  if (!isAllowedPlan(plan) || !userId) {
-    return NextResponse.json({ ok: false, error: "Invalid plan or user." }, { status: 400 });
+  // Recurring ITN: identify user by token (custom_str2 may be stale / missing).
+  let plan: string;
+  let userId: string;
+  let term: BillingTermMonths | null;
+  let isGrade11 = false;
+
+  if (isRecurringItn) {
+    const { data: subscriber } = await supabase
+      .from("profiles")
+      .select("id, grade_year, subscription_cycles_remaining")
+      .eq("subscription_token", token)
+      .maybeSingle();
+
+    if (!subscriber) {
+      return NextResponse.json({ ok: false, error: "Unknown subscription token." }, { status: 400 });
+    }
+
+    userId = String(subscriber.id);
+    plan = "pro"; // Only Grade 11 Pro uses recurring today
+    term = null;
+    isGrade11 = subscriber.grade_year === "Grade 11";
+  } else {
+    plan = String(payload.custom_str1 ?? "").trim().toLowerCase();
+    userId = String(payload.custom_str2 ?? "").trim();
+    term = normalizeBillingTermMonths(payload.custom_str3);
+
+    if (!isAllowedPlan(plan) || !userId) {
+      return NextResponse.json({ ok: false, error: "Invalid plan or user." }, { status: 400 });
+    }
+
+    if (plan === "essential" && !term) {
+      return NextResponse.json({ ok: false, error: "Missing billing term." }, { status: 400 });
+    }
+
+    const { data: buyerProfile } = await supabase
+      .from("profiles")
+      .select("grade_year")
+      .eq("id", userId)
+      .maybeSingle();
+    isGrade11 = buyerProfile?.grade_year === "Grade 11";
   }
 
-  if (plan === "essential" && !term) {
-    return NextResponse.json({ ok: false, error: "Missing billing term." }, { status: 400 });
+  if (!isAllowedPlan(plan)) {
+    return NextResponse.json({ ok: false, error: "Invalid plan." }, { status: 400 });
   }
 
-  const expectedAmount = expectedAmountForBilling(plan, term);
+  const expectedAmount = expectedAmountForBilling(plan, term, isGrade11);
   const actualAmount = String(payload.amount_gross ?? "0");
   if (!isAmountMatch(actualAmount, expectedAmount)) {
     return NextResponse.json({ ok: false, error: "Amount mismatch." }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
+  // Build profile update: tier + subscription state (for Grade 11 Pro recurring)
+  const isGrade11ProSubscription = isGrade11 && plan === "pro";
+  const profileUpdate: Record<string, unknown> = { tier: plan };
+
+  if (isGrade11ProSubscription) {
+    // Access lasts 1 month (the billed period) + 7-day grace buffer in case the
+    // next ITN is delayed. If the next payment arrives on time, expiry is
+    // refreshed forward; if it never arrives, access lapses 7 days after the
+    // expected charge.
+    const billingDate = payload.billing_date ? new Date(payload.billing_date) : new Date();
+    const newExpiresAt = addDaysToDate(addMonthsToDate(billingDate, 1), 7);
+
+    if (isRecurringItn) {
+      const { data: current } = await supabase
+        .from("profiles")
+        .select("subscription_cycles_remaining")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const remaining = Math.max(0, (current?.subscription_cycles_remaining ?? 1) - 1);
+      profileUpdate.subscription_cycles_remaining = remaining;
+      profileUpdate.subscription_status = remaining === 0 ? "completed" : "active";
+      profileUpdate.plan_expires_at = newExpiresAt.toISOString();
+      profileUpdate.next_billing_date = remaining === 0
+        ? null
+        : addMonthsToDate(billingDate, 1).toISOString().slice(0, 10);
+    } else {
+      // First payment of a new subscription
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const cyclesTotal = Math.max(1, 12 - currentMonth);
+
+      profileUpdate.subscription_token = token || null;
+      profileUpdate.subscription_status = "active";
+      profileUpdate.subscription_cycles_total = cyclesTotal;
+      profileUpdate.subscription_cycles_remaining = cyclesTotal - 1;
+      profileUpdate.plan_expires_at = newExpiresAt.toISOString();
+      profileUpdate.next_billing_date = cyclesTotal > 1
+        ? addMonthsToDate(billingDate, 1).toISOString().slice(0, 10)
+        : null;
+    }
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({ tier: plan })
+    .update(profileUpdate)
     .eq("id", userId);
 
   if (error) {

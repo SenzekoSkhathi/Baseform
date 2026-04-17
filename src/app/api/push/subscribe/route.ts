@@ -12,7 +12,8 @@ export async function POST(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as SubscribeBody;
+  const body = (await req.json().catch(() => null)) as SubscribeBody | null;
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
     return NextResponse.json({ error: "Invalid subscription." }, { status: 400 });
   }
@@ -40,7 +41,8 @@ export async function DELETE(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as { endpoint: string };
+  const body = (await req.json().catch(() => null)) as { endpoint: string } | null;
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   if (!body.endpoint) return NextResponse.json({ error: "Endpoint required." }, { status: 400 });
 
   const admin = createAdminClient();

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isFreePlanTier } from "@/lib/access/tiers";
+import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { deductCredits } from "@/lib/credits";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
@@ -12,11 +12,11 @@ export async function POST() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier")
+    .select("tier, plan_expires_at")
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isFreePlanTier(profile?.tier)) {
+  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
     return NextResponse.json({ error: "Connect Gmail is available on paid plans only." }, { status: 403 });
   }
 

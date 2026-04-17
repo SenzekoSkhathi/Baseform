@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_PLANS } from "@/lib/site-config/defaults";
+import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
 import {
   getEssentialBillingOption,
   normalizeBillingTermMonths,
@@ -20,8 +20,9 @@ function isAllowedPlan(plan: string): plan is PlanId {
   return plan === "essential" || plan === "pro" || plan === "ultra";
 }
 
-function findPlan(planId: PlanId) {
-  return DEFAULT_PLANS.find((plan) => plan.slug === planId);
+function findPlan(planId: PlanId, isGrade11: boolean) {
+  const pool = isGrade11 ? GRADE11_PLANS : DEFAULT_PLANS;
+  return pool.find((plan) => plan.slug === planId);
 }
 
 export async function POST(req: NextRequest) {
@@ -31,15 +32,6 @@ export async function POST(req: NextRequest) {
 
   if (!isAllowedPlan(planId)) {
     return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 });
-  }
-
-  const plan = findPlan(planId);
-  if (!plan) {
-    return NextResponse.json({ error: "Selected plan was not found." }, { status: 404 });
-  }
-
-  if (!plan.available) {
-    return NextResponse.json({ error: "Selected plan is not available yet." }, { status: 400 });
   }
 
   if (planId === "essential" && !term) {
@@ -56,11 +48,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("grade_year")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isGrade11 = profileRow?.grade_year === "Grade 11";
+
+  const plan = findPlan(planId, isGrade11);
+  if (!plan) {
+    return NextResponse.json({ error: "Selected plan was not found." }, { status: 404 });
+  }
+
+  if (!plan.available) {
+    return NextResponse.json({ error: "Selected plan is not available yet." }, { status: 400 });
+  }
+
   const config = getPayFastConfig();
   const baseUrl = getBaseUrl(req);
   const selectedOption = planId === "essential" ? getEssentialBillingOption(term as BillingTermMonths) : undefined;
   const amount = planId === "essential" ? selectedOption?.price ?? plan.price : plan.price;
   const mPaymentId = `${user.id}:${planId}${term ? `:${term}` : ""}`;
+
+  const isGrade11ProSubscription = isGrade11 && planId === "pro";
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1;
+
+  if (isGrade11ProSubscription && currentMonth === 12) {
+    return NextResponse.json(
+      { error: "Grade 11 Pro is unavailable in December — subscribe again from January." },
+      { status: 400 }
+    );
+  }
+
+  const subscriptionCycles = isGrade11ProSubscription ? 12 - currentMonth : 0;
 
   const fields: Record<string, string> = {
     merchant_id: config.merchantId,
@@ -82,6 +103,14 @@ export async function POST(req: NextRequest) {
     custom_str2: user.id,
     custom_str3: term ? String(term) : "",
   };
+
+  if (isGrade11ProSubscription) {
+    fields.subscription_type = "1";
+    fields.billing_date = today.toISOString().slice(0, 10);
+    fields.recurring_amount = toPayFastAmount(amount);
+    fields.frequency = "3";
+    fields.cycles = String(subscriptionCycles);
+  }
 
   const signature = createPayFastSignature(fields, config.passphrase);
 

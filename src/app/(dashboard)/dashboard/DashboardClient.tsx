@@ -8,6 +8,7 @@ import SubjectGapCard from "@/components/dashboard/SubjectGapCard";
 import CountdownCard from "@/components/dashboard/CountdownCard";
 import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
+import { cacheGradeYear } from "@/lib/onboarding/grade-year";
 
 type Profile = {
   full_name: string;
@@ -165,6 +166,12 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
 
   const [greeting, setGreeting] = useState("Welcome");
   const [date, setDate] = useState("");
+
+  // Keep the onboarding cache in sync so /plans and /payment can render the
+  // correct plan pool on first paint without a profile fetch round-trip.
+  useEffect(() => {
+    cacheGradeYear(gradeYear);
+  }, [gradeYear]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
