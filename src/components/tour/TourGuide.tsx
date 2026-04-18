@@ -241,14 +241,30 @@ const GUIDE_META = {
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
-const KEY = "bf_tour_v1";
+const KEY_PREFIX = "bf_tour_v1:";
+const LEGACY_KEY = "bf_tour_v1";
+
+function keyFor(userId: string) {
+  return `${KEY_PREFIX}${userId}`;
+}
 
 function loadTour(userId: string): TourState {
   try {
-    const raw = localStorage.getItem(KEY);
+    // Migrate legacy single-slot state if it belongs to this user.
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      try {
+        const parsed = JSON.parse(legacy) as TourState;
+        if (parsed.userId === userId && localStorage.getItem(keyFor(userId)) === null) {
+          localStorage.setItem(keyFor(userId), legacy);
+        }
+      } catch { /* ignore */ }
+      localStorage.removeItem(LEGACY_KEY);
+    }
+
+    const raw = localStorage.getItem(keyFor(userId));
     if (raw) {
       const parsed = JSON.parse(raw) as TourState;
-      // Only reuse stored state if it belongs to this user
       if (parsed.userId === userId) return parsed;
     }
   } catch { /* ignore */ }
@@ -259,7 +275,8 @@ function loadTour(userId: string): TourState {
 }
 
 function saveTour(s: TourState) {
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
+  if (!s.userId) return;
+  try { localStorage.setItem(keyFor(s.userId), JSON.stringify(s)); } catch { /* ignore */ }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────

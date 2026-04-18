@@ -57,7 +57,13 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 }
 
 function restartTour() {
-  try { localStorage.removeItem("bf_tour_v1"); } catch { /* ignore */ }
+  try {
+    localStorage.removeItem("bf_tour_v1");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("bf_tour_v1:")) localStorage.removeItem(key);
+    }
+  } catch { /* ignore */ }
   window.location.href = "/dashboard";
 }
 
