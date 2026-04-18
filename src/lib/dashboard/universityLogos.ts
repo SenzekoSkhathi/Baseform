@@ -1,6 +1,7 @@
 /**
- * Fallback logo URLs keyed by university short_name/abbreviation.
- * Used when logo_url is null in the database.
+ * Canonical logo URLs keyed by university short_name/abbreviation.
+ * This file is the single source of truth — Supabase logo_url values are
+ * intentionally ignored.
  * Sources: Wikimedia Commons (stable public CDN).
  */
 export const UNIVERSITY_LOGOS: Record<string, string> = {
@@ -35,17 +36,10 @@ export const UNIVERSITY_LOGOS: Record<string, string> = {
 };
 
 /**
- * Returns a logo URL for a university.
- * The static map above is the source of truth. Falls back to the
- * Supabase-stored value only when the abbreviation isn't in the map.
+ * Returns a logo URL for a university based solely on the static map above.
+ * The second argument is kept for call-site compatibility but is ignored —
+ * Supabase-stored logo URLs are no longer consulted.
  */
-export function getUniversityLogo(abbreviation: string, dbLogoUrl?: string | null): string | null {
-  const mapped = UNIVERSITY_LOGOS[abbreviation.toUpperCase()];
-  if (mapped) return mapped;
-
-  if (typeof dbLogoUrl === "string" && dbLogoUrl.trim()) {
-    return dbLogoUrl.trim();
-  }
-
-  return null;
+export function getUniversityLogo(abbreviation: string, _dbLogoUrl?: string | null): string | null {
+  return UNIVERSITY_LOGOS[abbreviation.toUpperCase()] ?? null;
 }
