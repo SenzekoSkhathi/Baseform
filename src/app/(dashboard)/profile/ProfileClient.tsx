@@ -22,6 +22,8 @@ const PROVINCES = [
 
 const RELATIONSHIPS = ["Parent", "Guardian", "Grandparent", "Sibling", "Other"];
 
+const GRADES = ["Grade 11", "Grade 12"] as const;
+
 const FIELDS = [
   "Engineering & Technology",
   "Health Sciences & Medicine",
@@ -384,6 +386,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
   const [editValues, setEditValues] = useState({
     full_name: profile?.full_name ?? "",
     school_name: profile?.school_name ?? "",
+    grade_year: profile?.grade_year ?? "",
     province: profile?.province ?? "",
     field_of_interest: profile?.field_of_interest ?? "",
     guardian_name: profile?.guardian_name ?? "",
@@ -409,6 +412,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
       .update({
         full_name: editValues.full_name.trim(),
         school_name: editValues.school_name.trim() || null,
+        grade_year: editValues.grade_year || null,
         province: editValues.province || null,
         field_of_interest: editValues.field_of_interest || null,
         guardian_name: editValues.guardian_name.trim() || null,
@@ -431,6 +435,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
             ...prev,
             full_name: editValues.full_name.trim(),
             school_name: editValues.school_name.trim() || null,
+            grade_year: editValues.grade_year || null,
             province: editValues.province || null,
             field_of_interest: editValues.field_of_interest || null,
             guardian_name: editValues.guardian_name.trim() || null,
@@ -450,6 +455,7 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
     setEditValues({
       full_name: displayProfile?.full_name ?? "",
       school_name: displayProfile?.school_name ?? "",
+      grade_year: displayProfile?.grade_year ?? "",
       province: displayProfile?.province ?? "",
       field_of_interest: displayProfile?.field_of_interest ?? "",
       guardian_name: displayProfile?.guardian_name ?? "",
@@ -894,6 +900,26 @@ export default function ProfileClient({ profile, aps, subjects, email, userId }:
                       className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
                       placeholder="School name"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500">Current grade</label>
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      {GRADES.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setEditValues((v) => ({ ...v, grade_year: g }))}
+                          className={`rounded-xl border py-2.5 text-sm font-medium transition-colors ${
+                            editValues.grade_year === g
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-gray-200 text-gray-600 hover:border-orange-300"
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>

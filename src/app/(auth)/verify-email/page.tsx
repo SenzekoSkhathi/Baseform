@@ -30,15 +30,6 @@ export default function VerifyEmailPage() {
   }
 
   async function persistPendingSignupProfile() {
-    const raw = localStorage.getItem("bf_pending_signup_profile");
-    if (!raw) return;
-
-    const payload = JSON.parse(raw);
-
-    // Attach referral code if one was captured at sign-up
-    const pendingReferral = localStorage.getItem("bf_pending_referral");
-    if (pendingReferral) payload.referral_code = pendingReferral;
-
     const supabase = createClient();
     const {
       data: { user },
@@ -48,6 +39,14 @@ export default function VerifyEmailPage() {
     if (userError || !user) {
       throw new Error("Could not load verified user session.");
     }
+
+    // Same-device fast path: use localStorage payload. Different-device path:
+    // post an empty body and let the server fall back to auth user_metadata.
+    const raw = localStorage.getItem("bf_pending_signup_profile");
+    const payload: Record<string, unknown> = raw ? JSON.parse(raw) : {};
+
+    const pendingReferral = localStorage.getItem("bf_pending_referral");
+    if (pendingReferral && !payload.referral_code) payload.referral_code = pendingReferral;
 
     const res = await fetch("/api/auth/signup/profile", {
       method: "POST",

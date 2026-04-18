@@ -106,12 +106,44 @@ export default function SignupPage() {
     const supabase = createClient();
     const redirectTo = `${window.location.origin}/verify-email`;
 
+    const pendingReferral = localStorage.getItem("bf_pending_referral");
+
+    const pendingSignupPayload = {
+      email,
+      profile: {
+        full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" "),
+        phone: onboarding?.phone ?? null,
+        school_name: onboarding?.schoolName ?? null,
+        grade_year: onboarding?.gradeYear ? onboarding.gradeYear : null,
+        province: onboarding?.province ?? null,
+        financial_need:
+          onboarding?.financialNeed === "yes" || onboarding?.financialNeed === "no"
+            ? onboarding.financialNeed
+            : null,
+        field_of_interest: onboarding?.fieldOfInterest ?? null,
+        guardian_name: guardian.name,
+        guardian_phone: guardian.phone,
+        guardian_relationship: guardian.relationship,
+        guardian_email: guardian.email || null,
+        guardian_whatsapp_number: whatsappSameAsPhone
+          ? guardian.phone
+          : guardian.whatsapp || null,
+      },
+      subjects: onboarding?.subjects ?? [],
+      ...(pendingReferral ? { referral_code: pendingReferral } : {}),
+    };
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: { full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" ") },
+        data: {
+          full_name: pendingSignupPayload.profile.full_name,
+          // Mirror the full onboarding payload into auth user_metadata so it survives
+          // email verification on a different device / browser (where localStorage is empty).
+          pending_signup_profile: pendingSignupPayload,
+        },
       },
     });
 
@@ -128,32 +160,10 @@ export default function SignupPage() {
       return;
     }
 
-    // Persist signup payload locally and save to DB only after email verification succeeds.
-    localStorage.setItem(
-      "bf_pending_signup_profile",
-      JSON.stringify({
-        email,
-        profile: {
-          full_name: [onboarding?.firstName, onboarding?.lastName].filter(Boolean).join(" "),
-          phone: onboarding?.phone ?? null,
-          school_name: onboarding?.schoolName ?? null,
-          grade_year: onboarding?.gradeYear ? onboarding.gradeYear : null,
-          province: onboarding?.province ?? null,
-          financial_need: onboarding?.financialNeed === "yes" || onboarding?.financialNeed === "no"
-            ? onboarding.financialNeed
-            : null,
-          field_of_interest: onboarding?.fieldOfInterest ?? null,
-          guardian_name: guardian.name,
-          guardian_phone: guardian.phone,
-          guardian_relationship: guardian.relationship,
-          guardian_email: guardian.email || null,
-          guardian_whatsapp_number: whatsappSameAsPhone
-            ? guardian.phone
-            : guardian.whatsapp || null,
-        },
-        subjects: onboarding?.subjects ?? [],
-      })
-    );
+    // Fast path on same device: persist the payload locally so verify-email can save
+    // without a round-trip to auth metadata. If the user verifies on a different device,
+    // the server falls back to user_metadata instead.
+    localStorage.setItem("bf_pending_signup_profile", JSON.stringify(pendingSignupPayload));
 
     localStorage.removeItem("bf_onboarding");
     router.push(`/verify-email?email=${encodeURIComponent(email)}`);

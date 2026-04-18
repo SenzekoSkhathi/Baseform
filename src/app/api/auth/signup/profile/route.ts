@@ -104,44 +104,46 @@ const subjectSchema = z.object({
   mark: z.number().int().min(0).max(100),
 });
 
+const profileSchema = z.object({
+  full_name: z.string().min(1).max(120),
+  phone: z.string().max(20).nullable().optional(),
+  school_name: z.string().max(120).nullable().optional(),
+  grade_year: z.enum(["Grade 11", "Grade 12"]).nullable().optional(),
+  province: z.enum([
+    "Gauteng",
+    "Western Cape",
+    "Eastern Cape",
+    "KwaZulu-Natal",
+    "Limpopo",
+    "Mpumalanga",
+    "North West",
+    "Free State",
+    "Northern Cape",
+  ]).nullable().optional(),
+  financial_need: z.enum(["yes", "no"]).nullable().optional(),
+  field_of_interest: z.string().max(80).nullable().optional(),
+  guardian_name: z.string().min(1).max(120),
+  guardian_phone: z.string().min(1).max(20),
+  guardian_relationship: z.enum(["Parent", "Guardian", "Grandparent", "Sibling", "Other"]),
+  guardian_email: z.string().email().nullable().optional(),
+  guardian_whatsapp_number: z.string().max(20).nullable().optional(),
+});
+
 const bodySchema = z.object({
-  profile: z.object({
-    full_name: z.string().min(1).max(120),
-    phone: z.string().max(20).nullable().optional(),
-    school_name: z.string().max(120).nullable().optional(),
-    grade_year: z.enum(["Grade 11", "Grade 12"]).nullable().optional(),
-    province: z.enum([
-      "Gauteng",
-      "Western Cape",
-      "Eastern Cape",
-      "KwaZulu-Natal",
-      "Limpopo",
-      "Mpumalanga",
-      "North West",
-      "Free State",
-      "Northern Cape",
-    ]).nullable().optional(),
-    financial_need: z.enum(["yes", "no"]).nullable().optional(),
-    field_of_interest: z.string().max(80).nullable().optional(),
-    guardian_name: z.string().min(1).max(120),
-    guardian_phone: z.string().min(1).max(20),
-    guardian_relationship: z.enum(["Parent", "Guardian", "Grandparent", "Sibling", "Other"]),
-    guardian_email: z.string().email().nullable().optional(),
-    guardian_whatsapp_number: z.string().max(20).nullable().optional(),
-  }),
+  profile: profileSchema,
+  subjects: z.array(subjectSchema).max(10).optional(),
+  referral_code: z.string().max(20).optional(),
+});
+
+const metadataFallbackSchema = z.object({
+  profile: profileSchema,
   subjects: z.array(subjectSchema).max(10).optional(),
   referral_code: z.string().max(20).optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const parsed = bodySchema.safeParse(body);
-
-    if (!parsed.success) {
-      const message = parsed.error.issues[0]?.message ?? "Invalid request";
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
+    const rawBody = await req.json().catch(() => null);
 
     const supabase = await createClient();
     const {
@@ -150,6 +152,20 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Prefer the client-posted payload (fast path, same-device verification).
+    // If missing or invalid, fall back to the signup payload we stored in auth
+    // user_metadata — this covers users who verify on a different device/browser.
+    let parsed = bodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const metaPayload = (user.user_metadata as Record<string, unknown> | null)?.pending_signup_profile;
+      const metaParsed = metadataFallbackSchema.safeParse(metaPayload);
+      if (!metaParsed.success) {
+        const message = parsed.error.issues[0]?.message ?? "Invalid request";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      parsed = metaParsed;
     }
 
     const userId = user.id;
