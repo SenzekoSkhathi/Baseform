@@ -32,8 +32,8 @@ const nextConfig: NextConfig = {
       "script-src 'self' 'unsafe-inline' https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Tailwind / CSS-in-JS inline styles + PayFast engine.css
       "style-src 'self' 'unsafe-inline' https://payment.payfast.io",
-      // University logos (Wikimedia), Supabase storage, blob/data URLs for share card
-      "img-src 'self' data: blob: https://upload.wikimedia.org https://*.supabase.co",
+      // University logos, Supabase storage, blob/data URLs for share card
+      "img-src 'self' data: blob: https://upload.wikimedia.org https://*.supabase.co https://tenderbulletins.co.za https://www.skillsportal.co.za https://veldfiremedia.com https://studentroom.co.za https://sagea.org.za https://www.itweb.co.za https://www.univen.ac.za https://cms.cut.ac.za https://media.cdn.gradconnection.com https://i1.rgstatic.net https://images.sftcdn.net",
       // No external fonts — system stack only
       "font-src 'self' data:",
       // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend, PayFast
