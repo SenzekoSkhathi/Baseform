@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ArrowLeft,
@@ -177,6 +178,7 @@ export default function ProgrammesClient({
   isGrade11 = false,
   initialTargets = {},
 }: Props) {
+  const router = useRouter();
   const STATUS_COPY = isGrade11 ? STATUS_COPY_GRADE11 : STATUS_COPY_GRADE12;
   // targets: facultyId -> targetId (null means not saved)
   const [targets, setTargets] = useState<Record<number, number | null>>(() => {
@@ -207,6 +209,7 @@ export default function ProgrammesClient({
       const res = await fetch(`/api/targets/${existingId}`, { method: "DELETE" });
       if (res.ok) {
         setTargets((prev) => ({ ...prev, [facultyId]: null }));
+        router.refresh();
       }
     } else {
       // Add
@@ -218,6 +221,7 @@ export default function ProgrammesClient({
       if (res.ok) {
         const json = await res.json();
         setTargets((prev) => ({ ...prev, [facultyId]: json.id }));
+        router.refresh();
       }
     }
 
