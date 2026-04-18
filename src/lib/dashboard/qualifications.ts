@@ -1,9 +1,10 @@
-import { 
-  QualificationCheckResult, 
+import {
+  QualificationCheckResult,
   QualificationStatus,
-  Programme, 
-  StudentSubject 
+  Programme,
+  StudentSubject
 } from "./types";
+import { calculateWitsAPS, isWitsAbbreviation } from "@/lib/aps/calculator";
 
 type ParsedSubjectRequirement = {
   subject: string;
@@ -130,16 +131,21 @@ export function checkQualification(
     studentSubjects,
     parsedRequirements.subjectRequirements
   );
-  
-  const meetsAps = studentAps >= programme.apsMinimum;
-  const apsShortfall = meetsAps ? 0 : programme.apsMinimum - studentAps;
-  
+
+  // Wits uses an 8-point APS scale with bonuses; recompute against that scale.
+  const effectiveAps = isWitsAbbreviation(programme.universityAbbreviation)
+    ? calculateWitsAPS(studentSubjects.map((s) => ({ name: s.subjectName, mark: s.mark })))
+    : studentAps;
+
+  const meetsAps = effectiveAps >= programme.apsMinimum;
+  const apsShortfall = meetsAps ? 0 : programme.apsMinimum - effectiveAps;
+
   let status: QualificationStatus = "qualified";
   const notes: string[] = [];
-  
+
   if (!meetsAps) {
     status = "not-qualified";
-    notes.push(`Need ${apsShortfall} more APS points (current: ${studentAps}/${programme.apsMinimum})`);
+    notes.push(`Need ${apsShortfall} more APS points (current: ${effectiveAps}/${programme.apsMinimum})`);
   }
   
   if (!hasRequiredSubjects) {

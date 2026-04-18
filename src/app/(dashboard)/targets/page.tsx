@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { calculateAPS } from "@/lib/aps/calculator";
+import { calculateAPS, calculateWitsAPS } from "@/lib/aps/calculator";
 import { isGrade11FreeTier } from "@/lib/access/tiers";
 import LockedFeature from "@/components/access/LockedFeature";
 import TargetsClient from "./TargetsClient";
@@ -51,14 +51,15 @@ export default async function TargetsPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  const aps = subjects
-    ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
-    : 0;
+  const subjectsForAps = (subjects ?? []).map((s) => ({ name: s.subject_name, mark: s.mark }));
+  const aps = calculateAPS(subjectsForAps);
+  const witsAps = calculateWitsAPS(subjectsForAps);
 
   return (
     <TargetsClient
       targets={(targets ?? []) as any[]}
       aps={aps}
+      witsAps={witsAps}
       gradeYear={profile?.grade_year ?? null}
     />
   );

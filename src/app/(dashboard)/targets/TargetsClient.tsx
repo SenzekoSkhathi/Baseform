@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bookmark, BookmarkX, ExternalLink, GraduationCap, Target } from "lucide-react";
-import { markToApsPoint } from "@/lib/aps/calculator";
+import { isWitsAbbreviation, markToApsPoint } from "@/lib/aps/calculator";
 
 type TargetRow = {
   id: number;
@@ -29,6 +29,7 @@ type TargetRow = {
 type Props = {
   targets: TargetRow[];
   aps: number;
+  witsAps: number;
   gradeYear: string | null;
 };
 
@@ -42,9 +43,12 @@ function formatQualType(v: string | null) {
   return (v ?? "").replace(/_/g, " ");
 }
 
-export default function TargetsClient({ targets: initialTargets, aps, gradeYear }: Props) {
+export default function TargetsClient({ targets: initialTargets, aps, witsAps, gradeYear }: Props) {
   const [targets, setTargets] = useState(initialTargets);
   const [removing, setRemoving] = useState<Record<number, boolean>>({});
+
+  const apsForTarget = (t: TargetRow) =>
+    isWitsAbbreviation(t.universities?.abbreviation ?? null) ? witsAps : aps;
 
   async function handleRemove(targetId: number) {
     if (removing[targetId]) return;
@@ -95,7 +99,7 @@ export default function TargetsClient({ targets: initialTargets, aps, gradeYear 
               </div>
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-center">
                 <p className="text-lg font-black text-emerald-700">
-                  {targets.filter((t) => t.faculties && aps >= t.faculties.aps_minimum).length}
+                  {targets.filter((t) => t.faculties && apsForTarget(t) >= t.faculties.aps_minimum).length}
                 </p>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500">On Track</p>
               </div>
@@ -133,8 +137,9 @@ export default function TargetsClient({ targets: initialTargets, aps, gradeYear 
               const uni = target.universities;
               if (!faculty || !uni) return null;
 
-              const status = getStatusForAps(aps, faculty.aps_minimum);
-              const apsShortfall = Math.max(0, faculty.aps_minimum - aps);
+              const studentAps = apsForTarget(target);
+              const status = getStatusForAps(studentAps, faculty.aps_minimum);
+              const apsShortfall = Math.max(0, faculty.aps_minimum - studentAps);
 
               return (
                 <div
