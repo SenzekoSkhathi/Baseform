@@ -36,13 +36,16 @@ export const UNIVERSITY_LOGOS: Record<string, string> = {
 
 /**
  * Returns a logo URL for a university.
- * Prefers the Supabase-stored value when present; otherwise falls back to the
- * static map above.
+ * The static map above is the source of truth. Falls back to the
+ * Supabase-stored value only when the abbreviation isn't in the map.
  */
 export function getUniversityLogo(abbreviation: string, dbLogoUrl?: string | null): string | null {
+  const mapped = UNIVERSITY_LOGOS[abbreviation.toUpperCase()];
+  if (mapped) return mapped;
+
   if (typeof dbLogoUrl === "string" && dbLogoUrl.trim()) {
     return dbLogoUrl.trim();
   }
 
-  return UNIVERSITY_LOGOS[abbreviation.toUpperCase()] ?? null;
+  return null;
 }
