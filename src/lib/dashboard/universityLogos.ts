@@ -34,26 +34,14 @@ export const UNIVERSITY_LOGOS: Record<string, string> = {
   CAO:   "https://images.sftcdn.net/images/t_app-icon-m/p/81b09129-b72a-4665-908b-05f3c1c3400f/2129638517/central-applications-office-logo",
 };
 
-const DB_LOGO_ABBREVIATIONS = new Set([
-  "UCT",
-  "UWC",
-  "CPUT",
-  "SU",
-  "UKZN",
-  "DUT",
-  "TUT",
-  "UJ",
-  "WITS",
-  "UP",
-]);
-
 /**
  * Returns a logo URL for a university.
- * Uses the DB value first, falls back to the static map.
+ * Prefers the Supabase-stored value when present; otherwise falls back to the
+ * static map above.
  */
 export function getUniversityLogo(abbreviation: string, dbLogoUrl?: string | null): string | null {
-  if (dbLogoUrl && DB_LOGO_ABBREVIATIONS.has(abbreviation.toUpperCase())) {
-    return dbLogoUrl;
+  if (typeof dbLogoUrl === "string" && dbLogoUrl.trim()) {
+    return dbLogoUrl.trim();
   }
 
   return UNIVERSITY_LOGOS[abbreviation.toUpperCase()] ?? null;

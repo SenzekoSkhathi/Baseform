@@ -125,7 +125,7 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
   const [panelStep, setPanelStep] = useState<"closed" | "pick-uni" | "pick-programmes" | "upgrade">("closed");
   const [isPanelMounted, setIsPanelMounted] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [universities, setUniversities] = useState<{ id: string; name: string; abbreviation: string | null }[]>([]);
+  const [universities, setUniversities] = useState<{ id: string; name: string; abbreviation: string | null; logo_url: string | null }[]>([]);
   const [selectedUni, setSelectedUni] = useState<{ id: string; name: string; abbreviation: string | null } | null>(null);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [selectedFacultyIds, setSelectedFacultyIds] = useState<Set<string>>(new Set());
@@ -167,9 +167,9 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
     if (panelStep !== "pick-uni") return;
     fetch("/api/programmes/universities")
       .then((r) => r.json())
-      .then((data: { id: string; name: string; abbreviation: string | null }[]) => {
+      .then((data: { id: string; name: string; abbreviation: string | null; logo_url: string | null }[]) => {
         // Some seeds contain duplicate university rows; keep one per institution.
-        const unique = new Map<string, { id: string; name: string; abbreviation: string | null }>();
+        const unique = new Map<string, { id: string; name: string; abbreviation: string | null; logo_url: string | null }>();
         for (const uni of data || []) {
           const key = (uni.abbreviation || uni.name).trim().toLowerCase();
           if (!unique.has(key)) unique.set(key, uni);
@@ -526,7 +526,7 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
                 <div className="overflow-y-auto flex-1 px-5 pb-6 space-y-2 pt-2">
                   {filteredUniversities.map((uni) => {
                     const alreadyAdded = groupsState.some((g) => g.universityId === uni.id);
-                    const logoUrl = getUniversityLogo(uni.abbreviation || "");
+                    const logoUrl = getUniversityLogo(uni.abbreviation || "", uni.logo_url);
                     const isKznUni = isKznCaoUniversity(uni.abbreviation);
                     const choiceLimit = getUniversityChoiceLimit(uni.abbreviation);
                     const usedChoices = isKznUni

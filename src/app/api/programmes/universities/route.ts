@@ -8,7 +8,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("universities")
-      .select("id, name, abbreviation, province, city")
+      .select("id, name, abbreviation, province, city, logo_url")
       .eq("is_active", true)
       .order("name");
 
@@ -20,7 +20,7 @@ export async function GET() {
       );
     }
 
-    const unique = new Map<string, { id: string; name: string; abbreviation: string | null; province: string | null; city: string | null }>();
+    const unique = new Map<string, { id: string; name: string; abbreviation: string | null; province: string | null; city: string | null; logo_url: string | null }>();
     for (const uni of data || []) {
       const key = (uni.abbreviation || uni.name).trim().toLowerCase();
       if (!unique.has(key)) unique.set(key, uni);
