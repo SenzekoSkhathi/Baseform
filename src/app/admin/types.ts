@@ -129,12 +129,29 @@ export type MetricsResponse = {
   };
 };
 
+export type AdminUserSubject = {
+  subject_name: string;
+  mark: number;
+};
+
 export type AdminUser = {
   id: string;
   email: string;
   full_name: string | null;
   tier: string | null;
   created_at: string | null;
+  province: string | null;
+  field_of_interest: string | null;
+  school_name: string | null;
+  grade_year: string | null;
+  financial_need: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_whatsapp_number: string | null;
+  guardian_relationship: string | null;
+  guardian_email: string | null;
+  subjects: AdminUserSubject[];
+  aps: number;
 };
 
 export type UserPageResponse = {

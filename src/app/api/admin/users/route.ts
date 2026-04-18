@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminGuard } from "@/lib/admin/auth";
 import { recordAdminContentAudit } from "@/lib/admin/contentAdmin";
+import { calculateAPS } from "@/lib/aps/calculator";
 import { NextResponse } from "next/server";
 
 const USER_SORT_KEYS = ["full_name", "email", "tier", "created_at"] as const;
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
 
   let query = admin
     .from("profiles")
-    .select("id,full_name,tier,created_at,email")
+    .select("id,full_name,tier,created_at,email,province,field_of_interest,school_name,grade_year,financial_need,guardian_name,guardian_phone,guardian_whatsapp_number,guardian_relationship,guardian_email")
     .order(sortKey, { ascending, nullsFirst: !ascending })
     .order("id", { ascending })
     .range(from, to);
@@ -60,15 +61,50 @@ export async function GET(req: Request) {
   const hasMore = (profiles?.length ?? 0) > limit;
   const pageItems = hasMore ? (profiles ?? []).slice(0, limit) : profiles ?? [];
 
+  const profileIds = pageItems.map((p) => p.id);
+  const subjectsByUser: Record<string, { subject_name: string; mark: number }[]> = {};
+
+  if (profileIds.length > 0) {
+    const { data: subjectRows } = await admin
+      .from("student_subjects")
+      .select("profile_id,subject_name,mark")
+      .in("profile_id", profileIds)
+      .order("mark", { ascending: false });
+
+    for (const row of subjectRows ?? []) {
+      const key = String(row.profile_id);
+      if (!subjectsByUser[key]) subjectsByUser[key] = [];
+      subjectsByUser[key].push({ subject_name: row.subject_name, mark: row.mark });
+    }
+  }
+
   return NextResponse.json(
     {
-      items: pageItems.map((profile) => ({
-      id: profile.id,
-      full_name: profile.full_name,
-      tier: profile.tier,
-      created_at: profile.created_at,
-      email: profile.email ?? "",
-    })),
+      items: pageItems.map((profile) => {
+        const subjects = subjectsByUser[profile.id] ?? [];
+        const aps = subjects.length > 0
+          ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
+          : 0;
+        return {
+          id: profile.id,
+          full_name: profile.full_name,
+          tier: profile.tier,
+          created_at: profile.created_at,
+          email: profile.email ?? "",
+          province: profile.province ?? null,
+          field_of_interest: profile.field_of_interest ?? null,
+          school_name: profile.school_name ?? null,
+          grade_year: profile.grade_year ?? null,
+          financial_need: profile.financial_need ?? null,
+          guardian_name: profile.guardian_name ?? null,
+          guardian_phone: profile.guardian_phone ?? null,
+          guardian_whatsapp_number: profile.guardian_whatsapp_number ?? null,
+          guardian_relationship: profile.guardian_relationship ?? null,
+          guardian_email: profile.guardian_email ?? null,
+          subjects,
+          aps,
+        };
+      }),
       hasMore,
       nextCursor: null,
     }
