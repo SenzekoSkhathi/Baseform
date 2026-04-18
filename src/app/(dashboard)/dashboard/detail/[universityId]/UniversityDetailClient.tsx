@@ -121,6 +121,7 @@ export default function UniversityDetailClient({ university, programmes, aps }: 
 
   function removeChoice(applicationId: string) {
     const previous = programmesState;
+    const nextProgrammes = previous.filter((programme) => programme.applicationId !== applicationId);
     setCardFeedback(null);
     setBusyIds((prev) => {
       const next = new Set(prev);
@@ -128,7 +129,7 @@ export default function UniversityDetailClient({ university, programmes, aps }: 
       return next;
     });
 
-    setProgrammesState((prev) => prev.filter((programme) => programme.applicationId !== applicationId));
+    setProgrammesState(nextProgrammes);
 
     fetch("/api/applications", {
       method: "DELETE",
@@ -140,6 +141,14 @@ export default function UniversityDetailClient({ university, programmes, aps }: 
         if (!ok) {
           setCardFeedback(payload?.error || "Could not remove this programme right now.");
           setProgrammesState(previous);
+          return;
+        }
+        router.refresh();
+        // When the last programme is removed, the university card on the
+        // applications list is now empty — send the user back so the grid
+        // reflects the removal without a hard refresh.
+        if (nextProgrammes.length === 0) {
+          router.replace("/dashboard/detail");
         }
       })
       .catch(() => {
