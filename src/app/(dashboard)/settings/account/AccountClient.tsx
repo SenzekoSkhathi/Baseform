@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type AccountSettings = {
   fullName: string;
@@ -65,6 +66,7 @@ type SettingsResponse = {
 };
 
 export default function AccountClient() {
+  const router = useRouter();
   const [account, setAccount] = useState<AccountSettings>(DEFAULT_ACCOUNT);
   const [loadedAccount, setLoadedAccount] = useState<AccountSettings>(DEFAULT_ACCOUNT);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -119,6 +121,7 @@ export default function AccountClient() {
       setLoadedAccount(next);
       setSaved(true);
       setTimeout(() => setSaved(false), 1400);
+      router.refresh();
     } catch {
       setError("Could not save account settings.");
     } finally {
@@ -153,6 +156,7 @@ export default function AccountClient() {
       setLoadedSubjects(subjects);
       setSubjectsSaved(true);
       setTimeout(() => setSubjectsSaved(false), 1400);
+      router.refresh();
     } catch {
       setSubjectsError("Could not save subjects.");
     } finally {
