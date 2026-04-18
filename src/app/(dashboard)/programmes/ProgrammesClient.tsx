@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowRight,
   ArrowLeft,
@@ -464,6 +465,15 @@ export default function ProgrammesClient({
                     </p>
                   )}
                 </div>
+                {isGrade11 && (
+                  <Link
+                    href="/targets"
+                    className="inline-flex w-fit items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                  >
+                    <Bookmark size={16} />
+                    My Targets
+                  </Link>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-136">
