@@ -50,9 +50,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function () {
-                  navigator.serviceWorker.register('/sw.js').catch(function () {});
-                });
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  regs.forEach(function (reg) { reg.unregister(); });
+                }).catch(function () {});
+              }
+              if (typeof caches !== 'undefined') {
+                caches.keys().then(function (keys) {
+                  keys.forEach(function (key) { caches.delete(key); });
+                }).catch(function () {});
               }
             `,
           }}
