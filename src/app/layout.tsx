@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import PwaInstallButton from "@/components/ui/PwaInstallButton";
 
 export const metadata: Metadata = {
   title: "Baseform — Your University Application Co-pilot",
@@ -65,7 +64,6 @@ export default function RootLayout({
       </head>
       <body>
         {children}
-        <PwaInstallButton />
       </body>
     </html>
   );
