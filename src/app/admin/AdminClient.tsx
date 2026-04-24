@@ -14,6 +14,7 @@ import { SiteSettingsSection } from "./components/SiteSettingsSection";
 import { MetricsOverviewSection } from "./components/MetricsOverviewSection";
 import { ContentAuditSection } from "./components/ContentAuditSection";
 import { CreditVaultSection } from "./components/CreditVaultSection";
+import { CreditGrantSection } from "./components/CreditGrantSection";
 import { paginate, sortBy } from "./utils";
 import type {
   AdminPlan,
@@ -1138,6 +1139,7 @@ export default function AdminClient() {
             ["sec-bursaries",    "Bursaries"],
             ["sec-plans",        "Plans"],
             ["sec-vault",        "Credit Vault"],
+            ["sec-grants",       "Credit Grants"],
             ["sec-settings",     "Settings"],
             ["sec-audit",        "Audit"],
           ] as [string, string][]).map(([id, label]) => (
@@ -1379,6 +1381,10 @@ export default function AdminClient() {
 
         <div id="sec-vault">
         <CreditVaultSection onToast={pushToast} />
+        </div>
+
+        <div id="sec-grants">
+        <CreditGrantSection onToast={pushToast} />
         </div>
 
         <div id="sec-settings">
