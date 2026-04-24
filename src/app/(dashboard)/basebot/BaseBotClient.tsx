@@ -123,6 +123,19 @@ function renderInline(text: string): React.ReactNode {
   });
 }
 
+function splitTableRow(row: string): string[] {
+  const trimmed = row.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+}
+
+function isTableRow(line: string): boolean {
+  return /^\s*\|.*\|\s*$/.test(line);
+}
+
 function MessageContent({ text }: { text: string }) {
   const cleaned = normalizeResponseText(text);
   const lines = cleaned.split("\n");
@@ -135,6 +148,51 @@ function MessageContent({ text }: { text: string }) {
 
     if (!line) {
       i++;
+      continue;
+    }
+
+    // Markdown table: header row + separator row + body rows
+    if (isTableRow(raw) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const header = splitTableRow(raw);
+      i += 2; // skip header and separator
+      const rows: string[][] = [];
+      while (i < lines.length && isTableRow(lines[i])) {
+        rows.push(splitTableRow(lines[i]));
+        i++;
+      }
+
+      blocks.push(
+        <div key={`tbl-${i}`} className="my-3 overflow-x-auto rounded-xl border border-gray-200">
+          <table className="w-full border-collapse text-sm sm:text-[15px]">
+            <thead className="bg-orange-50">
+              <tr>
+                {header.map((cell, c) => (
+                  <th
+                    key={c}
+                    className="border-b border-gray-200 px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-orange-700 sm:text-[11px]"
+                  >
+                    {renderInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, r) => (
+                <tr key={r} className={r % 2 === 1 ? "bg-gray-50/60" : "bg-white"}>
+                  {row.map((cell, c) => (
+                    <td
+                      key={c}
+                      className="border-t border-gray-100 px-3 py-2 align-top leading-6 text-gray-800"
+                    >
+                      {renderInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
       continue;
     }
 
@@ -422,16 +480,57 @@ function EmptyState({
   );
 }
 
-function BotResponseSkeleton() {
+const THINKING_PHRASES = [
+  "Thinking",
+  "Gathering information",
+  "Checking the facts",
+  "Piecing it together",
+  "Looking into that",
+  "Crunching the numbers",
+  "Pulling up sources",
+  "Working on it",
+  "Reading up on that",
+  "Connecting the dots",
+] as const;
+
+function pickRandomPhrase(exclude?: string): string {
+  if (THINKING_PHRASES.length <= 1) return THINKING_PHRASES[0];
+  let next = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+  while (next === exclude) {
+    next = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+  }
+  return next;
+}
+
+function BotThinkingIndicator() {
+  const [phrase, setPhrase] = useState<string>(() => pickRandomPhrase());
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setPhrase((prev) => pickRandomPhrase(prev));
+    }, 2200);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
     <div className="flex w-full gap-3 justify-start" aria-live="polite" aria-busy="true">
-      <BotAvatar size="sm" />
-      <div className="min-w-0 flex-1 px-1 py-1">
-        <div className="space-y-2">
-          <div className="h-3 w-[70%] rounded bg-gray-100 animate-pulse" />
-          <div className="h-3 w-[88%] rounded bg-gray-100 animate-pulse" />
-          <div className="h-3 w-[62%] rounded bg-gray-100 animate-pulse" />
+      {/* Logo with spinning ring */}
+      <div className="relative h-8 w-8 shrink-0">
+        <div className="absolute inset-0 rounded-xl border-2 border-orange-200 border-t-orange-500 animate-spin" />
+        <div className="absolute inset-[3px] rounded-lg bg-orange-500 flex items-center justify-center">
+          <Image src="/icon.svg" alt="BaseBot" width={14} height={14} />
         </div>
+      </div>
+
+      {/* Rotating phrase */}
+      <div className="min-w-0 flex-1 px-1 py-1 flex items-center">
+        <span
+          key={phrase}
+          className="text-sm font-medium text-gray-500 animate-[fade-in_300ms_ease-out] sm:text-[15px]"
+        >
+          {phrase}
+          <span className="inline-block ml-0.5 animate-pulse">…</span>
+        </span>
       </div>
     </div>
   );
@@ -875,7 +974,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
                 );
               })}
 
-              {isLoading && <BotResponseSkeleton />}
+              {isLoading && <BotThinkingIndicator />}
 
               <div ref={messagesEndRef} />
             </div>
