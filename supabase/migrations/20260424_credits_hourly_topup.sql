@@ -1,0 +1,26 @@
+-- Switch the credit top-up cron from weekly (Monday 00:00) to hourly.
+--
+-- Why:
+--   weekly_credit_top_up() already gates each row on
+--     last_topped_up_at <= now() - interval '7 days'
+--   so running the job more often does NOT double-refill anyone. It just means
+--   each user refills within ~1 hour of their personal 7-day anniversary,
+--   instead of waiting for the next Monday.
+--
+-- Run once in the Supabase SQL editor after deploying this migration:
+--
+--   -- Best-effort unschedule of the old job
+--   do $$
+--   begin
+--     perform cron.unschedule('weekly-credit-top-up');
+--   exception when others then null;
+--   end $$;
+--
+--   -- Schedule hourly (at minute 0 of every hour, UTC)
+--   select cron.schedule(
+--     'hourly-credit-top-up',
+--     '0 * * * *',
+--     $$select public.weekly_credit_top_up();$$
+--   );
+--
+-- No function changes required — the 7-day per-user gate was already there.

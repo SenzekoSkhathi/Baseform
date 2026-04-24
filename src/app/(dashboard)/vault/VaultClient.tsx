@@ -1094,13 +1094,13 @@ export default function VaultClient({ initialFiles }: Props) {
                     className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm transition hover:border-orange-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400"
                   >
                     {/* Page preview */}
-                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-gray-100">
+                    <div className="relative aspect-3/4 w-full overflow-hidden bg-gray-100">
                       <img
                         src={page.previewUrl}
                         alt={`Scanned page ${index + 1}`}
                         className="h-full w-full object-contain"
                       />
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/55 to-transparent" />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-black/55 to-transparent" />
                       <span className="absolute left-2 top-2 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
                         {index + 1}
                       </span>

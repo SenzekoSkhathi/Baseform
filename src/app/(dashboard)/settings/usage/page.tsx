@@ -239,7 +239,7 @@ export default async function UsagePage() {
               </span>
               <div>
                 <p className="text-sm font-bold text-gray-900">Base Credits</p>
-                <p className="text-[11px] text-gray-400">Powers AI features — refills {weeklyAllowance}/week, capped at {CREDIT_CAP}</p>
+                <p className="text-[11px] text-gray-400">Powers AI features — refills {weeklyAllowance} every 7 days, capped at {CREDIT_CAP}</p>
               </div>
             </div>
             <span className="text-2xl font-black text-gray-900">
@@ -262,7 +262,7 @@ export default async function UsagePage() {
               </div>
               {userCredits.balance <= Math.round(weeklyAllowance * 0.2) && (
                 <p className="mt-1.5 text-xs text-red-500 font-medium">
-                  Running low — your weekly top-up of {weeklyAllowance} credits lands every Monday.
+                  Running low — your next top-up of {weeklyAllowance} credits lands on {new Date(userCredits.nextTopUpAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}.
                 </p>
               )}
             </div>

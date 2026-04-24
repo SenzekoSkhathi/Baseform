@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const { ok: credited } = await deductCredits(session.user.id, "basebot_message", "AI Coach message");
   if (!credited) {
     return Response.json(
-      { error: "You've run out of Base Credits. Your weekly allowance refills every Monday." },
+      { error: "You've run out of Base Credits. Your allowance refills 7 days after your last top-up." },
       { status: 402 },
     );
   }

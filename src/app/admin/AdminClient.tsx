@@ -13,6 +13,7 @@ import { PlanManagementSection } from "./components/PlanManagementSection";
 import { SiteSettingsSection } from "./components/SiteSettingsSection";
 import { MetricsOverviewSection } from "./components/MetricsOverviewSection";
 import { ContentAuditSection } from "./components/ContentAuditSection";
+import { CreditVaultSection } from "./components/CreditVaultSection";
 import { paginate, sortBy } from "./utils";
 import type {
   AdminPlan,
@@ -1136,6 +1137,7 @@ export default function AdminClient() {
             ["sec-programmes",   "Programmes"],
             ["sec-bursaries",    "Bursaries"],
             ["sec-plans",        "Plans"],
+            ["sec-vault",        "Credit Vault"],
             ["sec-settings",     "Settings"],
             ["sec-audit",        "Audit"],
           ] as [string, string][]).map(([id, label]) => (
@@ -1373,6 +1375,10 @@ export default function AdminClient() {
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
         />
+        </div>
+
+        <div id="sec-vault">
+        <CreditVaultSection onToast={pushToast} />
         </div>
 
         <div id="sec-settings">

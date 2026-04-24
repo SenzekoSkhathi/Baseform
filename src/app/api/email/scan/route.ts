@@ -22,7 +22,7 @@ export async function POST() {
 
   const { ok: credited } = await deductCredits(session.user.id, "email_scan", "Gmail agent check");
   if (!credited) {
-    return NextResponse.json({ error: "You've run out of Base Credits. Your weekly allowance refills every Monday." }, { status: 402 });
+    return NextResponse.json({ error: "You've run out of Base Credits. Your allowance refills 7 days after your last top-up." }, { status: 402 });
   }
 
   const res = await fetch(`${BACKEND_URL}/email/scan`, {

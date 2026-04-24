@@ -30,6 +30,8 @@ export type CreditBalance = {
   weeklyUsed: number;
   /** Highest threshold crossed this week, or null if none. */
   highestThresholdCrossed: CreditThreshold | null;
+  /** ISO timestamp when the next top-up is due (7 days after last_topped_up_at). */
+  nextTopUpAt: string;
 };
 
 export type CreditTransaction = {
@@ -61,6 +63,9 @@ export async function getUserCredits(userId: string): Promise<CreditBalance | nu
     .reverse()
     .find((t) => pctUsed >= t) ?? null;
 
+  const anchor = data.last_topped_up_at ?? data.plan_start_date;
+  const nextTopUpAt = new Date(new Date(anchor).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
   return {
     balance: data.balance,
     weekStartBalance: data.week_start_balance,
@@ -69,6 +74,7 @@ export async function getUserCredits(userId: string): Promise<CreditBalance | nu
     planTermMonths: data.plan_term_months,
     weeklyUsed,
     highestThresholdCrossed,
+    nextTopUpAt,
   };
 }
 

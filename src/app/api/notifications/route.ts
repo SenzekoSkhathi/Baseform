@@ -378,12 +378,19 @@ export async function GET() {
       ? userCredits.lastToppedUpAt.slice(0, 10)
       : userCredits.planStartDate.slice(0, 10);
 
+    const msUntilTopUp = new Date(userCredits.nextTopUpAt).getTime() - Date.now();
+    const daysUntilTopUp = Math.max(0, Math.ceil(msUntilTopUp / (24 * 60 * 60 * 1000)));
+    const topUpWhen =
+      daysUntilTopUp <= 0 ? "imminent" :
+      daysUntilTopUp === 1 ? "in 1 day" :
+      `in ${daysUntilTopUp} days`;
+
     const messages: Record<number, { title: string; message: string }> = {
       25:  { title: "You've used 25% of your weekly credits", message: `${remaining} of your ${weekly} weekly Base Credits remain. You're pacing well — keep it up.` },
       50:  { title: "Halfway through your weekly credits", message: `${remaining} Base Credits left this week. Use them wisely and they'll roll over if you don't spend them all.` },
-      80:  { title: "80% of weekly credits used", message: `Only ${remaining} Base Credits left for this week. Your next top-up lands next Monday.` },
-      90:  { title: "90% of weekly credits used — running low", message: `Just ${remaining} Base Credits remaining. AI features will pause if you hit zero before Monday's top-up.` },
-      95:  { title: "Almost out of weekly credits", message: `Only ${remaining} Base Credit${remaining === 1 ? "" : "s"} left. Monday's top-up of ${weekly} credits is on its way.` },
+      80:  { title: "80% of weekly credits used", message: `Only ${remaining} Base Credits left for this week. Your next top-up is ${topUpWhen}.` },
+      90:  { title: "90% of weekly credits used — running low", message: `Just ${remaining} Base Credits remaining. AI features will pause if you hit zero before your next top-up (${topUpWhen}).` },
+      95:  { title: "Almost out of weekly credits", message: `Only ${remaining} Base Credit${remaining === 1 ? "" : "s"} left. Your next top-up of ${weekly} credits is ${topUpWhen}.` },
     };
 
     const content = messages[pct];

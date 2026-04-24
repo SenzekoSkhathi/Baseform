@@ -12,8 +12,8 @@ function buildThresholdMessage(pct: number, remaining: number, weekly: number): 
   const messages: Record<number, { title: string; body: string }> = {
     25:  { title: "25% of weekly credits used",        body: `You have ${remaining} of your ${weekly} Base Credits left this week.` },
     50:  { title: "Halfway through your weekly credits", body: `${remaining} Base Credits remain for this week.` },
-    80:  { title: "80% of weekly credits used",        body: `Only ${remaining} Base Credits left this week — top-up lands Monday.` },
-    90:  { title: "Running low on credits",            body: `Only ${remaining} Base Credits left. Your weekly top-up lands Monday.` },
+    80:  { title: "80% of weekly credits used",        body: `Only ${remaining} Base Credits left this week — next top-up is 7 days after your last refill.` },
+    90:  { title: "Running low on credits",            body: `Only ${remaining} Base Credits left. Your next top-up lands 7 days after your last refill.` },
     95:  { title: "Almost out of Base Credits",        body: `${remaining} credit${remaining === 1 ? "" : "s"} remain. Save them for what matters most.` },
   };
   return messages[pct] ?? { title: `${pct}% of weekly credits used`, body: `${remaining} Base Credits remaining.` };
