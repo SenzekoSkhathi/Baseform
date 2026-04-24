@@ -296,7 +296,19 @@ export async function getAdminUsageMetrics(admin: SupabaseClient, searchParams: 
   }
 
   const applicationMap = new Map<string, number>();
+  // statusBreakdown is the current state of ALL applications (not range-filtered),
+  // so the pie chart reflects the overall mix rather than just new apps in range.
   const statusBreakdown: Record<string, number> = {
+    planning: 0,
+    in_progress: 0,
+    submitted: 0,
+    accepted: 0,
+    rejected: 0,
+    waitlisted: 0,
+  };
+  // statusBreakdownInRange is used internally by the funnel — it counts only
+  // apps CREATED inside the selected range so signups → submitted ratios stay honest.
+  const statusBreakdownInRange: Record<string, number> = {
     planning: 0,
     in_progress: 0,
     submitted: 0,
@@ -309,10 +321,12 @@ export async function getAdminUsageMetrics(admin: SupabaseClient, searchParams: 
     const createdAt = toStringValue(record.created_at);
     const status = toStringValue(record.status);
 
+    if (status in statusBreakdown) statusBreakdown[status] += 1;
+
     if (isInRange(createdAt, range.from, range.to)) {
       const key = dateKey(createdAt);
       applicationMap.set(key, (applicationMap.get(key) ?? 0) + 1);
-      if (status in statusBreakdown) statusBreakdown[status] += 1;
+      if (status in statusBreakdownInRange) statusBreakdownInRange[status] += 1;
     }
   }
 
@@ -450,12 +464,12 @@ export async function getAdminUsageMetrics(admin: SupabaseClient, searchParams: 
     }
   }
 
+  // Province distribution shows where ALL users come from, not just those who
+  // signed up inside the range. Range filters belong on growth charts, not on
+  // a who-uses-the-app-by-province snapshot.
   const provinceMap = new Map<string, number>();
   for (const row of provinceRows) {
     const record = row as Record<string, unknown>;
-    const createdAt = toStringValue(record.created_at);
-    if (!isInRange(createdAt, range.from, range.to)) continue;
-
     const province = toStringValue(record.province) || "Unknown";
     provinceMap.set(province, (provinceMap.get(province) ?? 0) + 1);
   }
@@ -476,10 +490,10 @@ export async function getAdminUsageMetrics(admin: SupabaseClient, searchParams: 
     ])
   ).sort();
 
-  const submitted = (statusBreakdown.submitted ?? 0)
-    + (statusBreakdown.accepted ?? 0)
-    + (statusBreakdown.rejected ?? 0)
-    + (statusBreakdown.waitlisted ?? 0);
+  const submitted = (statusBreakdownInRange.submitted ?? 0)
+    + (statusBreakdownInRange.accepted ?? 0)
+    + (statusBreakdownInRange.rejected ?? 0)
+    + (statusBreakdownInRange.waitlisted ?? 0);
 
   const funnel = {
     signups: Array.from(signupMap.values()).reduce((a, b) => a + b, 0),
@@ -487,14 +501,17 @@ export async function getAdminUsageMetrics(admin: SupabaseClient, searchParams: 
     submittedApplications: submitted,
   };
 
+  // "Last 7/30 days" is anchored to today, not to the end of the selected range,
+  // so the number means what the label says regardless of which range you pick.
+  // Strict < to give exactly 7 / 30 day windows (day 0..6 / 0..29).
   let last7dTokens = 0;
   let last30dTokens = 0;
-  const endOfRange = range.to;
+  const nowMs = Date.now();
   for (const [day, tokens] of tokenMap.entries()) {
     const value = new Date(`${day}T00:00:00.000Z`);
-    const age = Math.floor((endOfRange.getTime() - value.getTime()) / (24 * 60 * 60 * 1000));
-    if (age <= 7) last7dTokens += tokens;
-    if (age <= 30) last30dTokens += tokens;
+    const age = Math.floor((nowMs - value.getTime()) / (24 * 60 * 60 * 1000));
+    if (age >= 0 && age < 7) last7dTokens += tokens;
+    if (age >= 0 && age < 30) last30dTokens += tokens;
   }
 
   const aiCallsTotal = Array.from(aiCallsMap.values()).reduce((acc, value) => acc + value, 0);

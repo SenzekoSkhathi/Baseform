@@ -273,8 +273,8 @@ export function MetricsOverviewSection(props: MetricsOverviewSectionProps) {
 
       <div className="mt-5 rounded-2xl border border-gray-100 bg-white p-4">
         <p className="text-sm font-bold text-gray-900">BaseBot token usage by day</p>
-        <div className="mt-3 space-y-2">
-          {daily.slice(-14).map((point) => (
+        <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          {daily.map((point) => (
             <div key={point.day} className="grid grid-cols-[90px_1fr_70px] items-center gap-2">
               <p className="text-xs text-gray-500">{point.day.slice(5)}</p>
               <div className="h-2 rounded-full bg-gray-100"><div className="h-2 rounded-full bg-orange-500" style={{ width: `${Math.max(2, Math.round((point.tokens / maxTokenDay) * 100))}%` }} /></div>
@@ -285,14 +285,14 @@ export function MetricsOverviewSection(props: MetricsOverviewSectionProps) {
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <ChartCard title="Signups per day" color="bg-blue-500" max={maxSignupDay} points={daily.slice(-14).map((p) => ({ key: `signup-${p.day}`, label: p.day.slice(5), value: p.signups }))} />
-        <ChartCard title="Applications created per day" color="bg-emerald-500" max={maxApplicationDay} points={daily.slice(-14).map((p) => ({ key: `apps-${p.day}`, label: p.day.slice(5), value: p.applications }))} />
+        <ChartCard title="Signups per day" color="bg-blue-500" max={maxSignupDay} points={daily.map((p) => ({ key: `signup-${p.day}`, label: p.day.slice(5), value: p.signups }))} />
+        <ChartCard title="Applications created per day" color="bg-emerald-500" max={maxApplicationDay} points={daily.map((p) => ({ key: `apps-${p.day}`, label: p.day.slice(5), value: p.applications }))} />
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <ChartCard title="Emails sent per day" color="bg-sky-500" max={maxEmailsSentDay} points={daily.slice(-14).map((p) => ({ key: `sent-${p.day}`, label: p.day.slice(5), value: p.emailsSent }))} />
-        <ChartCard title="Emails received per day" color="bg-cyan-500" max={maxEmailsReceivedDay} points={daily.slice(-14).map((p) => ({ key: `received-${p.day}`, label: p.day.slice(5), value: p.emailsReceived }))} />
-        <ChartCard title="Files uploaded per day" color="bg-amber-500" max={maxFilesUploadedDay} points={daily.slice(-14).map((p) => ({ key: `files-${p.day}`, label: p.day.slice(5), value: p.filesUploaded }))} />
+        <ChartCard title="Emails sent per day" color="bg-sky-500" max={maxEmailsSentDay} points={daily.map((p) => ({ key: `sent-${p.day}`, label: p.day.slice(5), value: p.emailsSent }))} />
+        <ChartCard title="Emails received per day" color="bg-cyan-500" max={maxEmailsReceivedDay} points={daily.map((p) => ({ key: `received-${p.day}`, label: p.day.slice(5), value: p.emailsReceived }))} />
+        <ChartCard title="Files uploaded per day" color="bg-amber-500" max={maxFilesUploadedDay} points={daily.map((p) => ({ key: `files-${p.day}`, label: p.day.slice(5), value: p.filesUploaded }))} />
       </div>
 
       {props.metrics?.usage && (
@@ -316,12 +316,17 @@ export function MetricsOverviewSection(props: MetricsOverviewSectionProps) {
               <MiniStat label="Active" value={String(props.metrics.usage.email.activeConnectedMailboxes)} />
               <MiniStat label="Status changes" value={String(props.metrics.usage.email.statusChangesDetected)} />
               <MiniStat label="Sent total" value={String(props.metrics.usage.email.sentTotal)} />
+              <MiniStat label="Received total" value={String(props.metrics.usage.email.receivedTotal)} />
               <MiniStat label="Failed scans" value={String(props.metrics.usage.email.failedScansTotal)} />
               <MiniStat label="Failed scan rate" value={`${props.metrics.usage.email.failedScanRatePercent.toFixed(2)}%`} />
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <KeyValueList title="Sent by type" values={props.metrics.usage.email.sentByType} />
               <KeyValueList title="Scan actions" values={props.metrics.usage.email.actionsBreakdown} />
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <TopUsersList title="Top by emails received" entries={props.metrics.usage.email.topUsersByReceivedEmails} suffix="emails" />
+              <TopUsersList title="Top by emails sent" entries={props.metrics.usage.email.topUsersBySentEmails} suffix="emails" />
             </div>
           </div>
 

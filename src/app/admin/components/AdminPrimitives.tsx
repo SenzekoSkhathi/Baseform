@@ -124,7 +124,7 @@ export function ChartCard({
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4">
       <p className="text-sm font-bold text-gray-900">{title}</p>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
         {points.map((point) => (
           <div key={point.key} className="grid grid-cols-[90px_1fr_50px] items-center gap-2">
             <p className="text-xs text-gray-500">{point.label}</p>
