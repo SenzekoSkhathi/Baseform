@@ -52,7 +52,7 @@ export function CreditGrantSection({ onToast }: Props) {
     <section className="rounded-3xl border border-gray-100 bg-white/95 p-5 shadow-sm">
       <h2 className="text-lg font-black text-gray-900">Manual Credit Grants</h2>
       <p className="mt-1 text-xs text-gray-500">
-        Add or remove Base Credits on a user's account. Useful for test accounts and one-off support requests.
+        Add or remove Base Credits on a user&apos;s account. Useful for test accounts and one-off support requests.
         Positive numbers grant credits, negative numbers deduct. No 300-credit cap is enforced here.
       </p>
 
