@@ -517,7 +517,7 @@ function BotThinkingIndicator() {
       {/* Logo with spinning ring */}
       <div className="relative h-8 w-8 shrink-0">
         <div className="absolute inset-0 rounded-xl border-2 border-orange-200 border-t-orange-500 animate-spin" />
-        <div className="absolute inset-[3px] rounded-lg bg-orange-500 flex items-center justify-center">
+        <div className="absolute inset-0.75 rounded-lg bg-orange-500 flex items-center justify-center">
           <Image src="/icon.svg" alt="BaseBot" width={14} height={14} />
         </div>
       </div>
@@ -911,16 +911,11 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowMemoryPanel(true)}
-              className="relative flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 text-gray-400 hover:text-orange-500 rounded-xl text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 text-gray-400 hover:text-orange-500 rounded-xl text-xs font-medium transition-colors"
               title="What BaseBot remembers about you"
             >
               <MemoryIcon />
               <span className="hidden sm:inline">Memory</span>
-              {memories.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {memories.length > 9 ? "9+" : memories.length}
-                </span>
-              )}
             </button>
             <button
               onClick={handleNewChat}
