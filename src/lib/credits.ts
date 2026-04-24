@@ -1,10 +1,10 @@
 import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const CREDIT_CAP = 300;
-export const WEEKLY_TOP_UP = 100;
-export const GRADE11_WEEKLY_TOP_UP = 150;
-export const PLAN_BONUS = 100;
+export const CREDIT_CAP = 180;
+export const WEEKLY_TOP_UP = 60;
+export const GRADE11_WEEKLY_TOP_UP = 90;
+export const PLAN_BONUS = 60;
 
 /** Thresholds (% of weekly allowance used) that trigger notifications. */
 export const CREDIT_THRESHOLDS = [25, 50, 80, 90, 95] as const;
