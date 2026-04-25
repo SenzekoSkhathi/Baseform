@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   const [{ data: profile }, { data: subjects }, { data: memories }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, province, field_of_interest, grade_year")
+      .select("full_name, province, field_of_interest, grade_year, school_name, financial_need")
       .eq("id", session.user.id)
       .maybeSingle(),
     supabase
@@ -68,6 +68,10 @@ export async function POST(req: NextRequest) {
     ? calculateAPS(subjects.map((s) => ({ name: s.subject_name, mark: s.mark })))
     : 0;
 
+  // Build full conversation: cap history at last 20 messages to control token usage
+  const priorMessages: HistoryMessage[] = Array.isArray(history) ? history.slice(-20) : [];
+  const messages: HistoryMessage[] = [...priorMessages, { role: "user", content: message }];
+
   const context: Record<string, unknown> = {};
   if (profile?.full_name) context.name = profile.full_name.split(" ")[0];
   if (aps > 0) context.aps = aps;
@@ -75,12 +79,13 @@ export async function POST(req: NextRequest) {
   if (profile?.province) context.province = profile.province;
   if (profile?.grade_year) context.grade = profile.grade_year;
   if (profile?.grade_year === "Grade 11") context.mode = "planning";
+  if (profile?.school_name) context.school = profile.school_name;
+  if (profile?.financial_need) context.financialNeed = profile.financial_need;
   if (subjects?.length) context.subjects = subjects.map((s) => ({ subject: s.subject_name, mark: s.mark }));
   if (memories?.length) context.memories = memories;
-
-  // Build full conversation: cap history at last 20 messages to control token usage
-  const priorMessages: HistoryMessage[] = Array.isArray(history) ? history.slice(-20) : [];
-  const messages: HistoryMessage[] = [...priorMessages, { role: "user", content: message }];
+  // Tells the system prompt whether this is the opening turn or a follow-up,
+  // so the model can drop greetings and build on prior context.
+  context.isFollowUp = priorMessages.length > 0;
 
   const res = await fetch(`${BACKEND_URL}/ai/coach`, {
     method: "POST",

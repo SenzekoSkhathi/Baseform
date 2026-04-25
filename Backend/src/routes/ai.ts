@@ -15,6 +15,7 @@ function toClaudeMessages(messages: { role: string; content: string }[]) {
 }
 
 type Memory = { key: string; value: string; category: string };
+type Subject = { subject: string; mark: number };
 
 function buildSystemPrompt(
   base: string,
@@ -22,9 +23,21 @@ function buildSystemPrompt(
 ): string {
   const lines: string[] = [];
   if (ctx.name) lines.push(`Student name: ${ctx.name}`);
-  if (ctx.aps) lines.push(`APS score: ${ctx.aps}/42`);
-  if (ctx.field) lines.push(`Field of interest: ${ctx.field}`);
+  if (ctx.grade) lines.push(`Grade: ${ctx.grade}`);
+  if (ctx.school) lines.push(`School: ${ctx.school}`);
   if (ctx.province) lines.push(`Province: ${ctx.province}`);
+  if (ctx.field) lines.push(`Field of interest: ${ctx.field}`);
+  if (ctx.aps) lines.push(`APS score: ${ctx.aps}/42`);
+  if (ctx.financialNeed) lines.push(`Financial need: ${ctx.financialNeed}`);
+  if (ctx.mode === "planning") {
+    lines.push(`Application stage: planning (Grade 11 — exploring options before final-year applications)`);
+  }
+
+  const subjects = ctx.subjects as Subject[] | undefined;
+  if (Array.isArray(subjects) && subjects.length > 0) {
+    const subjectLines = subjects.map((s) => `- ${s.subject}: ${s.mark}%`);
+    lines.push(`\nSubjects and marks:\n${subjectLines.join("\n")}`);
+  }
 
   const memories = ctx.memories as Memory[] | undefined;
   if (Array.isArray(memories) && memories.length > 0) {
@@ -33,6 +46,16 @@ function buildSystemPrompt(
     );
     lines.push(`\nWhat I remember about this student:\n${memLines.join("\n")}`);
   }
+
+  // Conversation state drives the no-greeting / build-on-prior-context behaviour.
+  const isFollowUp = Boolean(ctx.isFollowUp);
+  lines.push(
+    `\nConversation state: ${
+      isFollowUp
+        ? "FOLLOW-UP TURN. Do not greet. Do not say the student's name. Continue the conversation naturally and answer directly."
+        : "FIRST TURN of this conversation. A short, warm opener is OK only if the student's message itself is a greeting; otherwise answer directly."
+    }`,
+  );
 
   return lines.length > 0
     ? `${base}\n\nStudent context:\n${lines.join("\n")}`
