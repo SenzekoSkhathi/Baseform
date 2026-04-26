@@ -20,6 +20,7 @@ interface Message {
   sender: "user" | "bot" | "system";
   timestamp: Date;
   attachments?: MessageAttachment[];
+  feedback?: "like" | "dislike" | null;
 }
 
 interface ChatThread {
@@ -323,6 +324,37 @@ const SendIcon = () => (
 const PaperclipIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <path d="M10.5 5L5.5 10a2 2 0 1 0 2.83 2.83l5-5a3.5 3.5 0 1 0-4.95-4.95l-5 5a5 5 0 1 0 7.07 7.07L13 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M9.5 4.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const EditIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
+const ThumbsUpIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill={filled ? "currentColor" : "none"}>
+    <path d="M4 6.5v6h-2v-6h2zm0 0L6.5 1.5c.83 0 1.5.67 1.5 1.5v2.5h3.25c.83 0 1.43.78 1.22 1.58l-1 4A1.25 1.25 0 0 1 10.25 12H4" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
+const ThumbsDownIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill={filled ? "currentColor" : "none"}>
+    <path d="M10 7.5v-6h2v6h-2zm0 0L7.5 12.5c-.83 0-1.5-.67-1.5-1.5V8.5H2.75c-.83 0-1.43-.78-1.22-1.58l1-4A1.25 1.25 0 0 1 3.75 2H10" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
+const RegenerateIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <path d="M2.5 7a4.5 4.5 0 0 1 7.7-3.18M11.5 7a4.5 4.5 0 0 1-7.7 3.18M10.5 1.5v2.7H7.8M3.5 12.5v-2.7h2.7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -709,10 +741,12 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   const [memories, setMemories] = useState<MemoryFact[]>([]);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [activeMsgId, setActiveMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const longPressTimerRef = useRef<number | null>(null);
 
   // Keep mobile scroll contained inside the chat list.
   useEffect(() => {
@@ -914,19 +948,18 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
     fileInputRef.current?.click();
   };
 
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const incoming = Array.from(e.target.files ?? []);
+  const addFilesToPending = (incoming: File[]) => {
     if (incoming.length === 0) return;
 
     const accepted: File[] = [];
     const rejected: string[] = [];
     for (const file of incoming) {
       if (!ATTACHMENT_ALLOWED_MIMES.has(file.type)) {
-        rejected.push(`${file.name} (unsupported type)`);
+        rejected.push(`${file.name || "file"} (unsupported type)`);
         continue;
       }
       if (file.size > ATTACHMENT_MAX_BYTES) {
-        rejected.push(`${file.name} (over 5 MB)`);
+        rejected.push(`${file.name || "file"} (over 5 MB)`);
         continue;
       }
       accepted.push(file);
@@ -940,17 +973,159 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       return combined.slice(0, ATTACHMENT_MAX_COUNT);
     });
 
-    if (rejected.length > 0) {
-      setApiError(`Skipped: ${rejected.join(", ")}.`);
-    } else {
-      setApiError(null);
+    if (rejected.length > 0) setApiError(`Skipped: ${rejected.join(", ")}.`);
+    else setApiError(null);
+  };
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFilesToPending(Array.from(e.target.files ?? []));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const cd = e.clipboardData;
+    if (!cd) return;
+
+    // Pull files out of both files and items (different browsers populate them differently for screenshots / copied images).
+    const fromFiles = Array.from(cd.files ?? []);
+    const fromItems: File[] = [];
+    if (cd.items) {
+      for (const item of Array.from(cd.items)) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) fromItems.push(f);
+        }
+      }
     }
 
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    // De-dupe between files/items by reference.
+    const allFiles = Array.from(new Set([...fromFiles, ...fromItems]));
+    if (allFiles.length === 0) return;
+
+    e.preventDefault();
+    addFilesToPending(allFiles);
   };
 
   const handleRemoveFile = (index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Per-message actions ──────────────────────────────────────────────────────
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Best-effort; clipboard can be blocked in insecure contexts.
+    }
+  };
+
+  // ── Long-press to reveal action toolbar on touch devices ────────────────────
+  // Desktop uses CSS hover (group-hover); touch uses this state-driven path.
+
+  const startLongPress = (msgId: string) => {
+    if (longPressTimerRef.current) window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = window.setTimeout(() => {
+      setActiveMsgId(msgId);
+      longPressTimerRef.current = null;
+    }, 450);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // Dismiss active toolbar when the user taps anywhere else.
+  useEffect(() => {
+    if (!activeMsgId) return;
+    // Slight delay so the long-press's own touchend doesn't immediately dismiss it.
+    const handle = window.setTimeout(() => {
+      const dismiss = () => setActiveMsgId(null);
+      document.addEventListener("touchstart", dismiss, { once: true, capture: true });
+      document.addEventListener("click", dismiss, { once: true, capture: true });
+    }, 120);
+    return () => window.clearTimeout(handle);
+  }, [activeMsgId]);
+
+  const handleEditUserMessage = (msgId: string) => {
+    const idx = messages.findIndex((m) => m.id === msgId);
+    if (idx < 0 || messages[idx].sender !== "user") return;
+
+    setInput(messages[idx].text);
+    setApiError(null);
+    // Drop this user message and everything after it so the next send replays the conversation cleanly.
+    const trimmed = messages.slice(0, idx);
+    setMessages(trimmed);
+    saveThread(currentThreadId, trimmed);
+
+    // Focus and resize the textarea so the prompt is ready to edit.
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 128)}px`;
+    }
+  };
+
+  const handleSetFeedback = (msgId: string, kind: "like" | "dislike") => {
+    setMessages((prev) => {
+      const next = prev.map((m) =>
+        m.id === msgId ? { ...m, feedback: m.feedback === kind ? null : kind } : m,
+      );
+      saveThread(currentThreadId, next);
+      return next;
+    });
+  };
+
+  const handleRegenerate = async (msgId: string) => {
+    if (isLoading) return;
+    const idx = messages.findIndex((m) => m.id === msgId);
+    if (idx < 1 || messages[idx].sender !== "bot") return;
+
+    const triggerUserMsg = messages[idx - 1];
+    if (triggerUserMsg.sender !== "user") return;
+
+    // Drop the bot reply (and anything after) so the regenerated reply takes its place.
+    const trimmed = messages.slice(0, idx);
+    setMessages(trimmed);
+    saveThread(currentThreadId, trimmed);
+    setApiError(null);
+    setIsLoading(true);
+
+    try {
+      const history = trimmed
+        .slice(0, -1) // exclude the trigger user msg — that goes in `message`
+        .filter((m) => m.sender !== "system")
+        .map((m) => ({
+          role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
+          content: m.text,
+        }));
+
+      const res = await fetch("/api/basebot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: triggerUserMsg.text, history }),
+      });
+
+      const data = (await res.json()) as { response?: string; error?: string };
+      if (!res.ok || !data.response) {
+        throw new Error(data.error || "We could not reach BaseBot right now.");
+      }
+
+      const botMsg: Message = { id: makeId(), text: data.response, sender: "bot", timestamp: new Date() };
+      const withBot = [...trimmed, botMsg];
+      setMessages(withBot);
+      saveThread(currentThreadId, withBot);
+    } catch (error) {
+      const fallback = "Something went wrong. Please try again.";
+      const msg = error instanceof Error && error.message ? error.message : fallback;
+      setApiError(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -1045,12 +1220,71 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
               )}
 
               {messages.map((msg) => {
+                const isActive = activeMsgId === msg.id;
+                const toolbarVisibility = [
+                  "opacity-0 transition-opacity duration-150",
+                  "group-hover:opacity-100 group-focus-within:opacity-100",
+                  isActive ? "opacity-100" : "",
+                ].join(" ");
+
                 if (msg.sender === "bot") {
                   return (
-                    <div key={msg.id} className="flex w-full items-start gap-3 justify-start">
+                    <div
+                      key={msg.id}
+                      className="group flex w-full items-start gap-3 justify-start"
+                      onTouchStart={() => startLongPress(msg.id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                    >
                       <BotAvatar size="sm" />
                       <div className="min-w-0 flex-1 py-1 text-left text-gray-800">
                         <MessageContent text={msg.text} />
+                        <div className={`mt-1.5 flex items-center gap-1 text-gray-400 ${toolbarVisibility}`}>
+                          <button
+                            type="button"
+                            onClick={() => void copyToClipboard(msg.text)}
+                            title="Copy reply"
+                            className="rounded-md p-1.5 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            <CopyIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetFeedback(msg.id, "like")}
+                            title="Good response"
+                            className={[
+                              "rounded-md p-1.5 transition-colors",
+                              msg.feedback === "like"
+                                ? "bg-orange-100 text-orange-600"
+                                : "hover:bg-orange-50 hover:text-orange-600",
+                            ].join(" ")}
+                          >
+                            <ThumbsUpIcon filled={msg.feedback === "like"} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetFeedback(msg.id, "dislike")}
+                            title="Bad response"
+                            className={[
+                              "rounded-md p-1.5 transition-colors",
+                              msg.feedback === "dislike"
+                                ? "bg-gray-200 text-gray-700"
+                                : "hover:bg-gray-100 hover:text-gray-600",
+                            ].join(" ")}
+                          >
+                            <ThumbsDownIcon filled={msg.feedback === "dislike"} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRegenerate(msg.id)}
+                            disabled={isLoading}
+                            title="Regenerate reply"
+                            className="rounded-md p-1.5 hover:bg-orange-50 hover:text-orange-600 transition-colors disabled:opacity-40"
+                          >
+                            <RegenerateIcon />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1067,7 +1301,14 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
                 }
 
                 return (
-                  <div key={msg.id} className="flex justify-end">
+                  <div
+                    key={msg.id}
+                    className="group flex flex-col items-end"
+                    onTouchStart={() => startLongPress(msg.id)}
+                    onTouchEnd={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
+                    onTouchMove={cancelLongPress}
+                  >
                     <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-orange-500 px-4 py-3 text-white space-y-2">
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -1097,6 +1338,25 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
                         </div>
                       )}
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                    </div>
+                    <div className={`mt-1 flex items-center gap-1 text-gray-400 ${toolbarVisibility}`}>
+                      <button
+                        type="button"
+                        onClick={() => handleEditUserMessage(msg.id)}
+                        disabled={isLoading}
+                        title="Edit and resend"
+                        className="rounded-md p-1.5 hover:bg-orange-50 hover:text-orange-600 transition-colors disabled:opacity-40"
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyToClipboard(msg.text)}
+                        title="Copy prompt"
+                        className="rounded-md p-1.5 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                      >
+                        <CopyIcon />
+                      </button>
                     </div>
                   </div>
                 );
@@ -1161,7 +1421,8 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about universities, bursaries, APS scores…"
+                onPaste={handlePaste}
+                placeholder="Ask about universities, bursaries, APS scores…  (paste images or PDFs anytime)"
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none resize-none leading-relaxed"
                 style={{ minHeight: "24px", maxHeight: "128px" }}
