@@ -15,6 +15,7 @@ import { MetricsOverviewSection } from "./components/MetricsOverviewSection";
 import { ContentAuditSection } from "./components/ContentAuditSection";
 import { CreditVaultSection } from "./components/CreditVaultSection";
 import { CreditGrantSection } from "./components/CreditGrantSection";
+import { PaymentReconcileSection } from "./components/PaymentReconcileSection";
 import { paginate, sortBy } from "./utils";
 import type {
   AdminPlan,
@@ -1140,6 +1141,7 @@ export default function AdminClient() {
             ["sec-plans",        "Plans"],
             ["sec-vault",        "Credit Vault"],
             ["sec-grants",       "Credit Grants"],
+            ["sec-reconcile",    "Reconcile Payment"],
             ["sec-settings",     "Settings"],
             ["sec-audit",        "Audit"],
           ] as [string, string][]).map(([id, label]) => (
@@ -1385,6 +1387,10 @@ export default function AdminClient() {
 
         <div id="sec-grants">
         <CreditGrantSection onToast={pushToast} />
+        </div>
+
+        <div id="sec-reconcile">
+        <PaymentReconcileSection onToast={pushToast} />
         </div>
 
         <div id="sec-settings">
