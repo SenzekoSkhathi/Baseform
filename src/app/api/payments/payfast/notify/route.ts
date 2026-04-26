@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
@@ -87,30 +88,76 @@ async function verifyWithPayFast(payload: NotifyPayload): Promise<boolean> {
   return response.ok && text === "VALID";
 }
 
+async function logItnAttempt(
+  payload: NotifyPayload,
+  outcome: "accepted" | "rejected",
+  reason: string | null,
+  sourceIp: string | null,
+) {
+  // Best-effort audit row. Failures here must NOT affect the webhook response.
+  try {
+    const admin = createAdminClient();
+    await admin.from("payfast_itn_log").insert({
+      pf_payment_id: payload.pf_payment_id ?? null,
+      m_payment_id: payload.m_payment_id ?? null,
+      payment_status: payload.payment_status ?? null,
+      amount_gross: payload.amount_gross ? Number(payload.amount_gross) : null,
+      custom_str1: payload.custom_str1 ?? null,
+      custom_str2: payload.custom_str2 ?? null,
+      custom_str3: payload.custom_str3 ?? null,
+      outcome,
+      reason,
+      source_ip: sourceIp,
+      raw_payload: payload,
+    });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { route: "payfast/notify", phase: "audit_log" } });
+  }
+}
+
+function reject(payload: NotifyPayload, status: number, reason: string, sourceIp: string | null) {
+  // Single rejection helper: writes to Sentry AND audit table so failed ITNs are
+  // never silent. PayFast retries on non-200 responses, so we still return the
+  // original status code so it knows the attempt failed.
+  Sentry.captureMessage(`PayFast ITN rejected: ${reason}`, {
+    level: "warning",
+    tags: { route: "payfast/notify", reason },
+    extra: { payload },
+  });
+  void logItnAttempt(payload, "rejected", reason, sourceIp);
+  return NextResponse.json({ ok: false, error: reason }, { status });
+}
+
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const payload: NotifyPayload = Object.fromEntries(
     Array.from(formData.entries()).map(([key, value]) => [key, String(value)])
   );
 
+  const sourceIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    ?? req.headers.get("x-real-ip")
+    ?? null;
+
   const receivedSignature = String(payload.signature ?? "");
   if (!receivedSignature) {
-    return NextResponse.json({ ok: false, error: "Missing signature." }, { status: 400 });
+    return reject(payload, 400, "Missing signature.", sourceIp);
   }
 
   const config = getPayFastConfig();
   const { signature: _ignored, ...unsignedFields } = payload;
   const computedSignature = createPayFastSignature(unsignedFields, config.passphrase);
   if (computedSignature !== receivedSignature) {
-    return NextResponse.json({ ok: false, error: "Invalid signature." }, { status: 400 });
+    return reject(payload, 400, "Invalid signature.", sourceIp);
   }
 
   const serverValidation = await verifyWithPayFast(payload);
   if (!serverValidation) {
-    return NextResponse.json({ ok: false, error: "PayFast validation failed." }, { status: 400 });
+    return reject(payload, 400, "PayFast server-side validation failed.", sourceIp);
   }
 
   if (String(payload.payment_status ?? "").toUpperCase() !== "COMPLETE") {
+    void logItnAttempt(payload, "rejected", `payment_status=${payload.payment_status}`, sourceIp);
     return NextResponse.json({ ok: true, message: "Payment not complete, no upgrade performed." });
   }
 
@@ -132,7 +179,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!subscriber) {
-      return NextResponse.json({ ok: false, error: "Unknown subscription token." }, { status: 400 });
+      return reject(payload, 400, "Unknown subscription token.", sourceIp);
     }
 
     userId = String(subscriber.id);
@@ -145,11 +192,11 @@ export async function POST(req: NextRequest) {
     term = normalizeBillingTermMonths(payload.custom_str3);
 
     if (!isAllowedPlan(plan) || !userId) {
-      return NextResponse.json({ ok: false, error: "Invalid plan or user." }, { status: 400 });
+      return reject(payload, 400, "Invalid plan or user in custom fields.", sourceIp);
     }
 
     if (plan === "essential" && !term) {
-      return NextResponse.json({ ok: false, error: "Missing billing term." }, { status: 400 });
+      return reject(payload, 400, "Missing billing term in custom_str3.", sourceIp);
     }
 
     const { data: buyerProfile } = await supabase
@@ -161,13 +208,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (!isAllowedPlan(plan)) {
-    return NextResponse.json({ ok: false, error: "Invalid plan." }, { status: 400 });
+    return reject(payload, 400, "Invalid plan after resolution.", sourceIp);
   }
 
   const expectedAmount = expectedAmountForBilling(plan, term, isGrade11);
   const actualAmount = String(payload.amount_gross ?? "0");
   if (!isAmountMatch(actualAmount, expectedAmount)) {
-    return NextResponse.json({ ok: false, error: "Amount mismatch." }, { status: 400 });
+    return reject(payload, 400, `Amount mismatch (got ${actualAmount}, expected ${expectedAmount}).`, sourceIp);
   }
 
   // Build profile update: tier + subscription state (for Grade 11 Pro recurring)
@@ -219,7 +266,7 @@ export async function POST(req: NextRequest) {
     .eq("id", userId);
 
   if (error) {
-    return NextResponse.json({ ok: false, error: "Could not update profile tier." }, { status: 500 });
+    return reject(payload, 500, `Could not update profile tier: ${error.message}`, sourceIp);
   }
 
   if (plan === "essential" && term) {
@@ -247,13 +294,16 @@ export async function POST(req: NextRequest) {
   ).select("id").maybeSingle();
 
   if (billingInsert.error) {
-    return NextResponse.json({ ok: false, error: "Could not write billing history." }, { status: 500 });
+    return reject(payload, 500, `Could not write billing_events: ${billingInsert.error.message}`, sourceIp);
   }
 
   // Send invoice email non-blocking — never let this fail the webhook response
   if (billingInsert.data?.id) {
-    sendInvoiceEmail(userId, String(billingInsert.data.id)).catch(() => undefined);
+    sendInvoiceEmail(userId, String(billingInsert.data.id)).catch((err) => {
+      Sentry.captureException(err, { tags: { route: "payfast/notify", phase: "invoice_email" } });
+    });
   }
 
+  void logItnAttempt(payload, "accepted", null, sourceIp);
   return NextResponse.json({ ok: true });
 }
