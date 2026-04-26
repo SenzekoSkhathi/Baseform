@@ -6,11 +6,20 @@ import { useEffect, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface MessageAttachment {
+  name: string;
+  mimeType: string;
+  size: number;
+  /** Object URL for in-session preview only — not persisted to localStorage. */
+  previewUrl?: string;
+}
+
 interface Message {
   id: string;
   text: string;
   sender: "user" | "bot" | "system";
   timestamp: Date;
+  attachments?: MessageAttachment[];
 }
 
 interface ChatThread {
@@ -310,6 +319,25 @@ const SendIcon = () => (
     <path d="M12 7H2M7.5 2.5L12 7l-4.5 4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+
+const PaperclipIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M10.5 5L5.5 10a2 2 0 1 0 2.83 2.83l5-5a3.5 3.5 0 1 0-4.95-4.95l-5 5a5 5 0 1 0 7.07 7.07L13 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ATTACHMENT_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.pdf,image/png,image/jpeg,image/gif,image/webp,application/pdf";
+const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+const ATTACHMENT_MAX_COUNT = 4;
+const ATTACHMENT_ALLOWED_MIMES = new Set([
+  "image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf",
+]);
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ── Bot avatar ────────────────────────────────────────────────────────────────
 
@@ -680,9 +708,11 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [memories, setMemories] = useState<MemoryFact[]>([]);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keep mobile scroll contained inside the chat list.
   useEffect(() => {
@@ -759,7 +789,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
 
   const handleSend = async (text?: string) => {
     const content = (text ?? input).trim();
-    if (!content || isLoading) return;
+    if ((!content && pendingFiles.length === 0) || isLoading) return;
 
     setApiError(null);
 
@@ -768,13 +798,42 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       textareaRef.current.style.height = "auto";
     }
 
-    const userMsg: Message = { id: makeId(), text: content, sender: "user", timestamp: new Date() };
+    const filesToSend = pendingFiles;
+    setPendingFiles([]);
+
+    const messageAttachments: MessageAttachment[] = filesToSend.map((file) => ({
+      name: file.name,
+      mimeType: file.type,
+      size: file.size,
+      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+    }));
+
+    const userMsg: Message = {
+      id: makeId(),
+      text: content || "(attachment only)",
+      sender: "user",
+      timestamp: new Date(),
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+    };
     const withUser = [...messages, userMsg];
     setMessages(withUser);
     saveThread(currentThreadId, withUser);
     setIsLoading(true);
 
     try {
+      // Convert files to base64 (strip the "data:...;base64," prefix)
+      const attachmentPayloads = await Promise.all(
+        filesToSend.map(async (file) => {
+          const buf = await file.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const base64 = btoa(binary);
+          const type: "image" | "document" = file.type.startsWith("image/") ? "image" : "document";
+          return { type, mediaType: file.type, data: base64, name: file.name };
+        }),
+      );
+
       // Build history from existing messages (exclude system messages)
       const history = messages
         .filter((m) => m.sender !== "system")
@@ -786,7 +845,11 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       const res = await fetch("/api/basebot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, history }),
+        body: JSON.stringify({
+          message: content || "Please review the attached file(s).",
+          history,
+          attachments: attachmentPayloads,
+        }),
       });
 
       const data = (await res.json()) as { response?: string; error?: string };
@@ -845,6 +908,49 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
   const handleDeleteMemory = async (key: string) => {
     setMemories((prev) => prev.filter((m) => m.key !== key));
     await fetch(`/api/basebot/memory?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+  };
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const incoming = Array.from(e.target.files ?? []);
+    if (incoming.length === 0) return;
+
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of incoming) {
+      if (!ATTACHMENT_ALLOWED_MIMES.has(file.type)) {
+        rejected.push(`${file.name} (unsupported type)`);
+        continue;
+      }
+      if (file.size > ATTACHMENT_MAX_BYTES) {
+        rejected.push(`${file.name} (over 5 MB)`);
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...accepted];
+      if (combined.length > ATTACHMENT_MAX_COUNT) {
+        rejected.push(`only the first ${ATTACHMENT_MAX_COUNT} attachments are sent`);
+      }
+      return combined.slice(0, ATTACHMENT_MAX_COUNT);
+    });
+
+    if (rejected.length > 0) {
+      setApiError(`Skipped: ${rejected.join(", ")}.`);
+    } else {
+      setApiError(null);
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -962,8 +1068,35 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
 
                 return (
                   <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-orange-500 px-4 py-3 text-white">
-                      <p className="text-sm leading-relaxed">{msg.text}</p>
+                    <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-orange-500 px-4 py-3 text-white space-y-2">
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.attachments.map((att, i) => (
+                            <div
+                              key={`${msg.id}-att-${i}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1.5 text-[11px]"
+                            >
+                              {att.previewUrl && att.mimeType.startsWith("image/") ? (
+                                <Image
+                                  src={att.previewUrl}
+                                  alt={att.name}
+                                  width={36}
+                                  height={36}
+                                  className="rounded-md object-cover"
+                                  unoptimized
+                                />
+                              ) : (
+                                <span className="text-base leading-none">📎</span>
+                              )}
+                              <div className="min-w-0">
+                                <p className="truncate max-w-35 font-medium">{att.name}</p>
+                                <p className="text-white/70 text-[10px]">{formatFileSize(att.size)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                     </div>
                   </div>
                 );
@@ -979,7 +1112,50 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
         {/* Input bar */}
         <div className="border-t border-gray-100 bg-white px-4 py-3 shrink-0">
           <div className="max-w-3xl mx-auto">
+            {pendingFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {pendingFiles.map((file, i) => (
+                  <div
+                    key={`pending-${i}-${file.name}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2 py-1 text-xs"
+                  >
+                    <span className="text-sm leading-none">{file.type.startsWith("image/") ? "🖼️" : "📄"}</span>
+                    <span className="truncate max-w-40 font-medium text-gray-800">{file.name}</span>
+                    <span className="text-[10px] text-gray-500">{formatFileSize(file.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(i)}
+                      className="ml-1 rounded-full p-0.5 text-gray-400 hover:bg-orange-100 hover:text-orange-600"
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2 bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-orange-300 focus-within:ring-2 focus-within:ring-orange-100 transition-all px-4 py-2.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ATTACHMENT_ACCEPT}
+                multiple
+                onChange={handleFilesSelected}
+                className="hidden"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                onClick={handleAttachClick}
+                disabled={isLoading || pendingFiles.length >= ATTACHMENT_MAX_COUNT}
+                title={pendingFiles.length >= ATTACHMENT_MAX_COUNT ? "Attachment limit reached" : "Attach images or PDFs"}
+                className="w-8 h-8 rounded-xl text-gray-400 hover:bg-orange-50 hover:text-orange-600 disabled:opacity-40 flex items-center justify-center transition-colors shrink-0 mb-0.5"
+              >
+                <PaperclipIcon />
+              </button>
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -992,7 +1168,7 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
               />
               <button
                 onClick={() => void handleSend()}
-                disabled={!input.trim() || isLoading}
+                disabled={(!input.trim() && pendingFiles.length === 0) || isLoading}
                 className="w-8 h-8 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 flex items-center justify-center transition-colors shrink-0 mb-0.5"
               >
                 <SendIcon />

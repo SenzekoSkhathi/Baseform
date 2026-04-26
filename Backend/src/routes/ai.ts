@@ -7,11 +7,51 @@ const ai = new Hono();
 
 ai.use("*", requireAuth);
 
-function toClaudeMessages(messages: { role: string; content: string }[]) {
-  return messages.map((m) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }));
+type Attachment = {
+  type: "image" | "document";
+  mediaType: string;
+  data: string; // base64
+  name?: string;
+};
+
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const ALLOWED_DOC_TYPES = new Set(["application/pdf"]);
+
+type ClaudeContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "document"; source: { type: "base64"; media_type: string; data: string } };
+
+function toClaudeMessages(
+  messages: { role: string; content: string }[],
+  lastUserAttachments: Attachment[],
+) {
+  return messages.map((m, idx) => {
+    const isLastUserMessage = idx === messages.length - 1 && m.role === "user";
+    if (!isLastUserMessage || lastUserAttachments.length === 0) {
+      return { role: m.role as "user" | "assistant", content: m.content };
+    }
+
+    // Attach files only to the most recent user turn — historical turns keep
+    // their text-only form so we don't re-upload the same file each turn.
+    const blocks: ClaudeContentBlock[] = [];
+    for (const att of lastUserAttachments) {
+      if (att.type === "image" && ALLOWED_IMAGE_TYPES.has(att.mediaType)) {
+        blocks.push({
+          type: "image",
+          source: { type: "base64", media_type: att.mediaType, data: att.data },
+        });
+      } else if (att.type === "document" && ALLOWED_DOC_TYPES.has(att.mediaType)) {
+        blocks.push({
+          type: "document",
+          source: { type: "base64", media_type: att.mediaType, data: att.data },
+        });
+      }
+    }
+    blocks.push({ type: "text", text: m.content });
+
+    return { role: "user" as const, content: blocks };
+  });
 }
 
 type Memory = { key: string; value: string; category: string };
@@ -78,6 +118,7 @@ ai.post("/coach", async (ctx) => {
 
   const messages: { role: string; content: string }[] = body.messages;
   const studentContext: Record<string, unknown> = body.context ?? {};
+  const attachments: Attachment[] = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return ctx.json({ error: "messages array is required" }, 400);
@@ -93,7 +134,7 @@ ai.post("/coach", async (ctx) => {
   }
 
   const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
-  const claudeMessages = toClaudeMessages(messages);
+  const claudeMessages = toClaudeMessages(messages, attachments);
 
   try {
     const result = await anthropic.messages.create({
@@ -144,6 +185,7 @@ ai.post("/coach/stream", async (ctx) => {
 
   const messages: { role: string; content: string }[] = body.messages;
   const studentContext: Record<string, unknown> = body.context ?? {};
+  const attachments: Attachment[] = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return ctx.json({ error: "messages array is required" }, 400);
@@ -159,7 +201,7 @@ ai.post("/coach/stream", async (ctx) => {
   }
 
   const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
-  const claudeMessages = toClaudeMessages(messages);
+  const claudeMessages = toClaudeMessages(messages, attachments);
 
   return new Response(
     new ReadableStream({

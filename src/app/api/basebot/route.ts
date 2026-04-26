@@ -8,6 +8,33 @@ import { deductCredits } from "@/lib/credits";
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3001";
 
 type HistoryMessage = { role: "user" | "assistant"; content: string };
+type Attachment = { type: "image" | "document"; mediaType: string; data: string; name?: string };
+
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const ALLOWED_DOC_TYPES = new Set(["application/pdf"]);
+const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB per file
+
+function sanitizeAttachments(raw: unknown): Attachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Attachment[] = [];
+  for (const item of raw.slice(0, MAX_ATTACHMENTS)) {
+    if (!item || typeof item !== "object") continue;
+    const a = item as Record<string, unknown>;
+    const type = a.type === "image" || a.type === "document" ? a.type : null;
+    const mediaType = typeof a.mediaType === "string" ? a.mediaType : "";
+    const data = typeof a.data === "string" ? a.data : "";
+    const name = typeof a.name === "string" ? a.name.slice(0, 120) : undefined;
+    if (!type || !mediaType || !data) continue;
+    if (type === "image" && !ALLOWED_IMAGE_TYPES.has(mediaType)) continue;
+    if (type === "document" && !ALLOWED_DOC_TYPES.has(mediaType)) continue;
+    // base64 size estimate: 4 chars per 3 bytes
+    const approxBytes = Math.floor((data.length * 3) / 4);
+    if (approxBytes > MAX_ATTACHMENT_BYTES) continue;
+    out.push({ type, mediaType, data, name });
+  }
+  return out;
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -29,14 +56,17 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   if (!body) return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  const { message, history } = body as {
+  const { message, history, attachments: rawAttachments } = body as {
     message: string;
     history?: HistoryMessage[];
+    attachments?: unknown;
   };
 
   if (!message?.trim()) {
     return Response.json({ error: "Message required" }, { status: 400 });
   }
+
+  const attachments = sanitizeAttachments(rawAttachments);
 
   const { ok: credited } = await deductCredits(session.user.id, "basebot_message", "AI Coach message");
   if (!credited) {
@@ -93,7 +123,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ messages, context }),
+    body: JSON.stringify({ messages, context, attachments }),
   });
 
   if (!res.ok) {
