@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
 import {
   getEssentialBillingOption,
@@ -86,7 +88,7 @@ export async function POST(req: NextRequest) {
   const fields: Record<string, string> = {
     merchant_id: config.merchantId,
     merchant_key: config.merchantKey,
-    return_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=success`,
+    return_url: `${baseUrl}/payment/success?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}`,
     cancel_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=cancelled`,
     notify_url: `${baseUrl}/api/payments/payfast/notify`,
     name_first: user.user_metadata?.full_name ? String(user.user_metadata.full_name).split(" ")[0] : "Baseform",
@@ -113,6 +115,26 @@ export async function POST(req: NextRequest) {
   }
 
   const signature = createPayFastSignature(fields, config.passphrase);
+
+  // Record this checkout so the cron can detect the case where the user pays
+  // but the ITN never lands — within 10 minutes we'll alert ourselves.
+  // Best-effort: never block the payment flow if this insert fails.
+  try {
+    const admin = createAdminClient();
+    await admin.from("payfast_pending_payments").upsert(
+      {
+        user_id: user.id,
+        m_payment_id: mPaymentId,
+        plan_slug: planId,
+        term_months: term ?? null,
+        amount_zar: Number.parseFloat(toPayFastAmount(amount)),
+        status: "pending",
+      },
+      { onConflict: "m_payment_id" },
+    );
+  } catch (err) {
+    Sentry.captureException(err, { tags: { route: "payfast/initiate", phase: "pending_insert" } });
+  }
 
   return NextResponse.json({
     ok: true,

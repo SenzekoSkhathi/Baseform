@@ -304,6 +304,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Resolve the pending payment row so the cron stops watching it.
+  if (payload.m_payment_id) {
+    try {
+      await supabase
+        .from("payfast_pending_payments")
+        .update({ status: "resolved", resolved_at: new Date().toISOString() })
+        .eq("m_payment_id", payload.m_payment_id);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { route: "payfast/notify", phase: "pending_resolve" } });
+    }
+  }
+
   void logItnAttempt(payload, "accepted", null, sourceIp);
   return NextResponse.json({ ok: true });
 }

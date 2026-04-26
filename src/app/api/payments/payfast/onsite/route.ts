@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PLANS, GRADE11_PLANS } from "@/lib/site-config/defaults";
 import {
   getEssentialBillingOption,
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
   const fields: Record<string, string> = {
     merchant_id: config.merchantId,
     merchant_key: config.merchantKey,
-    return_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=success`,
+    return_url: `${baseUrl}/payment/success?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}`,
     cancel_url: `${baseUrl}/payment?plan=${encodeURIComponent(planId)}${term ? `&term=${term}` : ""}&status=cancelled`,
     notify_url: `${baseUrl}/api/payments/payfast/notify`,
     name_first: user.user_metadata?.full_name
@@ -146,6 +147,24 @@ export async function POST(req: NextRequest) {
 
   if (!uuid) {
     return NextResponse.json({ error: "No payment UUID returned from PayFast." }, { status: 502 });
+  }
+
+  // Track this pending payment so the cron can detect ITN delivery failures.
+  try {
+    const admin = createAdminClient();
+    await admin.from("payfast_pending_payments").upsert(
+      {
+        user_id: user.id,
+        m_payment_id: mPaymentId,
+        plan_slug: planId,
+        term_months: term ?? null,
+        amount_zar: Number.parseFloat(toPayFastAmount(amount)),
+        status: "pending",
+      },
+      { onConflict: "m_payment_id" },
+    );
+  } catch (err) {
+    Sentry.captureException(err, { tags: { route: "payfast/onsite", phase: "pending_insert" } });
   }
 
   return NextResponse.json({ ok: true, uuid, engineUrl: getPayFastEngineUrl(config) });

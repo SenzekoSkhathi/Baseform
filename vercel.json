@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/payfast-stale-payments",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

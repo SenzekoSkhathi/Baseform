@@ -138,7 +138,10 @@ export default function PaymentPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Handle PayFast return callbacks via URL status param
+  // PayFast return callback handling
+  // Success path is now handled by /payment/success — a dedicated upgrade
+  // experience with polling, perks, and proper failure states. We only
+  // handle the cancelled/legacy success bounce here for back-compat.
   useEffect(() => {
     const status = searchParams.get("status");
     if (!status) return;
@@ -149,38 +152,13 @@ export default function PaymentPage() {
       return;
     }
 
-    if (status !== "success") return;
-
-    let isMounted = true;
-    async function verifyReturn() {
-      setNotice("Payment received — verifying your plan upgrade...");
-      try {
-        const res = await fetch("/api/payments/payfast/verify-return", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ plan, term }),
-        });
-        const payload = (await res.json().catch(() => null)) as {
-          ok?: boolean;
-          pending?: boolean;
-        } | null;
-        if (!isMounted) return;
-        if (res.ok && payload?.ok) {
-          router.push("/dashboard");
-          return;
-        }
-        if (payload?.pending) {
-          setNotice("Still confirming your payment with PayFast. Please refresh in a moment.");
-          return;
-        }
-        setError("Could not verify your payment yet. Please refresh or contact support.");
-      } catch {
-        if (!isMounted) return;
-        setError("Verification failed. Please refresh and try again.");
-      }
+    if (status === "success") {
+      // Legacy return_url some old PayFast flows might still use — bounce to
+      // the dedicated success page so users get the same experience.
+      const params = new URLSearchParams({ plan });
+      if (term) params.set("term", String(term));
+      router.replace(`/payment/success?${params.toString()}`);
     }
-    void verifyReturn();
-    return () => { isMounted = false; };
   }, [plan, router, searchParams, term]);
 
   async function handlePayNow() {
@@ -241,37 +219,16 @@ export default function PaymentPage() {
       clearTimeout(safetyTimer);
       setLoading(false);
       if (result) {
-        setNotice("Payment received — verifying your plan upgrade...");
-        void verifyAndRedirect();
+        // Hand off to the dedicated upgrade-success page — it handles polling,
+        // perks, animations, and the "still working" / failure states uniformly
+        // with the redirect-flow return_url.
+        const params = new URLSearchParams({ plan });
+        if (term) params.set("term", String(term));
+        router.push(`/payment/success?${params.toString()}`);
       } else {
         setNotice("Payment was cancelled. You can try again whenever you are ready.");
       }
     });
-  }
-
-  async function verifyAndRedirect() {
-    try {
-      const res = await fetch("/api/payments/payfast/verify-return", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, term }),
-      });
-      const payload = (await res.json().catch(() => null)) as {
-        ok?: boolean;
-        pending?: boolean;
-      } | null;
-      if (res.ok && payload?.ok) {
-        router.push("/dashboard");
-        return;
-      }
-      if (payload?.pending) {
-        setNotice("Still confirming with PayFast — please refresh in a moment.");
-        return;
-      }
-      setError("Could not verify your payment yet. Please contact support.");
-    } catch {
-      setError("Verification failed. Please refresh and try again.");
-    }
   }
 
   const features = planData?.features ?? [];

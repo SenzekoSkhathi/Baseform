@@ -149,7 +149,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Billing event upsert failed: ${billingInsert.error.message}` }, { status: 500 });
   }
 
-  // 4. Send invoice (best-effort — doesn't block success)
+  // 4. Resolve the pending-payment row if there is one (so the stale-detector cron stops watching it).
+  if (mPaymentId) {
+    await admin
+      .from("payfast_pending_payments")
+      .update({ status: "resolved", resolved_at: new Date().toISOString() })
+      .eq("m_payment_id", mPaymentId);
+  }
+
+  // 5. Send invoice (best-effort — doesn't block success)
   const invoiceResult = await sendInvoiceEmail(userId, billingInsert.data.id)
     .then(() => ({ ok: true }))
     .catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
