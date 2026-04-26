@@ -7,6 +7,9 @@ const ai = new Hono();
 
 ai.use("*", requireAuth);
 
+type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+type DocumentMediaType = "application/pdf";
+
 type Attachment = {
   type: "image" | "document";
   mediaType: string;
@@ -14,13 +17,21 @@ type Attachment = {
   name?: string;
 };
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-const ALLOWED_DOC_TYPES = new Set(["application/pdf"]);
+const ALLOWED_IMAGE_TYPES = new Set<ImageMediaType>(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const ALLOWED_DOC_TYPES = new Set<DocumentMediaType>(["application/pdf"]);
+
+function isImageMediaType(value: string): value is ImageMediaType {
+  return (ALLOWED_IMAGE_TYPES as Set<string>).has(value);
+}
+
+function isDocumentMediaType(value: string): value is DocumentMediaType {
+  return (ALLOWED_DOC_TYPES as Set<string>).has(value);
+}
 
 type ClaudeContentBlock =
   | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-  | { type: "document"; source: { type: "base64"; media_type: string; data: string } };
+  | { type: "image"; source: { type: "base64"; media_type: ImageMediaType; data: string } }
+  | { type: "document"; source: { type: "base64"; media_type: DocumentMediaType; data: string } };
 
 function toClaudeMessages(
   messages: { role: string; content: string }[],
@@ -36,12 +47,12 @@ function toClaudeMessages(
     // their text-only form so we don't re-upload the same file each turn.
     const blocks: ClaudeContentBlock[] = [];
     for (const att of lastUserAttachments) {
-      if (att.type === "image" && ALLOWED_IMAGE_TYPES.has(att.mediaType)) {
+      if (att.type === "image" && isImageMediaType(att.mediaType)) {
         blocks.push({
           type: "image",
           source: { type: "base64", media_type: att.mediaType, data: att.data },
         });
-      } else if (att.type === "document" && ALLOWED_DOC_TYPES.has(att.mediaType)) {
+      } else if (att.type === "document" && isDocumentMediaType(att.mediaType)) {
         blocks.push({
           type: "document",
           source: { type: "base64", media_type: att.mediaType, data: att.data },
