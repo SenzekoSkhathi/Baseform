@@ -61,8 +61,11 @@ async function applyRateLimit(tier: string, ip: string): Promise<boolean> {
   }
 }
 
-const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin", "/targets", "/vault", "/discover"];
+const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin", "/targets", "/vault", "/discover", "/onboarding", "/plans", "/payment", "/settings", "/notifications", "/coach"];
 const AUTH_PAGES = ["/login", "/signup"];
+// Routes that an unverified user MUST be allowed to reach so they can
+// finish verification — never redirect away from these even if logged in unverified.
+const UNVERIFIED_ALLOWED = ["/verify-email", "/api/email/welcome"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -122,6 +125,18 @@ export async function middleware(request: NextRequest) {
   // Not logged in, trying to access protected route
   if (isProtected && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Logged in but email not verified — block access to anything except the
+  // verify-email page itself. Defence-in-depth: server layouts also enforce
+  // this, but bouncing here saves loading any protected layout/data.
+  if (
+    user
+    && !user.email_confirmed_at
+    && (isProtected || isAuthPage)
+    && !UNVERIFIED_ALLOWED.some((p) => pathname.startsWith(p))
+  ) {
+    return NextResponse.redirect(new URL("/verify-email?reason=unverified", request.url));
   }
 
   // Already logged in, no need to see auth pages

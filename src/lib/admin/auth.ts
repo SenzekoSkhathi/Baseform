@@ -32,6 +32,12 @@ export async function requireAdminGuard(): Promise<AdminGuardResult> {
 
   if (!user) return { ok: false, status: 401, error: "Unauthorized" };
 
+  // Admin tools must require a verified email regardless of tier — a stolen
+  // session with an unconfirmed email shouldn't grant access to user data.
+  if (!user.email_confirmed_at) {
+    return { ok: false, status: 401, error: "Email not verified" };
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("tier")

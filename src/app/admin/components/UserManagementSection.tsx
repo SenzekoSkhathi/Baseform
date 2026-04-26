@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import type { AdminUser, SortDirection } from "../types";
+import { isOnboardingComplete } from "@/lib/onboarding/status";
 
 type UserSortKey = "full_name" | "email" | "tier" | "created_at";
 
@@ -228,7 +229,19 @@ export function UserManagementSection(props: UserManagementSectionProps) {
                         onChange={(e) => props.onToggleSelectOne(user.id, e.target.checked)}
                       />
                     </td>
-                    <td className="px-2 py-2 font-medium text-gray-800">{user.full_name || "-"}</td>
+                    <td className="px-2 py-2 font-medium text-gray-800">
+                      <div className="flex items-center gap-1.5">
+                        <span>{user.full_name || "-"}</span>
+                        {!isOnboardingComplete(user) && (
+                          <span
+                            title="User has not completed onboarding (missing school, grade, or guardian)."
+                            className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700"
+                          >
+                            Incomplete
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-2 py-2 text-gray-600">{user.email || "-"}</td>
                     <td className="px-2 py-2 text-gray-600">{user.school_name || "-"}</td>
                     <td className="px-2 py-2 text-gray-600">{user.grade_year || "-"}</td>
