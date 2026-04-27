@@ -142,7 +142,6 @@ function PlansPageInner() {
     void loadPlanConfig();
 
     return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleContinue() {

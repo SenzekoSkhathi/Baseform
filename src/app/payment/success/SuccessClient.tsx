@@ -214,11 +214,11 @@ export default function SuccessClient() {
         ) : phase === "failed" ? (
           <>
             <h1 className="mt-6 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
-              Hmm, that's taking longer than expected
+              Hmm, that&apos;s taking longer than expected
             </h1>
             <p className="mt-2 text-sm font-medium text-gray-500">
-              PayFast confirmed your payment, but we haven't seen the upgrade signal yet.
-              Don't worry — your money is safe and we'll resolve this within a few minutes.
+              PayFast confirmed your payment, but we haven&apos;t seen the upgrade signal yet.
+              Don&apos;t worry — your money is safe and we&apos;ll resolve this within a few minutes.
             </p>
           </>
         ) : (
@@ -311,7 +311,7 @@ export default function SuccessClient() {
               <a className="font-semibold text-orange-600 hover:underline" href="mailto:hello@baseformapplications.com">
                 hello@baseformapplications.com
               </a>{" "}
-              with this URL — we'll fix it within the day.
+              with this URL — we&apos;ll fix it within the day.
             </p>
           </div>
         )}
