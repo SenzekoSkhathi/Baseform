@@ -132,8 +132,22 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "AI service temporarily unavailable" }, { status: 502 });
   }
 
-  const data = (await res.json()) as { reply?: string; error?: string };
+  const data = (await res.json()) as {
+    reply?: string;
+    error?: string;
+    citations?: Array<{
+      id: number;
+      title: string;
+      provider: string | null;
+      funding_value: string | null;
+      closing_date: string | null;
+      detail_page_url: string | null;
+      application_url: string | null;
+      similarity: number;
+    }>;
+  };
   const replyText = data.reply ?? "";
+  const citations = Array.isArray(data.citations) ? data.citations : [];
 
   // Fire-and-forget: extract new memory facts from this exchange
   void (async () => {
@@ -164,5 +178,5 @@ export async function POST(req: NextRequest) {
     }
   })();
 
-  return Response.json({ response: replyText });
+  return Response.json({ response: replyText, citations });
 }

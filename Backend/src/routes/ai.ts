@@ -1,10 +1,12 @@
 import { Hono } from "hono";
+import type { MessageParam, Tool, ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { requireAuth } from "../middleware/auth.js";
 import { anthropic, AI_MODEL, SYSTEM_PROMPT } from "../lib/ai.js";
 import { withRetry } from "../lib/retry.js";
 import { redactPII } from "../lib/redact.js";
 import { recordUsage } from "../lib/aiUsageLog.js";
 import { createLogger } from "../lib/logger.js";
+import { searchBursaries, type BursaryHit } from "../lib/bursarySearch.js";
 
 const log = createLogger("ai-route");
 const ai = new Hono();
@@ -152,9 +154,80 @@ function validateMessages(messages: unknown): { ok: true; messages: { role: stri
   return { ok: true, messages: messages as { role: string; content: string }[] };
 }
 
+// ── Tool definitions ────────────────────────────────────────────────────────
+//
+// search_bursaries: lets BaseBot retrieve real bursary records from the
+// pgvector layer instead of reciting from prompt memory. The model decides
+// when to invoke it; we cap iterations at MAX_TOOL_LOOPS to avoid runaways.
+
+const MAX_TOOL_LOOPS = 3;
+
+const BURSARY_TOOL: Tool = {
+  name: "search_bursaries",
+  description:
+    "Search the Baseform bursary database for South African bursaries that match a student's question. " +
+    "Use this whenever the student asks about specific bursaries, eligibility for funding, who funds a particular field of study, or 'find me bursaries for X'. " +
+    "Do NOT use it for generic APS / university / motivation-letter questions. " +
+    "Returns the top matching bursaries with funding amount, eligibility, closing date, and an application URL the student can cite. " +
+    "Search is keyword-based (Postgres full-text search), so the `query` argument should be the most specific terms a bursary listing would actually contain — provider names, fields of study, course names, eligibility phrases. " +
+    "If the student says 'I want to be a doctor', search for 'medicine MBChB health sciences', not 'doctor'. " +
+    "If they say 'I'm broke', search for 'financial need disadvantaged background'. " +
+    "Always expand vague terms into the precise vocabulary a bursary description would use.",
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Space-separated search keywords. Prefer specific vocabulary that bursary listings actually use (e.g. 'engineering chemical mining', 'medicine MBChB health sciences', 'accounting CA chartered'). Multiple keywords increase recall.",
+      },
+      province: {
+        type: "string",
+        description: "Optional province filter (e.g. 'Gauteng', 'Western Cape'). Only set if the student explicitly cares about a province.",
+      },
+      field: {
+        type: "string",
+        description: "Optional field-of-study filter (e.g. 'Engineering', 'Health Sciences'). Only set if the student is asking about a specific field.",
+      },
+    },
+    required: ["query"],
+  },
+};
+
+const TOOLS: Tool[] = [BURSARY_TOOL];
+
+async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+  if (name === "search_bursaries") {
+    const query = typeof input.query === "string" ? input.query : "";
+    const province = typeof input.province === "string" ? input.province : undefined;
+    const field = typeof input.field === "string" ? input.field : undefined;
+    const hits = await searchBursaries(query, { province, field, matchCount: 5 });
+    // Strip embedding-only fields and keep what's useful for both Claude's
+    // reasoning and the citation card the frontend renders.
+    return hits.map((h) => ({
+      id: h.id,
+      title: h.title,
+      provider: h.provider,
+      funding_value: h.funding_value,
+      amount_per_year: h.amount_per_year,
+      minimum_aps: h.minimum_aps,
+      requires_financial_need: undefined, // not selected by RPC
+      closing_date: h.closing_date,
+      detail_page_url: h.detail_page_url,
+      application_url: h.application_url,
+      eligibility_requirements: h.eligibility_requirements,
+      fields_of_study: h.fields_of_study,
+      provinces_eligible: h.provinces_eligible,
+      similarity: Math.round(h.similarity * 100) / 100,
+    }));
+  }
+  throw new Error(`Unknown tool: ${name}`);
+}
+
 /**
  * POST /ai/coach
- * Non-streaming chat with the AI Coach.
+ * Non-streaming chat with the AI Coach. Loops on tool calls so the model can
+ * call search_bursaries and ground its answer in real DB rows. Returns any
+ * citation hits alongside the reply so the UI can render bursary cards.
  */
 ai.post("/coach", async (ctx) => {
   const user = ctx.var.user;
@@ -167,44 +240,145 @@ ai.post("/coach", async (ctx) => {
   const attachments: Attachment[] = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
 
   const systemBlocks = buildSystemBlocks(studentContext);
-  const claudeMessages = toClaudeMessages(validated.messages, attachments);
+  const conversation: MessageParam[] = toClaudeMessages(validated.messages, attachments) as MessageParam[];
+
+  // Citations accumulated across tool calls in this turn — surfaced to the
+  // frontend so the UI can render bursary cards under the bot reply.
+  const citations: BursaryHit[] = [];
+  const seenIds = new Set<number>();
+
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalCacheRead = 0;
+  let totalCacheCreate = 0;
 
   try {
-    const result = await withRetry(
+    for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
+      const result = await withRetry(
+        () =>
+          anthropic.messages.create({
+            model: AI_MODEL,
+            max_tokens: 900,
+            system: systemBlocks,
+            tools: TOOLS,
+            messages: conversation,
+          }),
+        { label: "anthropic.coach" }
+      );
+
+      const u = result.usage;
+      totalInput += u?.input_tokens ?? 0;
+      totalOutput += u?.output_tokens ?? 0;
+      totalCacheRead += u?.cache_read_input_tokens ?? 0;
+      totalCacheCreate += u?.cache_creation_input_tokens ?? 0;
+
+      // Append the assistant turn (text + any tool_use blocks) to the conversation.
+      conversation.push({ role: "assistant", content: result.content });
+
+      // If the model didn't call any tools, we're done.
+      if (result.stop_reason !== "tool_use") {
+        const reply = result.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b.type === "text" ? b.text : ""))
+          .join("\n")
+          .trim();
+
+        void recordUsage({
+          student_id: user.id,
+          input_tokens: totalInput,
+          output_tokens: totalOutput,
+          cache_read_input_tokens: totalCacheRead,
+          cache_creation_input_tokens: totalCacheCreate,
+          model: AI_MODEL,
+        });
+
+        return ctx.json({
+          reply,
+          citations,
+          usage: {
+            input_tokens: totalInput,
+            output_tokens: totalOutput,
+            cache_read_input_tokens: totalCacheRead,
+            cache_creation_input_tokens: totalCacheCreate,
+          },
+        });
+      }
+
+      // Execute every tool_use block and feed results back as a single user turn.
+      const toolResults: ContentBlockParam[] = [];
+      for (const block of result.content) {
+        if (block.type !== "tool_use") continue;
+        try {
+          const out = await runTool(block.name, block.input as Record<string, unknown>);
+          if (block.name === "search_bursaries" && Array.isArray(out)) {
+            for (const h of out as BursaryHit[]) {
+              if (!seenIds.has(h.id)) {
+                seenIds.add(h.id);
+                citations.push(h);
+              }
+            }
+          }
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify(out),
+          });
+        } catch (err) {
+          log.warn("Tool execution failed", {
+            tool: block.name,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: "Tool error — continue without these results.",
+            is_error: true,
+          });
+        }
+      }
+      conversation.push({ role: "user", content: toolResults });
+    }
+
+    // Hit the loop cap. Force a final, no-tools call so the model summarises
+    // what it has gathered so far instead of leaving the user hanging.
+    const final = await withRetry(
       () =>
         anthropic.messages.create({
           model: AI_MODEL,
           max_tokens: 900,
           system: systemBlocks,
-          messages: claudeMessages,
+          messages: conversation,
         }),
-      { label: "anthropic.coach" }
+      { label: "anthropic.coach.final" }
     );
+    totalInput += final.usage?.input_tokens ?? 0;
+    totalOutput += final.usage?.output_tokens ?? 0;
+    totalCacheRead += final.usage?.cache_read_input_tokens ?? 0;
+    totalCacheCreate += final.usage?.cache_creation_input_tokens ?? 0;
 
-    const reply = result.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
+    const reply = final.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b.type === "text" ? b.text : ""))
       .join("\n")
       .trim();
 
-    const usage = result.usage;
-
     void recordUsage({
       student_id: user.id,
-      input_tokens: usage?.input_tokens ?? 0,
-      output_tokens: usage?.output_tokens ?? 0,
-      cache_read_input_tokens: usage?.cache_read_input_tokens ?? 0,
-      cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
+      input_tokens: totalInput,
+      output_tokens: totalOutput,
+      cache_read_input_tokens: totalCacheRead,
+      cache_creation_input_tokens: totalCacheCreate,
       model: AI_MODEL,
     });
 
     return ctx.json({
       reply,
+      citations,
       usage: {
-        input_tokens: usage?.input_tokens ?? 0,
-        output_tokens: usage?.output_tokens ?? 0,
-        cache_read_input_tokens: usage?.cache_read_input_tokens ?? 0,
-        cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
+        input_tokens: totalInput,
+        output_tokens: totalOutput,
+        cache_read_input_tokens: totalCacheRead,
+        cache_creation_input_tokens: totalCacheCreate,
       },
     });
   } catch (err) {

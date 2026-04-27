@@ -14,6 +14,17 @@ interface MessageAttachment {
   previewUrl?: string;
 }
 
+interface BursaryCitation {
+  id: number;
+  title: string;
+  provider: string | null;
+  funding_value: string | null;
+  closing_date: string | null;
+  detail_page_url: string | null;
+  application_url: string | null;
+  similarity: number;
+}
+
 interface Message {
   id: string;
   text: string;
@@ -21,6 +32,7 @@ interface Message {
   timestamp: Date;
   attachments?: MessageAttachment[];
   feedback?: "like" | "dislike" | null;
+  citations?: BursaryCitation[];
 }
 
 interface ChatThread {
@@ -167,6 +179,56 @@ function isTableSeparator(line: string): boolean {
 
 function isTableRow(line: string): boolean {
   return /^\s*\|.*\|\s*$/.test(line);
+}
+
+function formatClosingDate(d: string | null): string | null {
+  if (!d) return null;
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function BursaryCitations({ citations }: { citations: BursaryCitation[] }) {
+  if (!citations || citations.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        Bursaries cited
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {citations.map((c) => {
+          const closing = formatClosingDate(c.closing_date);
+          const url = c.detail_page_url ?? c.application_url ?? null;
+          return (
+            <a
+              key={c.id}
+              href={url ?? "#"}
+              target={url ? "_blank" : undefined}
+              rel={url ? "noopener noreferrer" : undefined}
+              className="block rounded-xl border border-orange-100 bg-orange-50/60 p-3 text-left transition hover:border-orange-200 hover:bg-orange-50"
+            >
+              <div className="text-sm font-semibold text-gray-900 line-clamp-2">{c.title}</div>
+              {c.provider && (
+                <div className="mt-0.5 text-xs text-gray-600 line-clamp-1">{c.provider}</div>
+              )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                {c.funding_value && (
+                  <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-orange-100">
+                    {c.funding_value}
+                  </span>
+                )}
+                {closing && (
+                  <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-orange-100">
+                    Closes {closing}
+                  </span>
+                )}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function MessageContent({ text }: { text: string }) {
@@ -917,12 +979,18 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
         }),
       });
 
-      const data = (await res.json()) as { response?: string; error?: string };
+      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[] };
       if (!res.ok || !data.response) {
         throw new Error(data.error || "We could not reach BaseBot right now.");
       }
 
-      const botMsg: Message = { id: makeId(), text: data.response, sender: "bot", timestamp: new Date() };
+      const botMsg: Message = {
+        id: makeId(),
+        text: data.response,
+        sender: "bot",
+        timestamp: new Date(),
+        citations: Array.isArray(data.citations) && data.citations.length > 0 ? data.citations : undefined,
+      };
       const withBot = [...withUser, botMsg];
       setMessages(withBot);
       saveThread(currentThreadId, withBot);
@@ -1141,12 +1209,18 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
         body: JSON.stringify({ message: triggerUserMsg.text, history }),
       });
 
-      const data = (await res.json()) as { response?: string; error?: string };
+      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[] };
       if (!res.ok || !data.response) {
         throw new Error(data.error || "We could not reach BaseBot right now.");
       }
 
-      const botMsg: Message = { id: makeId(), text: data.response, sender: "bot", timestamp: new Date() };
+      const botMsg: Message = {
+        id: makeId(),
+        text: data.response,
+        sender: "bot",
+        timestamp: new Date(),
+        citations: Array.isArray(data.citations) && data.citations.length > 0 ? data.citations : undefined,
+      };
       const withBot = [...trimmed, botMsg];
       setMessages(withBot);
       saveThread(currentThreadId, withBot);
@@ -1271,6 +1345,9 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
                       <BotAvatar size="sm" />
                       <div className="min-w-0 flex-1 py-1 text-left text-gray-800">
                         <MessageContent text={msg.text} />
+                        {msg.citations && msg.citations.length > 0 && (
+                          <BursaryCitations citations={msg.citations} />
+                        )}
                         <div className={`mt-1.5 flex items-center gap-1 text-gray-400 ${toolbarVisibility}`}>
                           <button
                             type="button"
