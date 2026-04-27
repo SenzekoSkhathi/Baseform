@@ -162,6 +162,13 @@ export default function Home() {
               >
                 View plans
               </Link>
+
+              <Link
+                href="/website"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-6 py-4 text-base font-semibold text-slate-700 transition-colors hover:bg-slate-100 sm:w-auto"
+              >
+                View website
+              </Link>
             </motion.div>
 
             <motion.div
