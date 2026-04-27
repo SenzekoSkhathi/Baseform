@@ -10,7 +10,29 @@ type Prefs = {
   weeklySummary: boolean;
 };
 
-const SETTINGS_KEY = "baseform.settings";
+// Per-user namespacing — a shared device must never let one user see another's
+// notification preferences (or, worse, save toggles to the wrong account).
+const SETTINGS_KEY_PREFIX = "baseform.settings:";
+const LEGACY_SETTINGS_KEY = "baseform.settings";
+
+function settingsKeyFor(userId: string): string {
+  return `${SETTINGS_KEY_PREFIX}${userId}`;
+}
+
+function purgeForeignSettingsCaches(currentUserId: string): void {
+  try {
+    localStorage.removeItem(LEGACY_SETTINGS_KEY);
+    const myKey = settingsKeyFor(currentUserId);
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(SETTINGS_KEY_PREFIX) && k !== myKey) toRemove.push(k);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+}
 
 const DEFAULT_PREFS: Prefs = {
   deadlineAlerts: true,
@@ -56,8 +78,9 @@ const TOGGLES_GRADE11: { key: keyof Prefs; title: string; description: string }[
   },
 ];
 
-export default function NotificationsClient({ gradeYear }: { gradeYear: string | null }) {
+export default function NotificationsClient({ gradeYear, userId }: { gradeYear: string | null; userId: string }) {
   const TOGGLES = gradeYear === "Grade 11" ? TOGGLES_GRADE11 : TOGGLES_GRADE12;
+  const settingsKey = settingsKeyFor(userId);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,9 +90,12 @@ export default function NotificationsClient({ gradeYear }: { gradeYear: string |
   useEffect(() => {
     let active = true;
 
-    // Hydrate from localStorage immediately for instant UI
+    // Wipe any other user's cached prefs on this device first.
+    purgeForeignSettingsCaches(userId);
+
+    // Hydrate from per-user localStorage for instant UI
     try {
-      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      const raw = window.localStorage.getItem(settingsKey);
       if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
     } catch { /* ignore */ }
 
@@ -79,18 +105,22 @@ export default function NotificationsClient({ gradeYear }: { gradeYear: string |
         if (!active) return;
         const merged = { ...DEFAULT_PREFS, ...data.preferences };
         setPrefs(merged);
-        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+        try {
+          window.localStorage.setItem(settingsKey, JSON.stringify(merged));
+        } catch { /* ignore */ }
       })
       .catch(() => undefined)
       .finally(() => { if (active) setIsLoading(false); });
 
     return () => { active = false; };
-  }, []);
+  }, [userId, settingsKey]);
 
   async function toggle(key: keyof Prefs) {
     const next = { ...prefs, [key]: !prefs[key] };
     setPrefs(next);
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    try {
+      window.localStorage.setItem(settingsKey, JSON.stringify(next));
+    } catch { /* ignore */ }
     setSaved(false);
     setIsSyncing(true);
     setError(null);

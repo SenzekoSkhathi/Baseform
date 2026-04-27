@@ -60,22 +60,24 @@ function PlansPageInner() {
   // resolves, or site-config loads a different recommendation).
   const [userPicked, setUserPicked] = useState<boolean>(paramPlan !== null);
   const [loading, setLoading] = useState(false);
-  // Seed grade year synchronously from the onboarding cache so the first paint
-  // already shows the correct pool. gradeResolved tracks whether the profile
-  // fetch has verified/updated the cached value.
-  const [gradeYear, setGradeYear] = useState<string | null>(() => readCachedGradeYear());
-  const [gradeResolved, setGradeResolved] = useState<boolean>(() => readCachedGradeYear() !== null);
+  // gradeYear starts null and resolves once auth + profile fetch land. We
+  // intentionally do NOT seed synchronously from a shared cache — that leaked
+  // grade between users on shared devices.
+  const [gradeYear, setGradeYear] = useState<string | null>(null);
+  const [gradeResolved, setGradeResolved] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
     async function resolveGradeYear() {
       try {
-        // Prefer the authenticated profile — localStorage can be stale from a
-        // previous session or a different user on the same browser.
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
+          // Per-user cache: safe to read once we know who the user is.
+          const cached = readCachedGradeYear(user.id);
+          if (cached && !cancelled) setGradeYear(cached);
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("grade_year")
@@ -84,10 +86,10 @@ function PlansPageInner() {
           if (cancelled) return;
           const grade = profile?.grade_year ?? null;
           setGradeYear(grade);
-          cacheGradeYear(grade);
+          cacheGradeYear(user.id, grade);
         }
       } catch {
-        // keep whatever we seeded from cache
+        /* ignore */
       } finally {
         if (!cancelled) setGradeResolved(true);
       }

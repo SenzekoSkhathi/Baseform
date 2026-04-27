@@ -8,7 +8,7 @@ import SubjectGapCard from "@/components/dashboard/SubjectGapCard";
 import CountdownCard from "@/components/dashboard/CountdownCard";
 import TourGuide from "@/components/tour/TourGuide";
 import { apsRating } from "@/lib/aps/calculator";
-import { cacheGradeYear } from "@/lib/onboarding/grade-year";
+import { cacheGradeYear, clearPreAuthOnboarding } from "@/lib/onboarding/grade-year";
 
 type Profile = {
   full_name: string;
@@ -167,11 +167,13 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
   const [greeting, setGreeting] = useState("Welcome");
   const [date, setDate] = useState("");
 
-  // Keep the onboarding cache in sync so /plans and /payment can render the
-  // correct plan pool on first paint without a profile fetch round-trip.
+  // Keep the per-user grade cache in sync so /plans and /payment can render
+  // the correct plan pool quickly. Also wipe pre-auth onboarding state and
+  // any other user's cached grade — protects shared devices.
   useEffect(() => {
-    cacheGradeYear(gradeYear);
-  }, [gradeYear]);
+    clearPreAuthOnboarding(userId);
+    cacheGradeYear(userId, gradeYear);
+  }, [userId, gradeYear]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

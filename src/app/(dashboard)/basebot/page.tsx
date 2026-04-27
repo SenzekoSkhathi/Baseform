@@ -23,5 +23,5 @@ export default async function BaseBotPage() {
     redirect("/basebot/preview");
   }
 
-  return <BaseBotClient profile={profile} />;
+  return <BaseBotClient profile={profile} userId={user.id} />;
 }

@@ -15,5 +15,5 @@ export default async function NotificationsSettingsPage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  return <NotificationsClient gradeYear={profile?.grade_year ?? null} />;
+  return <NotificationsClient gradeYear={profile?.grade_year ?? null} userId={user.id} />;
 }

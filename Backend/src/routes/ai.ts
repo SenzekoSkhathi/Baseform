@@ -1,8 +1,12 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
-import { supabaseAdmin } from "../lib/supabase.js";
 import { anthropic, AI_MODEL, SYSTEM_PROMPT } from "../lib/ai.js";
+import { withRetry } from "../lib/retry.js";
+import { redactPII } from "../lib/redact.js";
+import { recordUsage } from "../lib/aiUsageLog.js";
+import { createLogger } from "../lib/logger.js";
 
+const log = createLogger("ai-route");
 const ai = new Hono();
 
 ai.use("*", requireAuth);
@@ -19,6 +23,10 @@ type Attachment = {
 
 const ALLOWED_IMAGE_TYPES = new Set<ImageMediaType>(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const ALLOWED_DOC_TYPES = new Set<DocumentMediaType>(["application/pdf"]);
+
+// Run lightweight memory extraction roughly every Nth assistant turn instead
+// of every turn — halves Anthropic spend on chat without hurting recall.
+const MEMORY_EXTRACTION_EVERY_N_TURNS = 3;
 
 function isImageMediaType(value: string): value is ImageMediaType {
   return (ALLOWED_IMAGE_TYPES as Set<string>).has(value);
@@ -39,12 +47,14 @@ function toClaudeMessages(
 ) {
   return messages.map((m, idx) => {
     const isLastUserMessage = idx === messages.length - 1 && m.role === "user";
+    // Redact PII from free-form user text (not from attachments — those are
+    // intentionally part of the product surface).
+    const safeContent = m.role === "user" ? redactPII(m.content) : m.content;
+
     if (!isLastUserMessage || lastUserAttachments.length === 0) {
-      return { role: m.role as "user" | "assistant", content: m.content };
+      return { role: m.role as "user" | "assistant", content: safeContent };
     }
 
-    // Attach files only to the most recent user turn — historical turns keep
-    // their text-only form so we don't re-upload the same file each turn.
     const blocks: ClaudeContentBlock[] = [];
     for (const att of lastUserAttachments) {
       if (att.type === "image" && isImageMediaType(att.mediaType)) {
@@ -59,7 +69,7 @@ function toClaudeMessages(
         });
       }
     }
-    blocks.push({ type: "text", text: m.content });
+    blocks.push({ type: "text", text: safeContent });
 
     return { role: "user" as const, content: blocks };
   });
@@ -68,10 +78,16 @@ function toClaudeMessages(
 type Memory = { key: string; value: string; category: string };
 type Subject = { subject: string; mark: number };
 
-function buildSystemPrompt(
-  base: string,
-  ctx: Record<string, unknown>
-): string {
+/**
+ * Builds the system prompt as a TWO-BLOCK array so we can attach
+ * cache_control to the large stable block.
+ *
+ * Block 1: SYSTEM_PROMPT (large, identity + product knowledge) — CACHED.
+ *          Anthropic charges 25% extra on first write but 10% on reads, so
+ *          this saves ~80% on input cost from turn 2 onwards.
+ * Block 2: per-student dynamic context (name, marks, memories) — NOT cached.
+ */
+function buildSystemBlocks(ctx: Record<string, unknown>) {
   const lines: string[] = [];
   if (ctx.name) lines.push(`Student name: ${ctx.name}`);
   if (ctx.grade) lines.push(`Grade: ${ctx.grade}`);
@@ -92,13 +108,10 @@ function buildSystemPrompt(
 
   const memories = ctx.memories as Memory[] | undefined;
   if (Array.isArray(memories) && memories.length > 0) {
-    const memLines = memories.map(
-      (m) => `- ${m.key.replace(/_/g, " ")}: ${m.value}`
-    );
+    const memLines = memories.map((m) => `- ${m.key.replace(/_/g, " ")}: ${m.value}`);
     lines.push(`\nWhat I remember about this student:\n${memLines.join("\n")}`);
   }
 
-  // Conversation state drives the no-greeting / build-on-prior-context behaviour.
   const isFollowUp = Boolean(ctx.isFollowUp);
   lines.push(
     `\nConversation state: ${
@@ -108,52 +121,65 @@ function buildSystemPrompt(
     }`,
   );
 
-  return lines.length > 0
-    ? `${base}\n\nStudent context:\n${lines.join("\n")}`
-    : base;
+  const dynamic = lines.length > 0 ? `Student context:\n${lines.join("\n")}` : "";
+
+  return [
+    {
+      type: "text" as const,
+      text: SYSTEM_PROMPT,
+      cache_control: { type: "ephemeral" as const },
+    },
+    ...(dynamic ? [{ type: "text" as const, text: dynamic }] : []),
+  ];
+}
+
+function validateMessages(messages: unknown): { ok: true; messages: { role: string; content: string }[] } | { ok: false; error: string } {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { ok: false, error: "messages array is required" };
+  }
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") {
+      return { ok: false, error: "Each message must be an object" };
+    }
+    const m = msg as { role?: unknown; content?: unknown };
+    if (m.role !== "user" && m.role !== "assistant") {
+      return { ok: false, error: "Each message must have role 'user' or 'assistant'" };
+    }
+    if (typeof m.content !== "string" || !m.content.trim()) {
+      return { ok: false, error: "Each message must have non-empty string content" };
+    }
+  }
+  return { ok: true, messages: messages as { role: string; content: string }[] };
 }
 
 /**
  * POST /ai/coach
- * Chat with the AI Coach. Sends a conversation and gets a reply.
- *
- * Body:
- *   - messages: { role: "user" | "assistant", content: string }[]
- *     Pass the full conversation history for multi-turn support.
- *   - context: { aps?: number, field?: string, name?: string } (optional)
- *     Student context injected into the system prompt.
+ * Non-streaming chat with the AI Coach.
  */
 ai.post("/coach", async (ctx) => {
   const user = ctx.var.user;
   const body = await ctx.req.json();
 
-  const messages: { role: string; content: string }[] = body.messages;
+  const validated = validateMessages(body.messages);
+  if (!validated.ok) return ctx.json({ error: validated.error }, 400);
+
   const studentContext: Record<string, unknown> = body.context ?? {};
   const attachments: Attachment[] = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
 
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return ctx.json({ error: "messages array is required" }, 400);
-  }
-
-  for (const msg of messages) {
-    if (!["user", "assistant"].includes(msg.role)) {
-      return ctx.json({ error: "Each message must have role 'user' or 'assistant'" }, 400);
-    }
-    if (typeof msg.content !== "string" || !msg.content.trim()) {
-      return ctx.json({ error: "Each message must have non-empty string content" }, 400);
-    }
-  }
-
-  const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
-  const claudeMessages = toClaudeMessages(messages, attachments);
+  const systemBlocks = buildSystemBlocks(studentContext);
+  const claudeMessages = toClaudeMessages(validated.messages, attachments);
 
   try {
-    const result = await anthropic.messages.create({
-      model: AI_MODEL,
-      max_tokens: 900,
-      system: systemPrompt,
-      messages: claudeMessages,
-    });
+    const result = await withRetry(
+      () =>
+        anthropic.messages.create({
+          model: AI_MODEL,
+          max_tokens: 900,
+          system: systemBlocks,
+          messages: claudeMessages,
+        }),
+      { label: "anthropic.coach" }
+    );
 
     const reply = result.content
       .filter((block) => block.type === "text")
@@ -163,56 +189,49 @@ ai.post("/coach", async (ctx) => {
 
     const usage = result.usage;
 
-    void supabaseAdmin
-      .from("ai_coach_logs")
-      .insert({
-        student_id: user.id,
-        input_tokens: usage?.input_tokens ?? 0,
-        output_tokens: usage?.output_tokens ?? 0,
-        model: AI_MODEL,
-      });
+    void recordUsage({
+      student_id: user.id,
+      input_tokens: usage?.input_tokens ?? 0,
+      output_tokens: usage?.output_tokens ?? 0,
+      cache_read_input_tokens: usage?.cache_read_input_tokens ?? 0,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
+      model: AI_MODEL,
+    });
 
     return ctx.json({
       reply,
       usage: {
         input_tokens: usage?.input_tokens ?? 0,
         output_tokens: usage?.output_tokens ?? 0,
+        cache_read_input_tokens: usage?.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
       },
     });
   } catch (err) {
-    console.error("Claude API error:", err);
+    log.error("Claude API error after retries", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return ctx.json({ error: "AI service temporarily unavailable" }, 503);
   }
 });
 
 /**
  * POST /ai/coach/stream
- * Streaming version — returns a text/event-stream SSE response.
- * Same body shape as POST /ai/coach.
+ * SSE streaming version. Sends a `:` heartbeat every 15s so proxies don't
+ * close idle connections and the client can detect a stall.
  */
 ai.post("/coach/stream", async (ctx) => {
   const user = ctx.var.user;
   const body = await ctx.req.json();
 
-  const messages: { role: string; content: string }[] = body.messages;
+  const validated = validateMessages(body.messages);
+  if (!validated.ok) return ctx.json({ error: validated.error }, 400);
+
   const studentContext: Record<string, unknown> = body.context ?? {};
   const attachments: Attachment[] = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
 
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return ctx.json({ error: "messages array is required" }, 400);
-  }
-
-  for (const msg of messages) {
-    if (!['user', 'assistant'].includes(msg.role)) {
-      return ctx.json({ error: "Each message must have role 'user' or 'assistant'" }, 400);
-    }
-    if (typeof msg.content !== "string" || !msg.content.trim()) {
-      return ctx.json({ error: "Each message must have non-empty string content" }, 400);
-    }
-  }
-
-  const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, studentContext);
-  const claudeMessages = toClaudeMessages(messages, attachments);
+  const systemBlocks = buildSystemBlocks(studentContext);
+  const claudeMessages = toClaudeMessages(validated.messages, attachments);
 
   return new Response(
     new ReadableStream({
@@ -220,19 +239,40 @@ ai.post("/coach/stream", async (ctx) => {
         const encoder = new TextEncoder();
         let inputTokens = 0;
         let outputTokens = 0;
+        let cacheReadTokens = 0;
+        let cacheCreationTokens = 0;
+        let closed = false;
+
+        // SSE comment heartbeat — keeps the connection warm through proxies
+        // and lets the client see "still alive" frames even mid-thinking.
+        const heartbeat = setInterval(() => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(`: ping\n\n`));
+          } catch {
+            /* controller already closed */
+          }
+        }, 15_000);
 
         try {
-          const stream = await anthropic.messages.create({
-            model: AI_MODEL,
-            max_tokens: 900,
-            system: systemPrompt,
-            messages: claudeMessages,
-            stream: true,
-          });
+          const stream = await withRetry(
+            () =>
+              anthropic.messages.create({
+                model: AI_MODEL,
+                max_tokens: 900,
+                system: systemBlocks,
+                messages: claudeMessages,
+                stream: true,
+              }),
+            { label: "anthropic.coach.stream" }
+          );
 
           for await (const event of stream) {
             if (event.type === "message_start") {
-              inputTokens = event.message.usage.input_tokens ?? inputTokens;
+              const u = event.message.usage;
+              inputTokens = u.input_tokens ?? inputTokens;
+              cacheReadTokens = u.cache_read_input_tokens ?? cacheReadTokens;
+              cacheCreationTokens = u.cache_creation_input_tokens ?? cacheCreationTokens;
             }
 
             if (event.type === "message_delta") {
@@ -241,28 +281,30 @@ ai.post("/coach/stream", async (ctx) => {
 
             if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
               const text = event.delta.text;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
-              );
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
             }
           }
 
-          void supabaseAdmin.from("ai_coach_logs").insert({
+          void recordUsage({
             student_id: user.id,
             input_tokens: inputTokens,
             output_tokens: outputTokens,
+            cache_read_input_tokens: cacheReadTokens,
+            cache_creation_input_tokens: cacheCreationTokens,
             model: AI_MODEL,
           });
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch (err) {
-          console.error("Claude stream error:", err);
+          log.error("Claude stream error", {
+            error: err instanceof Error ? err.message : String(err),
+          });
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`
-            )
+            encoder.encode(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`)
           );
         } finally {
+          closed = true;
+          clearInterval(heartbeat);
           controller.close();
         }
       },
@@ -280,19 +322,30 @@ ai.post("/coach/stream", async (ctx) => {
 
 /**
  * POST /ai/extract-memory
- * Lightweight endpoint that extracts memorable facts from a single exchange.
- * Uses Haiku for speed/cost. Returns { facts: [{key, value, category}] }.
+ * Extracts durable facts from a student/bot exchange. Throttled so we only
+ * call Claude every Nth turn (driven by the client passing `turn_index`),
+ * cutting Anthropic spend on this side-channel by ~66%.
  */
 ai.post("/extract-memory", async (ctx) => {
   const body = await ctx.req.json();
-  const { user_message, bot_reply } = body as {
+  const { user_message, bot_reply, turn_index } = body as {
     user_message?: string;
     bot_reply?: string;
+    turn_index?: number;
   };
 
   if (!user_message || !bot_reply) {
     return ctx.json({ facts: [] });
   }
+
+  // If the client passes a turn index, only run extraction periodically.
+  // (turn_index is the 0-based assistant turn count.)
+  if (typeof turn_index === "number" && turn_index % MEMORY_EXTRACTION_EVERY_N_TURNS !== 0) {
+    return ctx.json({ facts: [], skipped: true });
+  }
+
+  const safeUser = redactPII(user_message);
+  const safeBot = redactPII(bot_reply);
 
   const extractionPrompt = `You extract facts about a student from their conversation with an AI university advisor.
 Return ONLY a valid JSON array. Each element must have: {"key": "snake_case_key", "value": "string value", "category": "goal|applications|personal|academic|bursaries"}
@@ -314,17 +367,21 @@ Rules:
 - Do NOT extract APS score, name, field of interest, or province — already in their profile
 - Return [] if nothing new to extract
 
-Student message: ${JSON.stringify(user_message)}
-Bot reply: ${JSON.stringify(bot_reply)}
+Student message: ${JSON.stringify(safeUser)}
+Bot reply: ${JSON.stringify(safeBot)}
 
 Return ONLY the JSON array, no other text:`;
 
   try {
-    const result = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
-      messages: [{ role: "user", content: extractionPrompt }],
-    });
+    const result = await withRetry(
+      () =>
+        anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 400,
+          messages: [{ role: "user", content: extractionPrompt }],
+        }),
+      { label: "anthropic.extract-memory" }
+    );
 
     const text = result.content
       .filter((b) => b.type === "text")
@@ -349,7 +406,9 @@ Return ONLY the JSON array, no other text:`;
 
     return ctx.json({ facts });
   } catch (err) {
-    console.error("Memory extraction error:", err);
+    log.error("Memory extraction error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return ctx.json({ facts: [] });
   }
 });

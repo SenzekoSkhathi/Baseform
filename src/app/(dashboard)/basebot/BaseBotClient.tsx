@@ -59,7 +59,30 @@ function relativeTime(date: Date): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-const STORAGE_KEY = "basebot-threads-v1";
+// localStorage is per-device, not per-user. We MUST namespace by userId so a
+// shared device (or account-switch) never lets one user see another's chats.
+const STORAGE_KEY_PREFIX = "basebot-threads-v1:";
+const LEGACY_STORAGE_KEY = "basebot-threads-v1";
+
+function storageKeyFor(userId: string): string {
+  return `${STORAGE_KEY_PREFIX}${userId}`;
+}
+
+/** Wipes legacy unscoped key + any other user's scoped keys from this device. */
+function purgeForeignThreadCaches(currentUserId: string): void {
+  try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    const myKey = storageKeyFor(currentUserId);
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(STORAGE_KEY_PREFIX) && k !== myKey) toRemove.push(k);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}
 
 async function fetchThreadsFromDB(): Promise<ChatThread[]> {
   try {
@@ -726,8 +749,9 @@ function MemoryPanel({
 
 type Profile = { full_name: string | null; field_of_interest: string | null } | null;
 
-export default function BaseBotClient({ profile }: { profile: Profile }) {
+export default function BaseBotClient({ profile, userId }: { profile: Profile; userId: string }) {
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
+  const storageKey = storageKeyFor(userId);
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [currentThreadId, setCurrentThreadId] = useState<string>(() => makeId());
@@ -770,20 +794,23 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
       .catch(() => {});
   }, []);
 
-  // Load threads: DB first, fallback to localStorage
+  // Load threads: DB first, fallback to localStorage (scoped to this user).
+  // Always purge other users' caches first so a shared device cannot leak.
   useEffect(() => {
+    purgeForeignThreadCaches(userId);
     async function load() {
-      // Try DB first
       const dbThreads = await fetchThreadsFromDB();
       if (dbThreads.length > 0) {
         setThreads(dbThreads);
-        // Sync DB threads into localStorage so they're available offline
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(dbThreads));
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(dbThreads));
+        } catch {
+          /* ignore */
+        }
         return;
       }
-      // Fallback: localStorage (works offline or when DB is slow)
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         if (!raw) return;
         const parsed = JSON.parse(raw) as Array<{
           id: string; title: string; preview: string; updatedAt: string;
@@ -797,18 +824,22 @@ export default function BaseBotClient({ profile }: { profile: Profile }) {
           })),
         );
       } catch {
-        // ignore parse errors
+        /* ignore parse errors */
       }
     }
     void load();
-  }, []);
+  }, [userId, storageKey]);
 
-  // Persist threads to localStorage (always) + DB (best-effort)
+  // Persist threads to localStorage (per-user) + DB (best-effort).
   useEffect(() => {
     if (threads.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(threads));
+      } catch {
+        /* ignore quota errors */
+      }
     }
-  }, [threads]);
+  }, [threads, storageKey]);
 
   // Auto-scroll
   useEffect(() => {

@@ -55,13 +55,12 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  // Seed from the onboarding cache so the order summary doesn't flash the
-  // Grade 12 price before the profile fetch resolves.
-  const [gradeYear, setGradeYear] = useState<string | null>(() => readCachedGradeYear());
-  const [gradeResolved, setGradeResolved] = useState<boolean>(() => readCachedGradeYear() !== null);
-  const [planMap, setPlanMap] = useState<Record<string, PublicPlan>>(() =>
-    mapPlans(readCachedGradeYear() === "Grade 11" ? GRADE11_PLANS : DEFAULT_PLANS)
-  );
+  // gradeYear starts null and resolves after auth — we no longer read a
+  // shared cache synchronously (was leaking grade between users on shared
+  // devices). The plan map defaults to Grade 12 and is swapped after resolve.
+  const [gradeYear, setGradeYear] = useState<string | null>(null);
+  const [gradeResolved, setGradeResolved] = useState<boolean>(false);
+  const [planMap, setPlanMap] = useState<Record<string, PublicPlan>>(() => mapPlans(DEFAULT_PLANS));
 
   const plan = useMemo(() => {
     const raw = (searchParams.get("plan") ?? "essential") as PlanId;
@@ -91,10 +90,18 @@ export default function PaymentPage() {
     let cancelled = false;
     async function resolveGrade() {
       let grade: string | null = null;
+      let userId: string | null = null;
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          userId = user.id;
+          // Per-user cache for an instant hint while we fetch the profile.
+          const cached = readCachedGradeYear(user.id);
+          if (cached && !cancelled) {
+            setGradeYear(cached);
+            if (cached === "Grade 11") setPlanMap(mapPlans(GRADE11_PLANS));
+          }
           const { data: profile } = await supabase
             .from("profiles")
             .select("grade_year")
@@ -110,7 +117,7 @@ export default function PaymentPage() {
 
       if (grade) {
         setGradeYear(grade);
-        cacheGradeYear(grade);
+        if (userId) cacheGradeYear(userId, grade);
       }
 
       if (grade === "Grade 11") {
