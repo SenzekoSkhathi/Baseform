@@ -309,7 +309,7 @@ function HeroVisual() {
         </div>
 
         {/* In-progress card */}
-        <div className="relative rotate-[1deg] rounded-2xl border border-orange-200 bg-white p-5 shadow-2xl shadow-orange-500/10 ring-1 ring-orange-200/40">
+        <div className="relative rotate-1 rounded-2xl border border-orange-200 bg-white p-5 shadow-2xl shadow-orange-500/10 ring-1 ring-orange-200/40">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
               NSFAS funding
@@ -564,7 +564,7 @@ export default function WebsitePage() {
               Features
             </span>
             <h2 className="mt-3 text-3xl font-black text-slate-900 sm:text-4xl">
-              Everything you need, nothing you don't.
+              Everything you need, nothing you don&apos;t.
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-slate-600">
               Purpose-built for SA learners — not retrofitted from a US-style admissions portal.
@@ -602,7 +602,7 @@ export default function WebsitePage() {
               The old way vs Baseform.
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-slate-600">
-              Applying to university shouldn't be a part-time job. Here's what changes.
+              Applying to university shouldn&apos;t be a part-time job. Here&apos;s what changes.
             </p>
           </div>
 
@@ -674,8 +674,8 @@ export default function WebsitePage() {
             })}
           </div>
           <p className="mt-8 text-center text-xs text-slate-500">
-            More institutions added every month. Don't see yours? You can still apply — we'll guide
-            you through manual submission.
+            More institutions added every month. Don&apos;t see yours? You can still apply — we&apos;ll
+            guide you through manual submission.
           </p>
         </div>
       </section>
@@ -795,7 +795,7 @@ export default function WebsitePage() {
                   Help every learner apply — at scale.
                 </h2>
                 <p className="mt-4 max-w-xl text-slate-300">
-                  Bulk licences for schools and NGOs. Track every learner's progress, push
+                  Bulk licences for schools and NGOs. Track every learner&apos;s progress, push
                   deadlines to a whole grade, and run reports for your district or funder.
                 </p>
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -865,7 +865,7 @@ export default function WebsitePage() {
             >
               Email us
             </Link>{" "}
-            and we'll get back within a working day.
+            and we&apos;ll get back within a working day.
           </p>
         </div>
       </section>
@@ -874,7 +874,7 @@ export default function WebsitePage() {
       <section className="bg-white">
         <div className="mx-auto max-w-6xl px-6 pb-20 sm:pb-24">
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 p-10 text-center text-white sm:p-16">
-            <div className="absolute inset-0 -z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.35),transparent_60%)]" />
+            <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.35),transparent_60%)]" />
             <div className="relative">
               <h2 className="text-3xl font-black sm:text-4xl">Ready to apply the easier way?</h2>
               <p className="mx-auto mt-4 max-w-xl text-slate-300">
