@@ -9,6 +9,7 @@ import profile from "./routes/profile.js";
 import discover from "./routes/discover.js";
 import applications from "./routes/applications.js";
 import ai from "./routes/ai.js";
+import aiPublic from "./routes/aiPublic.js";
 import email from "./routes/email.js";
 import { startScanJob } from "./jobs/scanJob.js";
 import { startDeadlineJob } from "./jobs/deadlineJob.js";
@@ -52,6 +53,10 @@ app.route("/applications", applications);
 // AI routes get a tighter per-IP limit (15 req/min) on top of the global one.
 ai.use("*", rateLimitAi);
 app.route("/ai", ai);
+// Public, unauthenticated demo coach for the marketing site. Has its own
+// per-IP daily cap inside the route; share the AI per-minute limit too.
+aiPublic.use("*", rateLimitAi);
+app.route("/ai-public", aiPublic);
 app.route("/email", email);
 
 // ── 404 ─────────────────────────────────────────────────────────────────────
