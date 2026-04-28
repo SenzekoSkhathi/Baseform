@@ -29,6 +29,7 @@ import {
   CalendarClock,
   ListChecks,
   LineChart,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -186,47 +187,53 @@ const FEATURES = [
 const PLANS = [
   {
     name: "Free",
+    tagline: "Get started",
     price: "R0",
-    cadence: "forever",
-    blurb: "AI career guidance for every matric — no fees, no card.",
+    cadence: "/month",
     cta: "Start free",
     href: "/onboarding",
     highlighted: false,
+    comingSoon: false,
+    badge: null as string | null,
     features: [
-      "Full AI career coach access",
-      "Up to 3 institution applications",
-      "Document storage (ID, results, proof of residence)",
-      "NSFAS application support",
+      "Application tracking (up to 3 universities)",
+      "Interactive AI Coach (BaseBot)",
+      "Secure document vault & scanner",
+      "Automated deadline reminders",
     ],
   },
   {
-    name: "Plus",
-    price: "R49",
-    cadence: "/month",
-    blurb: "For learners applying widely.",
-    cta: "Choose Plus",
+    name: "Essential",
+    tagline: null,
+    price: "R89.99",
+    cadence: "/3 months",
+    cta: "Choose Essential",
     href: "/plans",
     highlighted: true,
+    comingSoon: false,
+    badge: "Recommended" as string | null,
     features: [
-      "Unlimited institution applications",
-      "Priority bursary auto-matching",
-      "Deadline reminders via SMS + email",
-      "Priority support",
+      "Everything in Free",
+      "Unlimited application tracking",
+      "Dedicated WhatsApp guidance bot",
+      "Autonomous progress tracking",
+      "Intelligent email monitoring (Gmail Agent)",
     ],
   },
   {
-    name: "Family",
-    price: "R99",
+    name: "Pro",
+    tagline: null,
+    price: "R249.99",
     cadence: "/month",
-    blurb: "Multiple learners, one bill.",
-    cta: "Choose Family",
+    cta: "Coming soon",
     href: "/plans",
     highlighted: false,
+    comingSoon: true,
+    badge: "Coming soon" as string | null,
     features: [
-      "Up to 4 learner profiles",
-      "Everything in Plus",
-      "Parent dashboard",
-      "Shared document vault",
+      "Everything in Essential",
+      "Autonomous application submission agent",
+      "Priority support",
     ],
   },
 ];
@@ -285,7 +292,7 @@ const FAQS = [
   },
   {
     q: "I'm a parent or counsellor — can I help my learner?",
-    a: "Yes. The Family plan includes a parent dashboard so you can track each learner's progress. Schools and NGOs can request bulk access — see the 'For schools' section.",
+    a: "Yes. Parents and counsellors can support a learner directly from their account — see status updates, document checklists, and upcoming deadlines. Schools and NGOs can request bulk access — see the 'For schools' section.",
   },
 ];
 
@@ -1048,8 +1055,8 @@ export default function WebsitePage() {
               Free where it matters.
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-slate-600">
-              Career guidance and NSFAS support are free for every matric. Pay only if you need
-              unlimited applications or extra learners.
+              BaseBot AI coach, document vault, and deadline reminders — free for every matric.
+              Upgrade when you want unlimited tracking and automation.
             </p>
           </div>
 
@@ -1057,19 +1064,33 @@ export default function WebsitePage() {
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative flex flex-col rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-1 ${
+                className={`relative flex flex-col rounded-2xl border p-7 shadow-sm transition-all ${
                   plan.highlighted
-                    ? "border-orange-500 bg-white ring-2 ring-orange-500"
-                    : "border-slate-200 bg-white"
+                    ? "border-orange-500 bg-white ring-2 ring-orange-500 hover:-translate-y-1"
+                    : plan.comingSoon
+                      ? "border-slate-200 bg-slate-50/50"
+                      : "border-slate-200 bg-white hover:-translate-y-1"
                 }`}
               >
-                {plan.highlighted && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
-                    Most popular
-                  </span>
-                )}
-                <h3 className="text-lg font-black text-slate-900">{plan.name}</h3>
-                <p className="mt-1 text-sm text-slate-600">{plan.blurb}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xl font-black text-slate-900">{plan.name}</h3>
+                  {plan.tagline && (
+                    <span className="text-sm font-semibold text-slate-500">{plan.tagline}</span>
+                  )}
+                  {plan.badge && plan.highlighted && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white">
+                      <Zap size={11} className="fill-white" />
+                      {plan.badge}
+                    </span>
+                  )}
+                  {plan.badge && plan.comingSoon && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                      <Lock size={11} />
+                      {plan.badge}
+                    </span>
+                  )}
+                </div>
+
                 <div className="mt-5 flex items-baseline gap-1">
                   <span className="text-4xl font-black text-slate-900">{plan.price}</span>
                   <span className="text-sm font-semibold text-slate-500">{plan.cadence}</span>
@@ -1078,30 +1099,43 @@ export default function WebsitePage() {
                 <ul className="mt-6 space-y-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
-                      <Check size={16} className="mt-0.5 shrink-0 text-orange-500" />
+                      <Check
+                        size={16}
+                        className={`mt-0.5 shrink-0 ${plan.comingSoon ? "text-slate-400" : "text-orange-500"}`}
+                      />
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
 
-                <Link
-                  href={plan.href}
-                  className={`mt-8 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold transition-colors ${
-                    plan.highlighted
-                      ? "bg-orange-500 text-white hover:bg-orange-400"
-                      : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  {plan.cta}
-                  <ArrowRight size={14} />
-                </Link>
+                {plan.comingSoon ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-8 inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-bold text-slate-500"
+                  >
+                    <Lock size={14} />
+                    {plan.cta}
+                  </button>
+                ) : (
+                  <Link
+                    href={plan.href}
+                    className={`mt-8 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold transition-colors ${
+                      plan.highlighted
+                        ? "bg-orange-500 text-white hover:bg-orange-400"
+                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {plan.cta}
+                    <ArrowRight size={14} />
+                  </Link>
+                )}
               </div>
             ))}
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-500">
-            Prices in ZAR. Cancel anytime. AI career coach and NSFAS support are free on every
-            plan.
+            Prices in ZAR. Cancel anytime. BaseBot AI coach is free on every plan.
           </p>
         </div>
       </section>
