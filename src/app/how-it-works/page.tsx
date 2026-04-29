@@ -4,13 +4,10 @@ import {
   ArrowRight,
   Bell,
   Bot,
-  Compass,
   FileText,
   Folder,
   GraduationCap,
   ListChecks,
-  Menu,
-  Search,
   Sparkles,
   Target,
   Trophy,
@@ -30,32 +27,101 @@ export const metadata = {
 
 type Character = "skhathi" | "ande";
 
-const CHARACTERS: Record<Character, { name: string; role: string; bg: string; ring: string; tone: string }> = {
+const CHARACTERS: Record<Character, { name: string; role: string; ring: string; tone: string }> = {
   skhathi: {
     name: "Skhathi",
-    role: "Tour guide · Grade 11 paths",
-    bg: "bg-orange-500",
+    role: "Your Baseform guide",
     ring: "ring-orange-200",
     tone: "text-orange-600",
   },
   ande: {
     name: "Ande",
-    role: "Tour guide · Grade 12 paths",
-    bg: "bg-emerald-700",
-    ring: "ring-emerald-200",
-    tone: "text-emerald-700",
+    role: "Your Baseform guide",
+    ring: "ring-blue-200",
+    tone: "text-blue-600",
   },
 };
 
+function SkhathiAvatar() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hiw-sk-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fb923c" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+        <clipPath id="hiw-sk-clip">
+          <circle cx="32" cy="32" r="32" />
+        </clipPath>
+      </defs>
+      <circle cx="32" cy="32" r="32" fill="url(#hiw-sk-bg)" />
+      <ellipse cx="32" cy="68" rx="26" ry="14" fill="#fff7ed" clipPath="url(#hiw-sk-clip)" />
+      <rect x="27.5" y="50" width="9" height="12" rx="3" fill="#c68642" />
+      <ellipse cx="32" cy="23" rx="14" ry="11" fill="#1a0800" />
+      <ellipse cx="18.5" cy="29" rx="4" ry="6" fill="#1a0800" />
+      <ellipse cx="45.5" cy="29" rx="4" ry="6" fill="#1a0800" />
+      <ellipse cx="19" cy="37" rx="2.5" ry="3" fill="#c68642" />
+      <ellipse cx="45" cy="37" rx="2.5" ry="3" fill="#c68642" />
+      <ellipse cx="32" cy="38" rx="13" ry="13" fill="#c68642" />
+      <path d="M24 30 Q27.5 28 31 30" stroke="#1a0800" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d="M33 30 Q36.5 28 40 30" stroke="#1a0800" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <ellipse cx="27.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <ellipse cx="36.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <circle cx="28.5" cy="33" r="0.85" fill="white" />
+      <circle cx="37.5" cy="33" r="0.85" fill="white" />
+      <path d="M30 39.5 Q32 42 34 39.5" stroke="#a0522d" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity="0.6" />
+      <path d="M27 44 Q32 49 37 44" fill="#7a3010" />
+      <path d="M28.5 44 Q32 46.5 35.5 44" fill="white" />
+      <ellipse cx="32" cy="21" rx="12" ry="9" fill="#1a0800" />
+    </svg>
+  );
+}
+
+function AndeAvatar() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hiw-an-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="100%" stopColor="#2563eb" />
+        </linearGradient>
+        <clipPath id="hiw-an-clip">
+          <circle cx="32" cy="32" r="32" />
+        </clipPath>
+      </defs>
+      <circle cx="32" cy="32" r="32" fill="url(#hiw-an-bg)" />
+      <ellipse cx="32" cy="68" rx="26" ry="14" fill="#eff6ff" clipPath="url(#hiw-an-clip)" />
+      <rect x="27.5" y="50" width="9" height="12" rx="3" fill="#b87333" />
+      <ellipse cx="32" cy="24" rx="14" ry="11" fill="#1a0800" />
+      <ellipse cx="18.5" cy="30" rx="4" ry="6" fill="#1a0800" />
+      <ellipse cx="45.5" cy="30" rx="4" ry="6" fill="#1a0800" />
+      <ellipse cx="18.5" cy="37" rx="2.5" ry="3" fill="#b87333" />
+      <ellipse cx="45.5" cy="37" rx="2.5" ry="3" fill="#b87333" />
+      <ellipse cx="32" cy="38" rx="13" ry="13.5" fill="#b87333" />
+      <path d="M24.5 30.5 Q27.5 28.5 31 30" stroke="#1a0800" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+      <path d="M33 30 Q36.5 28.5 39.5 30.5" stroke="#1a0800" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+      <ellipse cx="27.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <ellipse cx="36.5" cy="34" rx="2.3" ry="2.5" fill="#1a0800" />
+      <circle cx="28.5" cy="33" r="0.85" fill="white" />
+      <circle cx="37.5" cy="33" r="0.85" fill="white" />
+      <path d="M30.5 39.5 Q32 41.5 33.5 39.5" stroke="#8b4513" strokeWidth="1.1" fill="none" strokeLinecap="round" opacity="0.55" />
+      <path d="M27 44 Q32 49 37 44" fill="#7a3010" />
+      <path d="M28.5 44 Q32 46.5 35.5 44" fill="white" />
+      <ellipse cx="32" cy="22" rx="12" ry="9" fill="#1a0800" />
+    </svg>
+  );
+}
+
 function Avatar({ who, size = "md" }: { who: Character; size?: "sm" | "md" | "lg" }) {
   const c = CHARACTERS[who];
-  const dim = size === "lg" ? "size-14 text-lg" : size === "sm" ? "size-9 text-xs" : "size-11 text-sm";
+  const dim = size === "lg" ? "size-14" : size === "sm" ? "size-9" : "size-11";
+  const Portrait = who === "skhathi" ? SkhathiAvatar : AndeAvatar;
   return (
     <span
-      className={`grid shrink-0 ${dim} place-items-center rounded-full ${c.bg} font-sans font-bold uppercase tracking-wider text-white ring-4 ${c.ring}`}
+      className={`block shrink-0 overflow-hidden ${dim} rounded-full ring-4 ${c.ring} shadow-md`}
       aria-hidden="true"
     >
-      {c.name[0]}
+      <Portrait />
     </span>
   );
 }
@@ -87,7 +153,7 @@ function Speech({ who, lines }: { who: Character; lines: string[] }) {
 
 /* ---------- Stylised phone frame ---------- */
 
-function PhoneFrame({ children, label }: { children: React.ReactNode; label?: string }) {
+function PhoneFrame({ children, label, bg = "#fff9f2" }: { children: React.ReactNode; label?: string; bg?: string }) {
   return (
     <div className="relative mx-auto w-full max-w-[300px]">
       {/* Frame */}
@@ -95,7 +161,7 @@ function PhoneFrame({ children, label }: { children: React.ReactNode; label?: st
         {/* Notch */}
         <div className="absolute left-1/2 top-1.5 z-20 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-ink" />
         {/* Screen */}
-        <div className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#fff9f2]">
+        <div className="relative h-full w-full overflow-hidden rounded-[32px]" style={{ backgroundColor: bg }}>
           {children}
         </div>
       </div>
@@ -121,41 +187,37 @@ function StatusBar() {
 
 function ScreenOnboarding() {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-white">
+      {/* Thin progress bar at very top — matches real app */}
+      <div className="h-[3px] w-full bg-gray-100">
+        <div className="h-full w-1/3 bg-orange-500" />
+      </div>
       <StatusBar />
-      <div className="flex flex-col items-start gap-3 px-5 pt-6">
-        <p className="font-sans text-[8px] font-bold uppercase tracking-[0.18em] text-orange-600">
-          Step 3 of 5
-        </p>
-        <div className="h-[3px] w-full overflow-hidden rounded-full bg-orange-100">
-          <div className="h-full w-3/5 bg-orange-500" />
-        </div>
-        <h3 className="mt-4 font-serif text-[19px] font-bold leading-tight text-ink">
-          What grade are you in?
+      <div className="flex flex-col gap-1 px-5 pt-5">
+        <h3 className="font-sans text-[18px] font-bold leading-tight text-gray-900">
+          Let&apos;s get started
         </h3>
-        <p className="font-serif text-[11px] italic text-ink/60">
-          We&apos;ll tailor everything to you.
+        <p className="font-sans text-[10px] text-gray-500">
+          We&apos;ll find every opportunity you qualify for.
         </p>
       </div>
-      <div className="mt-5 flex flex-col gap-2 px-5">
+      <div className="mt-4 flex flex-col gap-3 px-5">
         {[
-          { label: "Grade 11", note: "Plan early. Build my targets.", active: true },
-          { label: "Grade 12", note: "I&apos;m applying this year.", active: false },
-        ].map((o) => (
-          <div
-            key={o.label}
-            className={`rounded-2xl border-2 px-3 py-3 ${
-              o.active ? "border-orange-500 bg-orange-50" : "border-ink/15 bg-white"
-            }`}
-          >
-            <p className="font-sans text-[12px] font-bold text-ink">{o.label}</p>
-            <p className="font-serif text-[10px] italic text-ink/55" dangerouslySetInnerHTML={{ __html: o.note }} />
+          { label: "Your first name", value: "Thabo" },
+          { label: "Your last name", value: "Mokoena" },
+          { label: "Phone number", value: "0821234567" },
+        ].map((f) => (
+          <div key={f.label} className="space-y-1">
+            <p className="font-sans text-[8px] font-medium text-gray-700">{f.label}</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-2.5 py-2">
+              <p className="font-sans text-[10px] text-gray-900">{f.value}</p>
+            </div>
           </div>
         ))}
       </div>
-      <div className="mt-auto px-5 pb-6">
-        <div className="rounded-full bg-ink py-2.5 text-center font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-          Continue →
+      <div className="mt-auto px-5 pb-5">
+        <div className="rounded-2xl bg-orange-500 py-2.5 text-center font-sans text-[11px] font-semibold text-white">
+          Continue
         </div>
       </div>
     </div>
@@ -164,34 +226,54 @@ function ScreenOnboarding() {
 
 function ScreenReveal() {
   return (
-    <div className="flex h-full flex-col items-center px-5 pt-6 text-center">
+    <div className="flex h-full flex-col px-3 pt-3">
       <StatusBar />
-      <Sparkles size={26} className="mt-4 text-orange-500" />
-      <p className="mt-3 font-sans text-[8px] font-bold uppercase tracking-[0.22em] text-orange-600">
-        Your reveal
-      </p>
-      <h3 className="mt-2 font-serif text-[20px] font-bold leading-[1.1] text-ink">
-        We found 8 paths for you.
-      </h3>
-      <div className="mt-4 grid w-full grid-cols-2 gap-2">
-        {[
-          { v: "8", l: "Programmes" },
-          { v: "12", l: "Bursaries" },
-          { v: "32", l: "APS" },
-          { v: "4", l: "Universities" },
-        ].map((s) => (
-          <div key={s.l} className="rounded-2xl border border-orange-100 bg-white px-2 py-2">
-            <p className="font-sans text-lg font-bold text-orange-500">{s.v}</p>
-            <p className="font-sans text-[8px] font-bold uppercase tracking-wider text-ink/50">
-              {s.l}
-            </p>
-          </div>
-        ))}
+      <div className="mt-2 flex flex-col items-center text-center">
+        <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 font-sans text-[8px] font-semibold text-orange-700">
+          <Sparkles size={9} />
+          Your Opportunity Report
+        </span>
+        <h3 className="mt-2 font-sans text-[13px] font-black leading-tight text-slate-900">
+          Thabo, here&apos;s what you<br />qualify for
+        </h3>
       </div>
-      <div className="mt-auto w-full pb-6">
-        <div className="rounded-full bg-orange-500 py-2.5 text-center font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-          See my paths →
+      <div className="mt-3 rounded-2xl border border-orange-100 bg-white p-2 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
+        <div className="rounded-xl bg-orange-500 p-2 text-white">
+          <p className="font-sans text-[7px] uppercase tracking-wider text-orange-100">
+            Your APS Score
+          </p>
+          <p className="mt-0.5 font-sans text-2xl font-black leading-none">32</p>
+          <span className="mt-1.5 inline-flex rounded-full bg-white/20 px-1.5 py-0.5 font-sans text-[8px] font-semibold">
+            Strong
+          </span>
         </div>
+        <div className="mt-2 grid grid-cols-3 gap-1">
+          {[
+            { Icon: GraduationCap, v: "8", l: "unis", c: "text-orange-500" },
+            { Icon: Trophy, v: "12", l: "bursaries", c: "text-amber-500" },
+            { Icon: Bell, v: "62", l: "days", c: "text-rose-500" },
+          ].map((s) => (
+            <div key={s.l} className="rounded-lg border border-gray-100 bg-white py-1.5 text-center">
+              <s.Icon size={11} className={`mx-auto ${s.c}`} />
+              <p className="mt-0.5 font-sans text-[11px] font-black text-slate-900">{s.v}</p>
+              <p className="font-sans text-[6px] leading-tight text-slate-500">{s.l}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2 py-1.5 text-center">
+          <p className="font-sans text-[8px] font-medium text-orange-800">
+            You qualify for{" "}
+            <span className="font-black text-orange-600">42 programmes</span>
+          </p>
+        </div>
+      </div>
+      <div className="mt-auto pb-4">
+        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-bold text-white">
+          Create your free account →
+        </div>
+        <p className="mt-1.5 text-center font-sans text-[7px] text-slate-500">
+          Free · No credit card · Takes 2 minutes
+        </p>
       </div>
     </div>
   );
@@ -199,35 +281,46 @@ function ScreenReveal() {
 
 function ScreenSignup() {
   return (
-    <div className="flex h-full flex-col px-5 pt-6">
+    <div className="flex h-full flex-col bg-gray-50 px-4 pt-3">
       <StatusBar />
-      <p className="mt-4 font-sans text-[8px] font-bold uppercase tracking-[0.22em] text-orange-600">
-        Create account
-      </p>
-      <h3 className="mt-2 font-serif text-[19px] font-bold leading-tight text-ink">
-        Save your matched paths.
+      {/* Step dots — matches real signup page */}
+      <div className="mt-3 flex items-center gap-1.5">
+        <div className="grid size-4 place-items-center rounded-full bg-orange-500 font-sans text-[7px] font-bold text-white">
+          1
+        </div>
+        <div className="h-0.5 w-6 bg-gray-200" />
+        <div className="grid size-4 place-items-center rounded-full bg-gray-100 font-sans text-[7px] font-bold text-gray-400">
+          2
+        </div>
+        <span className="ml-1 font-sans text-[7px] text-gray-400">Step 1 of 2</span>
+      </div>
+      <h3 className="mt-3 font-sans text-[15px] font-bold leading-tight text-gray-900">
+        Create your account
       </h3>
-      <div className="mt-4 flex flex-col gap-3">
+      <p className="font-sans text-[9px] text-gray-500">
+        Save your matched paths and get started.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
         {[
-          { label: "Full name", value: "Lwazi Mthembu" },
-          { label: "Email", value: "lwazi@example.co.za" },
+          { label: "Email", value: "thabo@example.co.za" },
           { label: "Password", value: "••••••••" },
+          { label: "Confirm password", value: "••••••••" },
         ].map((f) => (
-          <div key={f.label} className="border-b border-ink/15 pb-1">
-            <p className="font-sans text-[8px] font-bold uppercase tracking-wider text-ink/45">
-              {f.label}
-            </p>
-            <p className="font-serif text-[12px] text-ink">{f.value}</p>
+          <div key={f.label} className="space-y-0.5">
+            <p className="font-sans text-[7px] font-medium text-gray-700">{f.label}</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
+              <p className="font-sans text-[9px] text-gray-900">{f.value}</p>
+            </div>
           </div>
         ))}
       </div>
-      <div className="mt-auto pb-6">
-        <div className="rounded-full bg-orange-500 py-2.5 text-center font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-          Create account
+      <div className="mt-auto pb-4">
+        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
+          Continue
         </div>
-        <p className="mt-3 text-center font-serif text-[10px] italic text-ink/50">
-          Already with us?{" "}
-          <span className="font-bold not-italic text-orange-600">Sign in →</span>
+        <p className="mt-2 text-center font-sans text-[8px] text-gray-500">
+          Already have an account?{" "}
+          <span className="font-semibold text-orange-600">Sign in</span>
         </p>
       </div>
     </div>
@@ -236,34 +329,37 @@ function ScreenSignup() {
 
 function ScreenLogin() {
   return (
-    <div className="flex h-full flex-col px-5 pt-6">
+    <div className="flex h-full flex-col bg-gray-50 px-4 pt-3">
       <StatusBar />
-      <p className="mt-4 font-sans text-[8px] font-bold uppercase tracking-[0.22em] text-orange-600">
+      <h3 className="mt-4 font-sans text-[15px] font-bold leading-tight text-gray-900">
         Welcome back
-      </p>
-      <h3 className="mt-2 font-serif text-[19px] font-bold leading-tight text-ink">
-        Pick up where you left off.
       </h3>
-      <div className="mt-4 flex flex-col gap-3">
+      <p className="font-sans text-[9px] text-gray-500">
+        Continue where you left off.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
         {[
-          { label: "Email", value: "lwazi@example.co.za" },
+          { label: "Email", value: "thabo@example.co.za" },
           { label: "Password", value: "••••••••" },
         ].map((f) => (
-          <div key={f.label} className="border-b border-ink/15 pb-1">
-            <p className="font-sans text-[8px] font-bold uppercase tracking-wider text-ink/45">
-              {f.label}
-            </p>
-            <p className="font-serif text-[12px] text-ink">{f.value}</p>
+          <div key={f.label} className="space-y-0.5">
+            <p className="font-sans text-[7px] font-medium text-gray-700">{f.label}</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
+              <p className="font-sans text-[9px] text-gray-900">{f.value}</p>
+            </div>
           </div>
         ))}
       </div>
-      <p className="mt-3 font-sans text-[9px] font-bold uppercase tracking-wider text-orange-600">
+      <p className="mt-2 text-right font-sans text-[8px] font-semibold text-orange-600">
         Forgot password?
       </p>
-      <div className="mt-auto pb-6">
-        <div className="rounded-full bg-ink py-2.5 text-center font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-          Sign in →
+      <div className="mt-auto pb-4">
+        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
+          Sign in
         </div>
+        <p className="mt-2 text-center font-sans text-[8px] text-gray-500">
+          New here? <span className="font-semibold text-orange-600">Create an account</span>
+        </p>
       </div>
     </div>
   );
@@ -274,7 +370,7 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
     grade === "11"
       ? [
           { label: "BaseBot", Icon: Bot, bg: "bg-purple-50", fg: "text-purple-600" },
-          { label: "Targets", Icon: Target, bg: "bg-blue-50", fg: "text-blue-600" },
+          { label: "My Targets", Icon: Target, bg: "bg-blue-50", fg: "text-blue-600" },
           { label: "Programmes", Icon: GraduationCap, bg: "bg-orange-50", fg: "text-orange-600" },
           { label: "Bursaries", Icon: Wallet, bg: "bg-pink-50", fg: "text-pink-600" },
           { label: "Documents", Icon: Folder, bg: "bg-teal-50", fg: "text-teal-600" },
@@ -289,58 +385,100 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
           { label: "Documents", Icon: Folder, bg: "bg-teal-50", fg: "text-teal-600" },
         ];
 
-  const headline = grade === "11" ? "Plan early, win big." : "Apply once, track everywhere.";
   const sub =
     grade === "11"
       ? "Explore your planning and preparation tools"
       : "Jump into your key application tools";
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col px-2 pt-2">
       <StatusBar />
-      <div className="flex items-center justify-between px-4 pt-3">
-        <Menu size={14} className="text-ink/55" />
-        <Search size={14} className="text-ink/55" />
-      </div>
-      <div className="px-4 pt-3">
-        <p className="font-sans text-[9px] font-bold uppercase tracking-wider text-ink/45">
-          Good morning,
-        </p>
-        <p className="font-serif text-base font-bold text-ink">
-          <span className="text-orange-500">Lwazi</span>
-        </p>
-        <div className="mt-3 rounded-2xl border border-orange-100 bg-white p-2.5">
-          <p className="font-sans text-[8px] font-bold uppercase tracking-wider text-orange-600">
-            {grade === "11" ? "Grade 11 · Plan ahead" : "Grade 12 · Active applications"}
-          </p>
-          <p className="mt-0.5 font-serif text-[12px] font-bold leading-tight text-ink">
-            {headline}
-          </p>
-          <p className="mt-0.5 font-serif text-[9px] italic text-ink/55">{sub}</p>
+      {/* Greeting card */}
+      <div className="mt-1.5 rounded-2xl border border-orange-100 bg-white/85 p-2 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="font-sans text-[6px] font-semibold uppercase tracking-widest text-gray-400">
+              Tue, April 28
+            </p>
+            <p className="mt-0.5 font-sans text-[12px] font-extrabold leading-tight text-gray-900">
+              Good Morning, <span className="text-orange-500">Thabo</span>
+            </p>
+            <p className="mt-0.5 font-sans text-[7px] leading-snug text-gray-500">
+              {grade === "11"
+                ? "You're in planning mode. Build your APS now."
+                : "Keep moving — applications and APS in one place."}
+            </p>
+          </div>
+          <div className="relative">
+            <div className="grid size-7 place-items-center rounded-xl bg-orange-500">
+              <span className="font-sans text-[10px] font-bold text-white">T</span>
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-white bg-green-500" />
+          </div>
+        </div>
+        {/* Grade · School pill row */}
+        <div className="mt-1.5 flex items-center gap-1.5 rounded-xl bg-orange-50/80 px-1.5 py-1">
+          <div>
+            <p className="font-sans text-[5px] text-gray-500">Grade</p>
+            <p className="font-sans text-[7px] font-semibold text-gray-800">
+              Grade {grade}
+            </p>
+          </div>
+          <span className="size-0.5 rounded-full bg-gray-300" />
+          <div className="min-w-0 flex-1">
+            <p className="font-sans text-[5px] text-gray-500">School</p>
+            <p className="truncate font-sans text-[7px] font-semibold text-gray-800">
+              Pretoria HS
+            </p>
+          </div>
+          {grade === "11" && (
+            <span className="rounded-full bg-blue-100 px-1 py-0.5 font-sans text-[5px] font-bold uppercase tracking-wide text-blue-700">
+              Planning
+            </span>
+          )}
+        </div>
+        {/* Mini APS card */}
+        <div className="mt-1.5 rounded-xl bg-orange-500 px-2 py-1.5 text-white">
+          <div className="flex items-center justify-between">
+            <p className="font-sans text-[6px] uppercase tracking-wider text-orange-100">
+              {grade === "11" ? "Projected APS" : "Your APS"}
+            </p>
+            <span className="rounded-full bg-white/20 px-1 py-0.5 font-sans text-[6px] font-semibold">
+              Strong
+            </span>
+          </div>
+          <p className="font-sans text-lg font-black leading-none">32</p>
         </div>
       </div>
-      <div className="mt-3 grid grow grid-cols-3 gap-1.5 px-4">
-        {tiles.map((t) => (
-          <div
-            key={t.label}
-            className="flex flex-col items-center justify-center gap-1 rounded-xl border border-ink/10 bg-white py-2.5"
-          >
-            <span className={`grid size-7 place-items-center rounded-lg ${t.bg}`}>
-              <t.Icon size={13} className={t.fg} />
-            </span>
-            <span className="font-sans text-[8px] font-bold text-ink">{t.label}</span>
+
+      {/* Quick Access section */}
+      <div className="mt-1.5 rounded-2xl border border-gray-100 bg-white/90 p-1.5 shadow-sm">
+        <div className="mb-1 flex items-end justify-between px-0.5">
+          <div>
+            <h4 className="font-sans text-[9px] font-bold tracking-tight text-gray-900">
+              Quick Access
+            </h4>
+            <p className="font-sans text-[5px] font-medium text-gray-400">{sub}</p>
           </div>
-        ))}
-      </div>
-      {/* Bottom nav */}
-      <div className="mt-2 flex justify-around border-t border-ink/10 bg-white px-4 py-2">
-        {[GraduationCap, Compass, Bell, User].map((Ic, i) => (
-          <Ic
-            key={i}
-            size={14}
-            className={i === 0 ? "text-orange-500" : "text-ink/35"}
-          />
-        ))}
+          <span className="rounded-full bg-orange-50 px-1 py-0.5 font-sans text-[5px] font-semibold uppercase text-orange-600">
+            {tiles.length} tools
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-1">
+          {tiles.map((t) => (
+            <div
+              key={t.label}
+              className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-gray-100 bg-white py-1.5"
+            >
+              <span className={`grid size-5 place-items-center rounded-md ${t.bg}`}>
+                <t.Icon size={9} className={t.fg} />
+              </span>
+              <span className="font-sans text-[6px] font-semibold text-gray-700">
+                {t.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -454,23 +592,23 @@ export default function HowItWorksPage() {
                 <span className="italic text-ink/55">Then a reveal.</span>
               </h2>
               <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Five short steps tell us your grade, marks, and what you&apos;re curious
-                about. No account yet. At the end, the Reveal page shows what we found
-                for you.
+                Three short steps: your name and contact, your subjects and marks, then a
+                bit about your grade, school and field of interest. No account yet. At the
+                end, the Opportunity Report shows what you qualify for.
               </p>
 
               <div className="mt-8 flex flex-col gap-5">
                 <Speech
                   who="skhathi"
                   lines={[
-                    "Hey — start by telling us what grade you're in. That picks the whole path the app shows you.",
-                    "Then we ask about your subjects and marks. APS gets calculated automatically.",
+                    "Step one is just your name and a phone number. Step two is your subjects — APS gets calculated automatically as you type your marks.",
+                    "Step three is your grade, school, province and what you're curious about studying.",
                   ]}
                 />
                 <Speech
                   who="skhathi"
                   lines={[
-                    "When you finish, you land on the Reveal — a snapshot of programmes and bursaries that match your numbers. No sign-up needed yet to see it.",
+                    "When you finish, you land on the Opportunity Report — your APS, the universities and bursaries you qualify for, and the next deadline. No sign-up needed yet to see it.",
                   ]}
                 />
               </div>
@@ -478,10 +616,10 @@ export default function HowItWorksPage() {
 
             <div className="lg:col-span-7">
               <div className="grid grid-cols-2 gap-6 sm:gap-8">
-                <PhoneFrame label="Onboarding · Step 3">
+                <PhoneFrame label="Onboarding · Step 1" bg="#ffffff">
                   <ScreenOnboarding />
                 </PhoneFrame>
-                <PhoneFrame label="The Reveal">
+                <PhoneFrame label="Opportunity Report">
                   <ScreenReveal />
                 </PhoneFrame>
               </div>
@@ -496,10 +634,10 @@ export default function HowItWorksPage() {
           <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
             <div className="order-2 lg:order-1 lg:col-span-7">
               <div className="grid grid-cols-2 gap-6 sm:gap-8">
-                <PhoneFrame label="Sign up">
+                <PhoneFrame label="Sign up" bg="#f9fafb">
                   <ScreenSignup />
                 </PhoneFrame>
-                <PhoneFrame label="Sign in">
+                <PhoneFrame label="Sign in" bg="#f9fafb">
                   <ScreenLogin />
                 </PhoneFrame>
               </div>
@@ -514,16 +652,16 @@ export default function HowItWorksPage() {
                 <span className="italic text-ink/55">Pick them up anywhere.</span>
               </h2>
               <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Sign-up is one screen. Email and a password — that&apos;s it. After
-                that, every device you log in on shows your matched programmes,
-                bursaries and documents.
+                Sign-up is two short steps. Email and password first, then a guardian
+                contact. After that, every device you log in on shows your matched
+                programmes, bursaries and documents.
               </p>
 
               <div className="mt-8 flex flex-col gap-5">
                 <Speech
                   who="ande"
                   lines={[
-                    "Sign-up takes about ten seconds. Your reveal results carry over — nothing gets lost.",
+                    "Step one: email, password, confirm. Step two: a guardian contact so we can keep someone in the loop. Your Opportunity Report carries over — nothing gets lost.",
                   ]}
                 />
                 <Speech
@@ -624,7 +762,7 @@ export default function HowItWorksPage() {
                     key={f.label}
                     className="flex items-center gap-2 rounded-full border border-ink/15 bg-white px-3 py-2"
                   >
-                    <f.Icon size={13} className="text-emerald-700" />
+                    <f.Icon size={13} className="text-blue-600" />
                     <span className="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-ink">
                       {f.label}
                     </span>
@@ -634,7 +772,7 @@ export default function HowItWorksPage() {
             </div>
 
             <div className="order-1 lg:order-2 lg:col-span-5">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-700">
+              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-blue-600">
                 Phase IV · Inside · Grade 12
               </p>
               <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
