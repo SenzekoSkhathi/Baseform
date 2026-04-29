@@ -674,7 +674,7 @@ export default function HowItWorksPage() {
       <section className="border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="lg:col-span-5">
+            <div className="order-2 lg:order-1 lg:col-span-5">
               <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
                 Phase I · Onboarding
               </p>
@@ -705,17 +705,21 @@ export default function HowItWorksPage() {
               </div>
             </div>
 
-            <div className="lg:col-span-7">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-5">
+            <div className="order-1 lg:order-2 lg:col-span-7">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
                 <PhoneFrame label="Step 1 · Your details" bg="#ffffff">
                   <ScreenOnboarding />
                 </PhoneFrame>
                 <PhoneFrame label="Step 2 · Subjects" bg="#ffffff">
                   <ScreenSubjects />
                 </PhoneFrame>
-                <PhoneFrame label="Opportunity Report">
-                  <ScreenReveal />
-                </PhoneFrame>
+              </div>
+              <div className="mt-10 flex justify-center">
+                <div className="w-full sm:max-w-[320px]">
+                  <PhoneFrame label="Opportunity Report">
+                    <ScreenReveal />
+                  </PhoneFrame>
+                </div>
               </div>
             </div>
           </div>
@@ -726,8 +730,8 @@ export default function HowItWorksPage() {
       <section className="border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-2 lg:order-1 lg:col-span-7">
-              <div className="grid grid-cols-2 gap-6 sm:gap-8">
+            <div className="order-1 lg:order-1 lg:col-span-7">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
                 <PhoneFrame label="Sign up" bg="#f9fafb">
                   <ScreenSignup />
                 </PhoneFrame>
@@ -737,7 +741,7 @@ export default function HowItWorksPage() {
               </div>
             </div>
 
-            <div className="order-1 lg:order-2 lg:col-span-5">
+            <div className="order-2 lg:order-2 lg:col-span-5">
               <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
                 Phase II · Account
               </p>
@@ -774,7 +778,7 @@ export default function HowItWorksPage() {
       <section className="border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="lg:col-span-5">
+            <div className="order-2 lg:order-1 lg:col-span-5">
               <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
                 Phase III · Inside · Grade 11
               </p>
@@ -804,7 +808,7 @@ export default function HowItWorksPage() {
               </div>
             </div>
 
-            <div className="lg:col-span-7">
+            <div className="order-1 lg:order-2 lg:col-span-7">
               <div className="mx-auto max-w-md">
                 <PhoneFrame label="Home · Grade 11">
                   <DashboardScreen grade="11" />
@@ -838,7 +842,7 @@ export default function HowItWorksPage() {
       <section className="border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-2 lg:order-1 lg:col-span-7">
+            <div className="order-1 lg:order-1 lg:col-span-7">
               <div className="mx-auto max-w-md">
                 <PhoneFrame label="Home · Grade 12">
                   <DashboardScreen grade="12" />
@@ -865,7 +869,7 @@ export default function HowItWorksPage() {
               </ul>
             </div>
 
-            <div className="order-1 lg:order-2 lg:col-span-5">
+            <div className="order-2 lg:order-2 lg:col-span-5">
               <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-blue-600">
                 Phase IV · Inside · Grade 12
               </p>
