@@ -1,0 +1,27 @@
+# Allow search engines to crawl public pages
+User-agent: *
+Allow: /
+Allow: /website
+Allow: /how-it-works
+Allow: /about
+Allow: /pricing
+Allow: /plans
+Allow: /contact
+
+# Disallow indexing of auth pages (login, signup, etc.)
+Disallow: /(auth)/
+Disallow: /auth/
+Disallow: /(dashboard)/
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /onboarding/
+Disallow: /parent/
+Disallow: /payment/
+Disallow: /share/
+
+# Crawl delay (optional - rate limit bot crawling)
+Crawl-delay: 1
+
+# Sitemap location (create this if you want)
+# Sitemap: https://baseform.com/sitemap.xml
