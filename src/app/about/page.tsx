@@ -39,7 +39,9 @@ export default function AboutPage() {
         } as React.CSSProperties
       }
     >
-      <style jsx global>{`
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .bg-paper { background-color: var(--paper); }
         .bg-ink { background-color: var(--ink); }
         .bg-forest { background-color: var(--forest); }
@@ -66,7 +68,9 @@ export default function AboutPage() {
           font-weight: 600;
           color: #ea580c;
         }
-      `}</style>
+      `,
+        }}
+      />
 
       {/* Masthead */}
       <div className="border-b border-ink/15">
@@ -212,7 +216,7 @@ export default function AboutPage() {
           <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
             Sizokusiza · we&apos;ll help you
           </p>
-          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-4xl font-medium leading-[1.0] tracking-tight text-ink sm:text-6xl">
+          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-4xl font-medium leading-none tracking-tight text-ink sm:text-6xl">
             If this is for you, the rest is{" "}
             <span className="italic text-orange-600">just one click.</span>
           </h2>
