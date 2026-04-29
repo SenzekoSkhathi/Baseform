@@ -61,7 +61,7 @@ async function applyRateLimit(tier: string, ip: string): Promise<boolean> {
   }
 }
 
-const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin", "/targets", "/vault", "/discover", "/onboarding", "/plans", "/payment", "/settings", "/notifications", "/coach"];
+const PROTECTED = ["/dashboard", "/programmes", "/bursaries", "/tracker", "/profile", "/basebot", "/admin", "/targets", "/vault", "/discover", "/payment", "/settings", "/notifications", "/coach"];
 const AUTH_PAGES = ["/login", "/signup"];
 // Routes that an unverified user MUST be allowed to reach so they can
 // finish verification — never redirect away from these even if logged in unverified.
