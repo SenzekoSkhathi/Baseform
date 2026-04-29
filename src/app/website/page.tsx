@@ -233,7 +233,15 @@ function TryAi() {
               )}
               {!error && streamed && (
                 <pre className="whitespace-pre-wrap font-serif text-[17px] leading-relaxed text-ink">
-                  {streamed}
+                  {streamed.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+                    part.startsWith("**") && part.endsWith("**") ? (
+                      <strong key={i} className="font-semibold">
+                        {part.slice(2, -2)}
+                      </strong>
+                    ) : (
+                      <span key={i}>{part}</span>
+                    )
+                  )}
                 </pre>
               )}
             </div>
@@ -890,10 +898,11 @@ export default function WebsitePage() {
                   <ArrowUpRight size={13} />
                 </Link>
                 <Link
-                  href="/plans"
+                  href="/contact"
                   className="inline-flex items-center gap-2 border border-ink px-6 py-3.5 font-sans text-xs font-bold uppercase tracking-[0.2em] text-ink hover:bg-ink hover:text-paper"
                 >
-                  See plans
+                  Get in touch
+                  <ArrowRight size={13} />
                 </Link>
               </div>
             </div>
