@@ -26,6 +26,7 @@ const NAV_LINKS = [
   { href: "#how", label: "The Method" },
   { href: "#pricing", label: "Pricing" },
   { href: "#schools", label: "Schools" },
+  { href: "/about", label: "About" },
 ];
 
 const ROTATING_PROMPTS = [
@@ -1003,6 +1004,7 @@ export default function WebsitePage() {
                   <li><Link href="#try" className="hover:text-ink">Ask BaseBot</Link></li>
                   <li><Link href="#how" className="hover:text-ink">The Method</Link></li>
                   <li><Link href="#pricing" className="hover:text-ink">Pricing</Link></li>
+                  <li><Link href="/about" className="hover:text-ink">About</Link></li>
                 </ul>
               </div>
 
