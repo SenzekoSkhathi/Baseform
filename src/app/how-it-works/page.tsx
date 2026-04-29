@@ -155,13 +155,13 @@ function Speech({ who, lines }: { who: Character; lines: string[] }) {
 
 function PhoneFrame({ children, label, bg = "#fff9f2" }: { children: React.ReactNode; label?: string; bg?: string }) {
   return (
-    <div className="relative mx-auto w-full max-w-[300px]">
+    <div className="relative mx-auto w-full max-w-75">
       {/* Frame */}
-      <div className="relative aspect-[9/19] rounded-[42px] border-[10px] border-ink bg-ink p-1 shadow-[0_30px_60px_rgba(26,23,20,0.25)]">
+      <div className="relative aspect-9/19 rounded-[42px] border-10 border-ink bg-ink p-1 shadow-[0_30px_60px_rgba(26,23,20,0.25)]">
         {/* Notch */}
         <div className="absolute left-1/2 top-1.5 z-20 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-ink" />
         {/* Screen */}
-        <div className="relative h-full w-full overflow-hidden rounded-[32px]" style={{ backgroundColor: bg }}>
+        <div className="relative h-full w-full overflow-hidden rounded-4xl" style={{ backgroundColor: bg }}>
           {children}
         </div>
       </div>
@@ -185,11 +185,81 @@ function StatusBar() {
 
 /* ---------- Screen recreations ---------- */
 
+function ScreenSubjects() {
+  const subjects = [
+    { name: "Mathematics", mark: 72, points: 6 },
+    { name: "English FAL", mark: 68, points: 5 },
+    { name: "Physical Sciences", mark: 65, points: 5 },
+    { name: "Life Sciences", mark: 74, points: 6 },
+    { name: "Geography", mark: 70, points: 6 },
+    { name: "isiZulu HL", mark: 80, points: 7 },
+  ];
+  const aps = subjects.reduce((s, x) => s + x.points, 0) - 1;
+
+  return (
+    <div className="flex h-full flex-col bg-white">
+      <div className="h-0.75 w-full bg-gray-100">
+        <div className="h-full w-2/3 bg-orange-500" />
+      </div>
+      <StatusBar />
+      <div className="flex flex-col gap-1 px-4 pt-4">
+        <p className="font-sans text-[7px] text-gray-400">← Back</p>
+        <h3 className="font-sans text-[15px] font-bold leading-tight text-gray-900">
+          Your subjects &amp; marks
+        </h3>
+        <p className="font-sans text-[8px] text-gray-500">
+          We calculate your APS as you go.
+        </p>
+      </div>
+
+      {/* Live APS chip */}
+      <div className="mx-4 mt-2 flex items-center justify-between rounded-xl bg-orange-50 px-2 py-1.5">
+        <p className="font-sans text-[8px] font-semibold text-orange-700">
+          Live APS
+        </p>
+        <p className="font-sans text-[14px] font-black text-orange-600">
+          {aps}
+        </p>
+      </div>
+
+      {/* Subject rows */}
+      <div className="mx-4 mt-2 flex flex-col gap-1">
+        {subjects.slice(0, 5).map((s) => (
+          <div
+            key={s.name}
+            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2 py-1"
+          >
+            <p className="truncate font-sans text-[8px] font-medium text-gray-800">
+              {s.name}
+            </p>
+            <div className="flex items-center gap-1">
+              <span className="font-sans text-[8px] text-gray-500">{s.mark}%</span>
+              <span className="rounded bg-orange-100 px-1 py-0.5 font-sans text-[7px] font-bold text-orange-700">
+                {s.points}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mx-4 mt-1.5 flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 py-1 font-sans text-[8px] font-semibold text-gray-500">
+        + Add subject
+      </div>
+
+      <div className="mt-auto px-4 pb-4">
+        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[11px] font-semibold text-white">
+          Continue
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScreenOnboarding() {
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Thin progress bar at very top — matches real app */}
-      <div className="h-[3px] w-full bg-gray-100">
+      <div className="h-0.75 w-full bg-gray-100">
         <div className="h-full w-1/3 bg-orange-500" />
       </div>
       <StatusBar />
@@ -329,36 +399,56 @@ function ScreenSignup() {
 
 function ScreenLogin() {
   return (
-    <div className="flex h-full flex-col bg-gray-50 px-4 pt-3">
+    <div className="flex h-full flex-col bg-gray-50 px-3 pt-1">
       <StatusBar />
-      <h3 className="mt-4 font-sans text-[15px] font-bold leading-tight text-gray-900">
-        Welcome back
-      </h3>
-      <p className="font-sans text-[9px] text-gray-500">
-        Continue where you left off.
-      </p>
-      <div className="mt-3 flex flex-col gap-2">
-        {[
-          { label: "Email", value: "thabo@example.co.za" },
-          { label: "Password", value: "••••••••" },
-        ].map((f) => (
-          <div key={f.label} className="space-y-0.5">
-            <p className="font-sans text-[7px] font-medium text-gray-700">{f.label}</p>
-            <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
-              <p className="font-sans text-[9px] text-gray-900">{f.value}</p>
-            </div>
+      {/* White card */}
+      <div className="mt-2 rounded-2xl bg-white p-3 shadow-sm">
+        {/* Logo lockup */}
+        <div className="flex items-center gap-1.5">
+          <div className="grid size-5 place-items-center rounded-md bg-orange-500">
+            <span className="font-sans text-[10px] font-black leading-none text-white">↑</span>
           </div>
-        ))}
-      </div>
-      <p className="mt-2 text-right font-sans text-[8px] font-semibold text-orange-600">
-        Forgot password?
-      </p>
-      <div className="mt-auto pb-4">
-        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
-          Sign in
+          <p className="font-sans text-[12px] font-black tracking-tight text-gray-900">
+            base<span className="text-orange-500">form</span>
+          </p>
         </div>
+
+        <h3 className="mt-3 font-sans text-[15px] font-bold leading-tight text-gray-900">
+          Welcome back
+        </h3>
+        <p className="font-sans text-[8px] text-gray-500">
+          Log in to your Baseform account.
+        </p>
+
+        <div className="mt-3 space-y-0.5">
+          <p className="font-sans text-[8px] font-medium text-gray-800">Email address</p>
+          <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
+            <p className="font-sans text-[9px] text-gray-400">you@example.com</p>
+          </div>
+        </div>
+
+        <div className="mt-2 space-y-0.5">
+          <p className="font-sans text-[8px] font-medium text-gray-800">Password</p>
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-2 py-1.5">
+            <p className="font-sans text-[9px] text-gray-400">Your password</p>
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+        </div>
+
+        <p className="mt-1.5 text-right font-sans text-[8px] font-semibold text-orange-600">
+          Forgot password?
+        </p>
+
+        <div className="mt-2 rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
+          Log in
+        </div>
+
         <p className="mt-2 text-center font-sans text-[8px] text-gray-500">
-          New here? <span className="font-semibold text-orange-600">Create an account</span>
+          Don&apos;t have an account?{" "}
+          <span className="font-semibold text-orange-600">Get started free</span>
         </p>
       </div>
     </div>
@@ -383,6 +473,7 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
           { label: "Bursaries", Icon: Wallet, bg: "bg-pink-50", fg: "text-pink-600" },
           { label: "Progress", Icon: TrendingUp, bg: "bg-green-50", fg: "text-green-600" },
           { label: "Documents", Icon: Folder, bg: "bg-teal-50", fg: "text-teal-600" },
+          { label: "Profile", Icon: User, bg: "bg-amber-50", fg: "text-amber-600" },
         ];
 
   const sub =
@@ -464,16 +555,16 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
             {tiles.length} tools
           </span>
         </div>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-2 gap-1">
           {tiles.map((t) => (
             <div
               key={t.label}
               className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-gray-100 bg-white py-1.5"
             >
-              <span className={`grid size-5 place-items-center rounded-md ${t.bg}`}>
-                <t.Icon size={9} className={t.fg} />
+              <span className={`grid size-6 place-items-center rounded-md ${t.bg}`}>
+                <t.Icon size={11} className={t.fg} />
               </span>
-              <span className="font-sans text-[6px] font-semibold text-gray-700">
+              <span className="font-sans text-[7px] font-semibold text-gray-700">
                 {t.label}
               </span>
             </div>
@@ -615,9 +706,12 @@ export default function HowItWorksPage() {
             </div>
 
             <div className="lg:col-span-7">
-              <div className="grid grid-cols-2 gap-6 sm:gap-8">
-                <PhoneFrame label="Onboarding · Step 1" bg="#ffffff">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-5">
+                <PhoneFrame label="Step 1 · Your details" bg="#ffffff">
                   <ScreenOnboarding />
+                </PhoneFrame>
+                <PhoneFrame label="Step 2 · Subjects" bg="#ffffff">
+                  <ScreenSubjects />
                 </PhoneFrame>
                 <PhoneFrame label="Opportunity Report">
                   <ScreenReveal />
@@ -811,7 +905,7 @@ export default function HowItWorksPage() {
           <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
             Tour&apos;s over · ready to try?
           </p>
-          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-4xl font-medium leading-[1.0] tracking-tight text-ink sm:text-6xl">
+          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-4xl font-medium leading-none tracking-tight text-ink sm:text-6xl">
             The real thing is{" "}
             <span className="italic text-orange-600">free to start.</span>
           </h2>
