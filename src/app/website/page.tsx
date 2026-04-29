@@ -352,7 +352,7 @@ export default function WebsitePage() {
       <div className="border-b border-ink/15">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-2 sm:px-8">
           <span className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/60">
-            Vol. I · Issue 01 · {issueDate}
+            Sizokusiza — we&apos;ll help you.
           </span>
           <Link
             href="/onboarding"
