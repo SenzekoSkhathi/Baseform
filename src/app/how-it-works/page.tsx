@@ -653,7 +653,7 @@ export default function HowItWorksPage() {
               <div>
                 <p className="font-serif text-xl font-medium text-ink">Skhathi</p>
                 <p className="mt-1 font-serif text-sm italic text-ink/65">
-                  Walks Grade 11s through planning, targets, and bursary discovery.
+                  Hi I&apos;m Skhathi, and I will walk you through Grade 11s planning, targets, and bursary discovery onboarding steps.
                 </p>
               </div>
             </div>
@@ -662,7 +662,7 @@ export default function HowItWorksPage() {
               <div>
                 <p className="font-serif text-xl font-medium text-ink">Ande</p>
                 <p className="mt-1 font-serif text-sm italic text-ink/65">
-                  Walks Grade 12s from sign-up through to live applications.
+                  Hi I&apos;m Ande, and I will walk you through from sign-up through to live applications of Grade 12s onboarding steps.
                 </p>
               </div>
             </div>
