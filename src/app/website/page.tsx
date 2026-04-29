@@ -492,10 +492,7 @@ export default function WebsitePage() {
             </div>
 
             <figure className="lg:col-span-5">
-              <div
-                className="relative aspect-4/5 w-full overflow-hidden rounded-3xl"
-                style={{ backgroundColor: "#fff9f2" }}
-              >
+              <div className="relative aspect-4/5 w-full">
                 {/* Soft orange glow under the stack */}
                 <div
                   aria-hidden="true"
@@ -566,7 +563,7 @@ export default function WebsitePage() {
                 </div>
 
                 {/* ── Card 2 · Next Deadline (front-center, tilted right) ── */}
-                <div className="absolute left-1/2 top-[38%] w-[60%] -translate-x-1/2 rotate-[3deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_22px_55px_rgba(249,115,22,0.22)]">
+                <div className="absolute left-1/2 top-[38%] w-[60%] -translate-x-1/2 rotate-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_22px_55px_rgba(249,115,22,0.22)]">
                   <div className="flex items-center justify-between">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
                       Next deadline
@@ -596,7 +593,7 @@ export default function WebsitePage() {
                 </div>
 
                 {/* ── Card 3 · Documents (bottom-right, tilted right) ── */}
-                <div className="absolute bottom-[6%] right-[3%] w-[55%] rotate-[6deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
+                <div className="absolute bottom-[6%] right-[3%] w-[55%] rotate-6 rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
                   <div className="flex items-center justify-between">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
                       Documents
