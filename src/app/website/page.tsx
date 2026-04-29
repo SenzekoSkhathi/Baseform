@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -13,6 +12,8 @@ import {
   MessageCircle,
   Lock,
   RotateCcw,
+  Check,
+  Clock,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import {
@@ -491,30 +492,101 @@ export default function WebsitePage() {
             </div>
 
             <figure className="lg:col-span-5">
-              <div className="relative aspect-4/5 w-full overflow-hidden border border-ink/20">
-                <Image
-                  src="/SA Grade 12 learner.jpg"
-                  alt="A South African Grade 12 learner"
-                  fill
-                  priority
-                  sizes="(min-width: 1024px) 40vw, 100vw"
-                  className="object-cover"
-                />
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/75 via-black/30 to-transparent"
-                />
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <p className="font-serif text-2xl italic leading-tight text-paper sm:text-3xl">
-                    &ldquo;I didn&apos;t know I could apply to Wits.&rdquo;
+              <div className="relative aspect-4/5 w-full overflow-hidden border border-ink/20 bg-paper">
+                {/* Card masthead */}
+                <div className="flex items-center justify-between border-b border-ink/15 px-5 py-3">
+                  <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-ink/55">
+                    Application Tracker
                   </p>
-                  <p className="mt-3 font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-paper/80">
-                    Lwazi M. — Grade 12, Soweto
+                  <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-orange-600">
+                    4 of 6
+                  </p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="px-5 pt-5">
+                  <div className="h-[3px] w-full bg-ink/10">
+                    <div
+                      className="h-full bg-orange-500"
+                      style={{ width: "66%" }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <p className="mt-2 font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-ink/55">
+                    66% complete
+                  </p>
+                </div>
+
+                {/* Application list */}
+                <ol className="mt-4 px-5">
+                  {[
+                    { uni: "Wits", course: "BCom Accounting", status: "submitted" },
+                    { uni: "UJ", course: "BSc Computer Science", status: "submitted" },
+                    { uni: "UP", course: "BEng Industrial", status: "submitted" },
+                    { uni: "UCT", course: "BBusSci Finance", status: "submitted" },
+                    { uni: "Stellenbosch", course: "BCom Economics", status: "in-progress" },
+                    { uni: "Rhodes", course: "BJourn", status: "pending" },
+                  ].map((a, i) => {
+                    const done = a.status === "submitted";
+                    const active = a.status === "in-progress";
+                    return (
+                      <li
+                        key={a.uni}
+                        className={`flex items-center gap-3 py-2.5 ${
+                          i !== 0 ? "border-t border-ink/10" : ""
+                        }`}
+                      >
+                        <span
+                          className={`grid size-5 shrink-0 place-items-center border ${
+                            done
+                              ? "border-orange-500 bg-orange-500 text-paper"
+                              : active
+                              ? "border-orange-500 text-orange-600"
+                              : "border-ink/25 text-ink/35"
+                          }`}
+                        >
+                          {done ? (
+                            <Check size={11} strokeWidth={3} />
+                          ) : active ? (
+                            <Clock size={10} />
+                          ) : null}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-serif text-[15px] leading-tight text-ink">
+                            {a.uni}
+                          </p>
+                          <p className="truncate font-serif text-[12px] italic text-ink/55">
+                            {a.course}
+                          </p>
+                        </div>
+                        <p
+                          className={`font-sans text-[9px] font-bold uppercase tracking-[0.18em] ${
+                            done
+                              ? "text-ink/55"
+                              : active
+                              ? "text-orange-600"
+                              : "text-ink/35"
+                          }`}
+                        >
+                          {done ? "Sent" : active ? "Drafting" : "—"}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                {/* Footer note */}
+                <div className="absolute inset-x-0 bottom-0 border-t border-ink/15 bg-paper px-5 py-3">
+                  <p className="font-serif text-[12px] italic leading-snug text-ink/65">
+                    Next deadline:{" "}
+                    <span className="not-italic font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                      Stellenbosch · 30 Jun
+                    </span>
                   </p>
                 </div>
               </div>
               <figcaption className="mt-3 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                Photograph: replace with a real learner portrait
+                Live tracker — every application, every deadline, one screen.
               </figcaption>
             </figure>
           </div>
