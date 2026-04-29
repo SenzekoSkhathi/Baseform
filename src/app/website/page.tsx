@@ -24,7 +24,6 @@ import {
 const NAV_LINKS = [
   { href: "#try", label: "Ask BaseBot" },
   { href: "#how", label: "The Method" },
-  { href: "#voices", label: "Voices" },
   { href: "#pricing", label: "Pricing" },
   { href: "#schools", label: "Schools" },
 ];
@@ -52,27 +51,6 @@ const HOW_IT_WORKS = [
     n: "III.",
     title: "Apply",
     body: "Upload your documents once. Track every application, every deadline, every outcome — from your phone, even on a slow connection.",
-  },
-];
-
-const VOICES = [
-  {
-    quote:
-      "I'm the first in my family who'll go to university. Nobody knew how the forms worked. BaseBot just told me, step by step.",
-    name: "Lwazi M.",
-    place: "Grade 12, Soweto",
-  },
-  {
-    quote:
-      "My school doesn't have a counsellor. I was going to apply to one university because that's the only one I'd heard of. Now I've applied to four.",
-    name: "Asanda N.",
-    place: "Grade 12, Mthatha",
-  },
-  {
-    quote:
-      "It told me about a bursary I'd never heard of. I qualified. That's the only reason I can afford to go.",
-    name: "Reabetswe K.",
-    place: "First-year, UJ",
   },
 ];
 
@@ -654,16 +632,16 @@ export default function WebsitePage() {
       </section>
 
       {/* ── Pull quote ──────────────────────────────────────────── */}
-      <section className="border-b border-ink/15">
+      <section className="bg-forest text-paper">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <div className="grid gap-6 lg:grid-cols-12">
-            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/55 lg:col-span-2">
+            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-paper/55 lg:col-span-2">
               The thesis
             </p>
-            <blockquote className="font-serif text-3xl font-medium leading-[1.15] tracking-tight text-ink sm:text-5xl lg:col-span-10 lg:text-6xl">
+            <blockquote className="font-serif text-3xl font-medium leading-[1.15] tracking-tight text-paper sm:text-5xl lg:col-span-10 lg:text-6xl">
               In some South African schools, a learner has a counsellor, alumni networks, and
               parents who&apos;ve been to varsity.{" "}
-              <span className="italic text-orange-600">Most don&apos;t.</span> That isn&apos;t a
+              <span className="italic text-orange-400">Most don&apos;t.</span> That isn&apos;t a
               talent gap — it&apos;s a guidance gap.
             </blockquote>
           </div>
@@ -733,41 +711,6 @@ export default function WebsitePage() {
         </div>
       </section>
 
-      {/* ── DARK SECTION: Voices ────────────────────────────────── */}
-      <section id="voices" className="scroll-mt-24 bg-forest text-paper">
-        <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-32">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-400">
-            Voices
-          </p>
-          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-medium leading-[1.05] tracking-tight sm:text-6xl">
-            What learners said when{" "}
-            <span className="italic text-orange-400">someone finally asked.</span>
-          </h2>
-
-          <div className="mt-16 grid gap-12 lg:grid-cols-3 lg:gap-10">
-            {VOICES.map((v) => (
-              <figure key={v.name} className="border-t border-paper/20 pt-6">
-                <blockquote className="font-serif text-xl leading-snug text-paper sm:text-2xl">
-                  &ldquo;{v.quote}&rdquo;
-                </blockquote>
-                <figcaption className="mt-6">
-                  <p className="font-sans text-xs font-bold uppercase tracking-[0.2em] text-paper">
-                    {v.name}
-                  </p>
-                  <p className="mt-1 font-serif text-sm italic text-paper/65">
-                    {v.place}
-                  </p>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-
-          <p className="mt-20 max-w-2xl font-serif text-base italic text-paper/55">
-            Names changed where requested. Composite quotes drawn from beta sessions.
-          </p>
-        </div>
-      </section>
-
       {/* ── Coverage ────────────────────────────────────────────── */}
       <section className="border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
@@ -811,111 +754,113 @@ export default function WebsitePage() {
       {/* ── Pricing (editorial table) ───────────────────────────── */}
       <section id="pricing" className="scroll-mt-24 border-b border-ink/15">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-4">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Pricing
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
-                Free for every matric.{" "}
-                <span className="italic text-ink/55">Forever.</span>
-              </h2>
-              <p className="mt-5 max-w-sm font-serif text-base italic text-ink/65">
-                Most learners only ever need the free plan. Paid tiers exist for those who want
-                more — the AI Coach, document vault and reminders are free for everyone.
-              </p>
-            </div>
-
-            <div className="lg:col-span-8 lg:pl-8">
-              <ul className="border-t-2 border-ink">
-                {plans
-                  .filter((p) => p.id !== "ultra")
-                  .map((p) => {
-                    const isLocked = !p.available;
-                    const isHighlighted = p.recommended;
-                    const href = isLocked
-                      ? "#pricing"
-                      : p.id === "free"
-                      ? "/onboarding"
-                      : "/plans";
-
-                    return (
-                      <li
-                        key={p.id}
-                        className="grid gap-4 border-b border-ink/15 py-7 sm:grid-cols-12 sm:gap-6"
-                      >
-                        <div className="sm:col-span-3">
-                          <div className="flex items-baseline gap-2">
-                            <h3 className="font-serif text-3xl font-medium tracking-tight text-ink">
-                              {p.name}
-                            </h3>
-                            {isHighlighted && (
-                              <span className="font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-orange-600">
-                                · Most popular
-                              </span>
-                            )}
-                            {isLocked && (
-                              <span className="inline-flex items-center gap-1 font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-ink/50">
-                                <Lock size={9} />
-                                Soon
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 font-serif text-2xl text-ink">
-                            <span className="font-medium">{p.price}</span>
-                            <span className="ml-1 text-base italic text-ink/55">{p.period}</span>
-                          </p>
-                          {p.tagline && (
-                            <p className="mt-1 font-serif text-sm italic text-ink/55">
-                              {p.tagline}
-                            </p>
-                          )}
-                        </div>
-
-                        <ul className="space-y-1.5 sm:col-span-6">
-                          {p.features.map((f) => (
-                            <li
-                              key={f}
-                              className="font-serif text-[15px] leading-snug text-ink/80 before:mr-2 before:font-sans before:text-orange-600 before:content-['—']"
-                            >
-                              {f}
-                            </li>
-                          ))}
-                        </ul>
-
-                        <div className="sm:col-span-3 sm:text-right">
-                          {isLocked ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="inline-flex cursor-not-allowed items-center gap-2 border border-ink/25 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/40"
-                            >
-                              Coming soon
-                            </button>
-                          ) : (
-                            <Link
-                              href={href}
-                              className={`inline-flex items-center gap-2 px-5 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.2em] transition-colors ${
-                                isHighlighted
-                                  ? "bg-orange-500 text-white hover:bg-ink"
-                                  : "border border-ink text-ink hover:bg-ink hover:text-paper"
-                              }`}
-                            >
-                              {p.id === "free" ? "Start free" : `Choose ${p.name}`}
-                              <ArrowRight size={12} />
-                            </Link>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-              </ul>
-
-              <p className="mt-6 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                Prices in ZAR · Cancel anytime · BaseBot AI Coach on every plan
-              </p>
-            </div>
+          <div className="max-w-2xl">
+            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
+              Pricing
+            </p>
+            <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
+              Free for every matric.{" "}
+              <span className="italic text-ink/55">Forever.</span>
+            </h2>
+            <p className="mt-5 max-w-xl font-serif text-base italic text-ink/65">
+              Most learners only ever need the free plan. Paid tiers exist for those who want
+              more — the AI Coach, document vault and reminders are free for everyone.
+            </p>
           </div>
+
+          <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {plans
+              .filter(
+                (p) =>
+                  p.id?.toLowerCase() !== "ultra" &&
+                  p.slug?.toLowerCase() !== "ultra" &&
+                  p.name?.toLowerCase() !== "ultra"
+              )
+              .map((p) => {
+                const isLocked = !p.available;
+                const isHighlighted = p.recommended;
+                const href = isLocked
+                  ? "#pricing"
+                  : p.id === "free"
+                  ? "/onboarding"
+                  : "/plans";
+
+                return (
+                  <li
+                    key={p.id}
+                    className={`flex flex-col border-t-2 pt-7 ${
+                      isHighlighted ? "border-orange-500" : "border-ink"
+                    }`}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="font-serif text-3xl font-medium tracking-tight text-ink">
+                        {p.name}
+                      </h3>
+                      {isHighlighted && (
+                        <span className="font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-orange-600">
+                          · Most popular
+                        </span>
+                      )}
+                      {isLocked && (
+                        <span className="inline-flex items-center gap-1 font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-ink/50">
+                          <Lock size={9} />
+                          Soon
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-2 font-serif text-3xl text-ink">
+                      <span className="font-medium">{p.price}</span>
+                      <span className="ml-1 text-base italic text-ink/55">{p.period}</span>
+                    </p>
+                    {p.tagline && (
+                      <p className="mt-1 font-serif text-sm italic text-ink/55">
+                        {p.tagline}
+                      </p>
+                    )}
+
+                    <ul className="mt-6 flex-1 space-y-2">
+                      {p.features.map((f) => (
+                        <li
+                          key={f}
+                          className="font-serif text-[15px] leading-snug text-ink/80 before:mr-2 before:font-sans before:text-orange-600 before:content-['—']"
+                        >
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="mt-8">
+                      {isLocked ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 border border-ink/25 px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/40"
+                        >
+                          Coming soon
+                        </button>
+                      ) : (
+                        <Link
+                          href={href}
+                          className={`inline-flex w-full items-center justify-center gap-2 px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                            isHighlighted
+                              ? "bg-orange-500 text-white hover:bg-ink"
+                              : "border border-ink text-ink hover:bg-ink hover:text-paper"
+                          }`}
+                        >
+                          {p.id === "free" ? "Start free" : `Choose ${p.name}`}
+                          <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+
+          <p className="mt-8 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
+            Prices in ZAR · Cancel anytime · BaseBot AI Coach on every plan
+          </p>
         </div>
       </section>
 
@@ -1048,7 +993,6 @@ export default function WebsitePage() {
                 <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
                   <li><Link href="#try" className="hover:text-ink">Ask BaseBot</Link></li>
                   <li><Link href="#how" className="hover:text-ink">The Method</Link></li>
-                  <li><Link href="#voices" className="hover:text-ink">Voices</Link></li>
                   <li><Link href="#pricing" className="hover:text-ink">Pricing</Link></li>
                 </ul>
               </div>
