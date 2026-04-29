@@ -41,5 +41,10 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 60_000,
+    env: {
+      // Tests don't need real Supabase / Resend / payments — skip strict env
+      // validation so the server can boot in CI without production secrets.
+      SKIP_ENV_VALIDATION: "1",
+    },
   },
 });

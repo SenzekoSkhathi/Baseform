@@ -30,7 +30,7 @@ import {
 
 const NAV_LINKS = [
   { href: "#try", label: "Ask BaseBot" },
-  { href: "#how", label: "The Method" },
+  { href: "/how-it-works", label: "How it works" },
   { href: "#pricing", label: "Pricing" },
   { href: "#schools", label: "Schools" },
   { href: "/about", label: "About" },
@@ -745,7 +745,7 @@ export default function WebsitePage() {
           </div>
 
           {/* Orbit (lg+) */}
-          <div className="relative mx-auto mt-16 hidden aspect-square w-full max-w-[640px] lg:block">
+          <div className="relative mx-auto mt-16 hidden aspect-square w-full max-w-160 lg:block">
             {/* Outer faint ring */}
             <div
               aria-hidden="true"
@@ -1103,7 +1103,7 @@ export default function WebsitePage() {
                 </h4>
                 <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
                   <li><Link href="#try" className="hover:text-ink">Ask BaseBot</Link></li>
-                  <li><Link href="#how" className="hover:text-ink">The Method</Link></li>
+                  <li><Link href="/how-it-works" className="hover:text-ink">How it works</Link></li>
                   <li><Link href="#pricing" className="hover:text-ink">Pricing</Link></li>
                   <li><Link href="/about" className="hover:text-ink">About</Link></li>
                 </ul>

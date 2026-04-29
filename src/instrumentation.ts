@@ -31,6 +31,11 @@ const REQUIRED_ENV: EnvVar[] = [
 ];
 
 function validateEnv() {
+  if (process.env.SKIP_ENV_VALIDATION === "1") {
+    console.warn("[startup] SKIP_ENV_VALIDATION=1 — skipping env var checks");
+    return;
+  }
+
   const missing = REQUIRED_ENV.filter(({ name }) => !process.env[name]?.trim());
   if (missing.length === 0) return;
 
