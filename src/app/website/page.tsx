@@ -492,101 +492,164 @@ export default function WebsitePage() {
             </div>
 
             <figure className="lg:col-span-5">
-              <div className="relative aspect-4/5 w-full overflow-hidden border border-ink/20 bg-paper">
-                {/* Card masthead */}
-                <div className="flex items-center justify-between border-b border-ink/15 px-5 py-3">
-                  <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-ink/55">
-                    Application Tracker
-                  </p>
-                  <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                    4 of 6
-                  </p>
-                </div>
+              <div
+                className="relative aspect-4/5 w-full overflow-hidden rounded-3xl"
+                style={{ backgroundColor: "#fff9f2" }}
+              >
+                {/* Soft orange glow under the stack */}
+                <div
+                  aria-hidden="true"
+                  className="absolute left-1/2 top-1/2 size-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-200/40 blur-3xl"
+                />
 
-                {/* Progress bar */}
-                <div className="px-5 pt-5">
-                  <div className="h-[3px] w-full bg-ink/10">
+                {/* ── Card 1 · Applications (back-left, tilted left) ── */}
+                <div className="absolute left-[3%] top-[6%] w-[58%] -rotate-[5deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                      Applications
+                    </p>
+                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600">
+                      4 / 6
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
+                    66<span className="text-base text-gray-400">%</span>
+                  </p>
+                  <p className="text-[10px] font-medium text-gray-500">complete</p>
+
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-orange-50">
                     <div
-                      className="h-full bg-orange-500"
+                      className="h-full rounded-full bg-orange-500"
                       style={{ width: "66%" }}
                       aria-hidden="true"
                     />
                   </div>
-                  <p className="mt-2 font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-ink/55">
-                    66% complete
-                  </p>
-                </div>
 
-                {/* Application list */}
-                <ol className="mt-4 px-5">
-                  {[
-                    { uni: "Wits", course: "BCom Accounting", status: "submitted" },
-                    { uni: "UJ", course: "BSc Computer Science", status: "submitted" },
-                    { uni: "UP", course: "BEng Industrial", status: "submitted" },
-                    { uni: "UCT", course: "BBusSci Finance", status: "submitted" },
-                    { uni: "Stellenbosch", course: "BCom Economics", status: "in-progress" },
-                    { uni: "Rhodes", course: "BJourn", status: "pending" },
-                  ].map((a, i) => {
-                    const done = a.status === "submitted";
-                    const active = a.status === "in-progress";
-                    return (
+                  <ul className="mt-3 space-y-1.5">
+                    {[
+                      { uni: "Wits", done: true },
+                      { uni: "UJ", done: true },
+                      { uni: "UP", done: true },
+                      { uni: "UCT", done: true },
+                      { uni: "Stellenbosch", done: false },
+                    ].map((a) => (
                       <li
                         key={a.uni}
-                        className={`flex items-center gap-3 py-2.5 ${
-                          i !== 0 ? "border-t border-ink/10" : ""
-                        }`}
+                        className="flex items-center gap-2 text-[11px]"
                       >
                         <span
-                          className={`grid size-5 shrink-0 place-items-center border ${
-                            done
-                              ? "border-orange-500 bg-orange-500 text-paper"
-                              : active
-                              ? "border-orange-500 text-orange-600"
-                              : "border-ink/25 text-ink/35"
+                          className={`grid size-3.5 shrink-0 place-items-center rounded-full ${
+                            a.done
+                              ? "bg-orange-500 text-white"
+                              : "border border-orange-200 bg-white text-orange-500"
                           }`}
                         >
-                          {done ? (
-                            <Check size={11} strokeWidth={3} />
-                          ) : active ? (
-                            <Clock size={10} />
-                          ) : null}
+                          {a.done ? (
+                            <Check size={8} strokeWidth={3.5} />
+                          ) : (
+                            <Clock size={7} />
+                          )}
                         </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-serif text-[15px] leading-tight text-ink">
-                            {a.uni}
-                          </p>
-                          <p className="truncate font-serif text-[12px] italic text-ink/55">
-                            {a.course}
-                          </p>
-                        </div>
-                        <p
-                          className={`font-sans text-[9px] font-bold uppercase tracking-[0.18em] ${
-                            done
-                              ? "text-ink/55"
-                              : active
-                              ? "text-orange-600"
-                              : "text-ink/35"
+                        <span
+                          className={
+                            a.done
+                              ? "text-gray-700"
+                              : "font-semibold text-gray-900"
+                          }
+                        >
+                          {a.uni}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* ── Card 2 · Next Deadline (front-center, tilted right) ── */}
+                <div className="absolute left-1/2 top-[38%] w-[60%] -translate-x-1/2 rotate-[3deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_22px_55px_rgba(249,115,22,0.22)]">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                      Next deadline
+                    </p>
+                    <span className="flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-bold text-white">
+                      <Clock size={8} strokeWidth={3} />
+                      62 days
+                    </span>
+                  </div>
+
+                  <p className="mt-2.5 text-lg font-bold leading-tight tracking-tight text-gray-900">
+                    Stellenbosch
+                  </p>
+                  <p className="text-[11px] text-gray-500">BCom Economics</p>
+
+                  <div className="mt-3 flex items-baseline gap-2 rounded-xl bg-orange-50 px-3 py-2">
+                    <p className="text-2xl font-bold tracking-tight text-orange-600">
+                      30
+                    </p>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
+                        June
+                      </p>
+                      <p className="text-[9px] text-orange-500/80">2026</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Card 3 · Documents (bottom-right, tilted right) ── */}
+                <div className="absolute bottom-[6%] right-[3%] w-[55%] rotate-[6deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                      Documents
+                    </p>
+                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600">
+                      6 / 7
+                    </span>
+                  </div>
+
+                  <ul className="mt-2.5 space-y-1.5">
+                    {[
+                      { label: "Certified ID", done: true },
+                      { label: "Matric results", done: true },
+                      { label: "Motivation letter", done: true },
+                      { label: "Reference letter", done: false },
+                    ].map((d) => (
+                      <li
+                        key={d.label}
+                        className="flex items-center gap-2 text-[11px]"
+                      >
+                        <span
+                          className={`grid size-3.5 shrink-0 place-items-center rounded-full ${
+                            d.done
+                              ? "bg-orange-500 text-white"
+                              : "border border-orange-200 bg-white"
                           }`}
                         >
-                          {done ? "Sent" : active ? "Drafting" : "—"}
-                        </p>
+                          {d.done && <Check size={8} strokeWidth={3.5} />}
+                        </span>
+                        <span
+                          className={
+                            d.done
+                              ? "text-gray-700 line-through decoration-orange-300"
+                              : "font-semibold text-gray-900"
+                          }
+                        >
+                          {d.label}
+                        </span>
                       </li>
-                    );
-                  })}
-                </ol>
+                    ))}
+                  </ul>
 
-                {/* Footer note */}
-                <div className="absolute inset-x-0 bottom-0 border-t border-ink/15 bg-paper px-5 py-3">
-                  <p className="font-serif text-[12px] italic leading-snug text-ink/65">
-                    Next deadline:{" "}
-                    <span className="not-italic font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-orange-600">
-                      Stellenbosch · 30 Jun
-                    </span>
-                  </p>
+                  <div className="mt-2.5 h-1 w-full rounded-full bg-orange-50">
+                    <div
+                      className="h-full rounded-full bg-orange-500"
+                      style={{ width: "86%" }}
+                      aria-hidden="true"
+                    />
+                  </div>
                 </div>
               </div>
               <figcaption className="mt-3 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                Live tracker — every application, every deadline, one screen.
+                Every application, deadline & document — one place.
               </figcaption>
             </figure>
           </div>
