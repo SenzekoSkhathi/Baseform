@@ -14,6 +14,13 @@ import {
   RotateCcw,
   Check,
   Clock,
+  Compass,
+  GraduationCap,
+  Trophy,
+  ListChecks,
+  Bell,
+  FolderLock,
+  Calculator,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import {
@@ -716,6 +723,100 @@ export default function WebsitePage() {
                 </li>
               ))}
             </ol>
+          </div>
+        </div>
+      </section>
+
+      {/* ── What we do (orbital) ──────────────────────────────────── */}
+      <section className="border-b border-ink/15">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+          <div className="max-w-2xl">
+            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
+              What we do
+            </p>
+            <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
+              One platform.{" "}
+              <span className="italic text-ink/55">Eight ways we help.</span>
+            </h2>
+            <p className="mt-5 max-w-xl font-serif text-base italic leading-relaxed text-ink/65">
+              Every part of the matric application journey, in one place — from the first
+              question to the offer letter.
+            </p>
+          </div>
+
+          {/* Orbit (lg+) */}
+          <div className="relative mx-auto mt-16 hidden aspect-square w-full max-w-[640px] lg:block">
+            {/* Outer faint ring */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-[6%] rounded-full border border-ink/15"
+            />
+            {/* Inner faint ring */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-[22%] rounded-full border border-ink/10"
+            />
+
+            {/* Center logo emblem */}
+            <div className="absolute left-1/2 top-1/2 flex aspect-square w-[34%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-full border border-orange-200 bg-paper shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
+              <Logo variant="lockup" size="md" />
+              <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-orange-600">
+                Sizokusiza
+              </p>
+            </div>
+
+            {/* 8 service pills, evenly spaced */}
+            {[
+              { label: "Career guidance", Icon: Compass, top: "0%", left: "50%" },
+              { label: "University matching", Icon: GraduationCap, top: "14.6%", left: "85.4%" },
+              { label: "Application tracking", Icon: ListChecks, top: "50%", left: "100%" },
+              { label: "Deadline reminders", Icon: Bell, top: "85.4%", left: "85.4%" },
+              { label: "Document vault", Icon: FolderLock, top: "100%", left: "50%" },
+              { label: "AI Coach · BaseBot", Icon: MessageCircle, top: "85.4%", left: "14.6%" },
+              { label: "Bursary discovery", Icon: Trophy, top: "50%", left: "0%" },
+              { label: "APS calculator", Icon: Calculator, top: "14.6%", left: "14.6%" },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ top: s.top, left: s.left }}
+              >
+                <div className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-ink/20 bg-paper px-4 py-2.5 shadow-[0_8px_24px_rgba(26,23,20,0.06)]">
+                  <span className="grid size-7 place-items-center rounded-full bg-orange-50 text-orange-600">
+                    <s.Icon size={14} />
+                  </span>
+                  <span className="font-sans text-[12px] font-bold uppercase tracking-[0.16em] text-ink">
+                    {s.label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stacked grid (mobile + tablet) */}
+          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:hidden">
+            {[
+              { label: "Career guidance", Icon: Compass },
+              { label: "University matching", Icon: GraduationCap },
+              { label: "Application tracking", Icon: ListChecks },
+              { label: "Deadline reminders", Icon: Bell },
+              { label: "Document vault", Icon: FolderLock },
+              { label: "AI Coach · BaseBot", Icon: MessageCircle },
+              { label: "Bursary discovery", Icon: Trophy },
+              { label: "APS calculator", Icon: Calculator },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="inline-flex items-center gap-3 rounded-full border border-ink/20 bg-paper px-4 py-3"
+              >
+                <span className="grid size-8 place-items-center rounded-full bg-orange-50 text-orange-600">
+                  <s.Icon size={15} />
+                </span>
+                <span className="font-sans text-[12px] font-bold uppercase tracking-[0.16em] text-ink">
+                  {s.label}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
