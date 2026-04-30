@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateAPS } from "@/lib/aps/calculator";
 import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { deductCredits } from "@/lib/credits";
@@ -50,8 +51,13 @@ export async function POST(req: NextRequest) {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isEffectivelyFreeTier(profileTier?.tier, profileTier?.plan_expires_at)) {
-    return Response.json({ error: "AI Coach is available on paid plans only." }, { status: 403 });
+  const isFree = isEffectivelyFreeTier(profileTier?.tier, profileTier?.plan_expires_at);
+
+  // Free users get 20 monthly Base Credits — make sure their credits row exists
+  // before we attempt to deduct (handles brand-new signups not covered by the
+  // 2026-05-01 backfill).
+  if (isFree) {
+    await createAdminClient().rpc("ensure_free_user_credits", { p_user_id: session.user.id });
   }
 
   const body = await req.json().catch(() => null);
@@ -71,7 +77,13 @@ export async function POST(req: NextRequest) {
   const { ok: credited } = await deductCredits(session.user.id, "basebot_message", "AI Coach message");
   if (!credited) {
     return Response.json(
-      { error: "You've run out of Base Credits. Your allowance refills 7 days after your last top-up." },
+      isFree
+        ? {
+            error: "You've used all 20 of your monthly Base Credits. Upgrade for more, or wait until the 1st of next month.",
+            upgrade: true,
+            redirect: "/basebot/preview?reason=out-of-credits",
+          }
+        : { error: "You've run out of Base Credits. Your allowance refills 7 days after your last top-up." },
       { status: 402 },
     );
   }

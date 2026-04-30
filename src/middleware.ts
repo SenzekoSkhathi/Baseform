@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isEffectivelyFreeTier } from "@/lib/access/tiers";
 import { hasAdminAccess } from "@/lib/admin/access";
 
 // ---------------------------------------------------------------------------
@@ -119,7 +118,6 @@ export async function middleware(request: NextRequest) {
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
   const isAdminRoute = pathname.startsWith("/admin");
-  const isBaseBotRoute = pathname.startsWith("/basebot");
   const isRootPage = pathname === "/";
 
   // Not logged in, trying to access protected route
@@ -165,17 +163,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isBaseBotRoute && !pathname.startsWith("/basebot/preview") && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tier, plan_expires_at")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
-      return NextResponse.redirect(new URL("/basebot/preview", request.url));
-    }
-  }
+  // Free users can reach BaseBot now (they get 20 monthly Base Credits).
+  // The /basebot route gates on credit balance via the API; preview is the
+  // upgrade page surfaced when those credits run out.
 
   return response;
 }

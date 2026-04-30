@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,28 +69,31 @@ const SUGGESTED_PROMPTS = [
 
 // ── Upgrade response card ─────────────────────────────────────────────────────
 
-function UpgradeCard() {
+function UpgradeCard({ outOfCredits }: { outOfCredits: boolean }) {
+  const intro = outOfCredits
+    ? "You've used all 20 of your monthly Base Credits — that's it from BaseBot until next month. Upgrade to keep the conversation going right now."
+    : "I'd love to help you with that! BaseBot gives you personalised guidance on your APS score, programme selection, bursary applications, and university deadlines — all tailored to your specific subjects and goals.";
+
+  const cardTitle = outOfCredits ? "Out of monthly Base Credits" : "Upgrade to unlock AI guidance";
+
+  const cardBody = outOfCredits
+    ? "Free plan includes 20 BaseBot messages per month. Your next refill lands on the 1st — or upgrade now for a much bigger weekly allowance and the rest of Baseform's tools."
+    : "Get unlimited conversations with BaseBot, personalised advice based on your profile, and smart recommendations across programmes and bursaries.";
+
   return (
     <div className="flex w-full items-start gap-3 justify-start">
       <BotAvatar size="sm" />
       <div className="min-w-0 flex-1 py-1">
-        <p className="text-sm leading-7 text-gray-800">
-          I&apos;d love to help you with that! BaseBot gives you personalised guidance on your APS
-          score, programme selection, bursary applications, and university deadlines — all tailored
-          to your specific subjects and goals.
-        </p>
+        <p className="text-sm leading-7 text-gray-800">{intro}</p>
 
         <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-orange-500">
               <LockIcon />
             </span>
-            <p className="text-sm font-bold text-orange-800">Upgrade to unlock AI guidance</p>
+            <p className="text-sm font-bold text-orange-800">{cardTitle}</p>
           </div>
-          <p className="text-xs text-orange-700 leading-relaxed mb-3">
-            Get unlimited conversations with BaseBot, personalised advice based on your profile,
-            and smart recommendations across programmes and bursaries.
-          </p>
+          <p className="text-xs text-orange-700 leading-relaxed mb-3">{cardBody}</p>
           <Link
             href="/plans"
             className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
@@ -110,12 +114,27 @@ function UpgradeCard() {
 function EmptyState({
   firstName,
   onPrompt,
+  outOfCredits,
 }: {
   firstName: string;
   onPrompt: (p: string) => void;
+  outOfCredits: boolean;
 }) {
   return (
     <div className="flex h-full w-full max-w-3xl mx-auto flex-col items-center justify-center gap-5 px-3 text-center sm:px-4">
+      {outOfCredits && (
+        <div className="w-full max-w-2xl rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-left">
+          <p className="text-sm font-semibold text-orange-800">
+            You&apos;re out of monthly Base Credits.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-orange-700">
+            Free plan includes 20 BaseBot messages per month. Your next refill lands on the 1st of next month — or{" "}
+            <Link href="/plans" className="underline font-semibold">upgrade now</Link>{" "}
+            for a much bigger allowance.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center gap-2.5">
         <BotAvatar size="md" />
         <h2 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">
@@ -141,6 +160,8 @@ function EmptyState({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function BaseBotPreviewClient({ firstName }: { firstName: string }) {
+  const searchParams = useSearchParams();
+  const outOfCredits = searchParams.get("reason") === "out-of-credits";
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -268,12 +289,12 @@ export default function BaseBotPreviewClient({ firstName }: { firstName: string 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
           {messages.length === 0 ? (
-            <EmptyState firstName={firstName} onPrompt={handleSend} />
+            <EmptyState firstName={firstName} onPrompt={handleSend} outOfCredits={outOfCredits} />
           ) : (
             <div className="mx-auto max-w-3xl space-y-5">
               {messages.map((msg) => {
                 if (msg.sender === "upgrade") {
-                  return <UpgradeCard key={msg.id} />;
+                  return <UpgradeCard key={msg.id} outOfCredits={outOfCredits} />;
                 }
 
                 return (

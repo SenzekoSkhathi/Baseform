@@ -30,24 +30,20 @@ export async function POST(req: NextRequest) {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
-    // Free plan users can use BaseBot only if they have unlocked referral credits
-    const { data: freeCredits } = await supabase
-      .from("user_credits")
-      .select("balance, referral_unlocked")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
-
-    if (!freeCredits?.referral_unlocked || (freeCredits.balance ?? 0) <= 0) {
-      return NextResponse.json({ error: "Credits are available on paid plans only." }, { status: 403 });
-    }
-    // Has unlocked referral credits — fall through to deduct
-  }
-
   const body = (await req.json().catch(() => null)) as { action?: string; description?: string } | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   if (!body.action || !isValidAction(body.action)) {
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
+  }
+
+  if (isEffectivelyFreeTier(profile?.tier, profile?.plan_expires_at)) {
+    // Free users' 20 monthly credits are restricted to BaseBot messages.
+    if (body.action !== "basebot_message") {
+      return NextResponse.json(
+        { error: "This feature is available on paid plans only.", upgrade: true, redirect: "/basebot/preview?reason=out-of-credits" },
+        { status: 403 },
+      );
+    }
   }
 
   const result = await deductCredits(session.user.id, body.action, body.description);

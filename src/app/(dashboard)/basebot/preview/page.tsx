@@ -19,3 +19,5 @@ export default async function BaseBotPreviewPage() {
 
   return <BaseBotPreviewClient firstName={profile?.full_name?.split(" ")[0] ?? "there"} />;
 }
+
+export const dynamic = "force-dynamic";

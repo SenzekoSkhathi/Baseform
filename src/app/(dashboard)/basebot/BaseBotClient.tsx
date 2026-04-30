@@ -979,7 +979,11 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
         }),
       });
 
-      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[] };
+      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[]; redirect?: string };
+      if (res.status === 402 && data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
       if (!res.ok || !data.response) {
         throw new Error(data.error || "We could not reach BaseBot right now.");
       }
@@ -1209,7 +1213,11 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
         body: JSON.stringify({ message: triggerUserMsg.text, history }),
       });
 
-      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[] };
+      const data = (await res.json()) as { response?: string; error?: string; citations?: BursaryCitation[]; redirect?: string };
+      if (res.status === 402 && data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
       if (!res.ok || !data.response) {
         throw new Error(data.error || "We could not reach BaseBot right now.");
       }
