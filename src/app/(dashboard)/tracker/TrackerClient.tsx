@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   ChevronDown,
@@ -9,6 +10,7 @@ import {
   Send,
   Shield,
   Star,
+  TrendingUp,
   Trophy,
   Zap,
 } from "lucide-react";
@@ -41,6 +43,45 @@ type ActivityRow = {
   note: string;
   created_at: string;
 };
+
+type SubjectMark = { name: string; mark: number | null };
+
+// ── Subject improvement helpers ───────────────────────────────────────────────
+
+// APS point bands (excluding LO at the call site).
+function apsPoint(mark: number): number {
+  if (mark >= 80) return 7;
+  if (mark >= 70) return 6;
+  if (mark >= 60) return 5;
+  if (mark >= 50) return 4;
+  if (mark >= 40) return 3;
+  if (mark >= 30) return 2;
+  return 1;
+}
+
+// Pick a *reasonable* next goal — the next milestone that's at most ~10 points
+// above the current mark, so a 54% student sees 60% before being asked to chase 80%.
+function nextGoal(mark: number): number {
+  if (mark >= 95) return 100;
+  if (mark >= 85) return 90;
+  if (mark >= 80) return 85;
+  if (mark >= 70) return 80;
+  if (mark >= 60) return 70;
+  if (mark >= 50) return 60;
+  if (mark >= 40) return 50;
+  if (mark >= 30) return 40;
+  return 35;
+}
+
+function improvementTip(mark: number): string {
+  if (mark >= 80) return "Maintain — keep doing past papers and teach a classmate to lock it in.";
+  if (mark >= 70) return "You're close to a distinction. Drill application questions and tighten exam timing.";
+  if (mark >= 60) return "Push from good to great — full marks on routine questions, then tackle harder ones.";
+  if (mark >= 50) return "Pinpoint your 2 weakest topics and rework them with past papers and your teacher.";
+  if (mark >= 40) return "Do past papers weekly. Rewrite every question you got wrong until you can solve it cold.";
+  if (mark >= 30) return "Go back to fundamentals — work through every textbook example before attempting tests.";
+  return "Speak to your teacher about extra support and start with the basic concepts of each chapter.";
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -131,9 +172,11 @@ function formatDate(iso: string) {
 export default function TrackerClient({
   applications: initialApplications,
   activityRows: initialActivityRows,
+  subjects = [],
 }: {
   applications: Application[];
   activityRows: ActivityRow[];
+  subjects?: SubjectMark[];
 }) {
   const [applications, setApplications] = useState(initialApplications);
   const [activityRows, setActivityRows]  = useState(initialActivityRows);
@@ -260,6 +303,9 @@ export default function TrackerClient({
             );
           })
         )}
+
+        {/* ── Subject improvement targets ── */}
+        <SubjectImprovementCard subjects={subjects} />
 
         {/* ── Achievements ── */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4">
@@ -582,6 +628,116 @@ function UniCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── SubjectImprovementCard ────────────────────────────────────────────────────
+
+function SubjectImprovementCard({ subjects }: { subjects: SubjectMark[] }) {
+  const rows = subjects
+    .filter((s) => typeof s.mark === "number" && Number.isFinite(s.mark))
+    .map((s) => {
+      const mark = Math.max(0, Math.min(100, Math.round(s.mark as number)));
+      const isLO = /life\s*orientation/i.test(s.name);
+      const goal = nextGoal(mark);
+      return {
+        name: s.name,
+        mark,
+        goal,
+        gap: goal - mark,
+        currentApsPoint: isLO ? null : apsPoint(mark),
+        goalApsPoint: isLO ? null : apsPoint(goal),
+        tip: improvementTip(mark),
+        isLO,
+      };
+    })
+    .sort((a, b) => a.mark - b.mark);
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={15} className="text-emerald-500" />
+          <p className="text-sm font-bold text-gray-900">Subject improvement targets</p>
+        </div>
+        <Link href="/profile" className="text-[11px] font-semibold text-orange-600 hover:text-orange-700">
+          Edit marks
+        </Link>
+      </div>
+      <p className="text-[11px] text-gray-500 mb-3">
+        Realistic next goals based on your current marks. Hit each one and the target moves up — one step at a time.
+      </p>
+
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
+          <p className="text-xs font-bold text-gray-600">No subject marks yet</p>
+          <p className="mt-1 text-[11px] text-gray-400">
+            Add your subjects and current marks on your profile to see improvement targets here.
+          </p>
+          <Link
+            href="/profile"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-orange-600"
+          >
+            Add subjects
+          </Link>
+        </div>
+      ) : (
+        <div className="overflow-x-auto -mx-4 px-4">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                <th className="py-2 pr-3 font-semibold">Subject</th>
+                <th className="py-2 pr-3 font-semibold">Now</th>
+                <th className="py-2 pr-3 font-semibold">Next goal</th>
+                <th className="py-2 pr-3 font-semibold">APS</th>
+                <th className="py-2 font-semibold">How to get there</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r) => {
+                const pct = Math.min(100, Math.round((r.mark / r.goal) * 100));
+                return (
+                  <tr key={r.name} className="align-top">
+                    <td className="py-3 pr-3">
+                      <p className="font-semibold text-gray-900">{r.name}</p>
+                      {r.isLO && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">Not counted toward APS</p>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <p className="font-bold text-gray-900">{r.mark}%</p>
+                      <div className="mt-1 h-1 w-16 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full bg-linear-to-r from-emerald-400 to-emerald-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <p className="font-bold text-emerald-600">{r.goal}%</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">+{r.gap} pts</p>
+                    </td>
+                    <td className="py-3 pr-3">
+                      {r.currentApsPoint === null ? (
+                        <span className="text-gray-300">—</span>
+                      ) : r.goalApsPoint && r.goalApsPoint > r.currentApsPoint ? (
+                        <span className="font-semibold text-gray-700">
+                          {r.currentApsPoint} <span className="text-gray-400">→</span>{" "}
+                          <span className="text-emerald-600">{r.goalApsPoint}</span>
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-700">{r.currentApsPoint}</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-[11px] leading-snug text-gray-600">{r.tip}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

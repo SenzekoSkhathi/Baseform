@@ -17,7 +17,7 @@ export default async function TrackerPage() {
 
   if (gradeProfile?.grade_year === "Grade 11") redirect("/dashboard");
 
-  const [{ data: applications }, { data: activityRows }] = await Promise.all([
+  const [{ data: applications }, { data: activityRows }, { data: subjectRows }] = await Promise.all([
     supabase
       .from("applications")
       .select(`
@@ -33,6 +33,11 @@ export default async function TrackerPage() {
       .select("id, application_id, note, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
+
+    supabase
+      .from("student_subjects")
+      .select("subject_name, mark")
+      .eq("profile_id", user.id),
   ]);
 
   const normalised = (applications ?? []).map((a) => ({
@@ -45,6 +50,7 @@ export default async function TrackerPage() {
     <TrackerClient
       applications={normalised}
       activityRows={activityRows ?? []}
+      subjects={(subjectRows ?? []).map((s) => ({ name: s.subject_name, mark: s.mark }))}
     />
   );
 }

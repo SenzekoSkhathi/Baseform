@@ -1538,7 +1538,7 @@ export default function BaseBotClient({ profile, userId }: { profile: Profile; u
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Ask about universities, bursaries, APS scores…  (paste images or PDFs anytime)"
+                placeholder="Ask about careers, universities, bursaries, APS scores…  (paste images or PDFs anytime)"
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none resize-none leading-relaxed"
                 style={{ minHeight: "24px", maxHeight: "128px" }}

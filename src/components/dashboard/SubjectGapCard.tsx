@@ -22,8 +22,20 @@ type GapSubject = {
   mark: number;
   currentPoints: number;
   targetMark: number;
+  targetPoints: number;
   gap: number;
+  tip: string;
 };
+
+function improvementTip(mark: number): string {
+  if (mark >= 80) return "Maintain — keep doing past papers and teach a classmate to lock it in.";
+  if (mark >= 70) return "Drill application questions and tighten exam timing — distinction is close.";
+  if (mark >= 60) return "Aim for full marks on routine questions, then push into the harder ones.";
+  if (mark >= 50) return "Pick your 2 weakest topics and rework them with past papers and your teacher.";
+  if (mark >= 40) return "Past papers weekly — rewrite every question you got wrong until it's automatic.";
+  if (mark >= 30) return "Back to basics — work through every textbook example before sitting tests.";
+  return "Ask your teacher for extra support and start with each chapter's core concepts.";
+}
 
 function getGapSubjects(subjects: Subject[]): GapSubject[] {
   return subjects
@@ -37,7 +49,9 @@ function getGapSubjects(subjects: Subject[]): GapSubject[] {
         mark: s.mark,
         currentPoints,
         targetMark: target,
+        targetPoints: markToApsPoint(target),
         gap: target - s.mark,
+        tip: improvementTip(s.mark),
       };
     })
     .filter((s): s is GapSubject => s !== null)
@@ -64,19 +78,26 @@ export default function SubjectGapCard({ subjects }: { subjects: Subject[] }) {
 
       <div className="divide-y divide-gray-50">
         {gapSubjects.map((s) => (
-          <div key={s.name} className="flex items-center gap-3 px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-800">{s.name}</p>
-              <p className="mt-0.5 text-xs text-gray-400">
-                Currently {s.mark}% ({s.currentPoints} pts) → need {s.targetMark}%
-              </p>
+          <div key={s.name} className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-gray-800">{s.name}</p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  {s.mark}% → goal {s.targetMark}% ·{" "}
+                  <span className="font-semibold text-gray-500">
+                    {s.currentPoints} <span className="text-gray-300">→</span>{" "}
+                    <span className="text-emerald-600">{s.targetPoints}</span> APS
+                  </span>
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                  +{s.gap}%
+                </span>
+                <p className="mt-0.5 text-[10px] font-medium text-gray-400">to gain +1 pt</p>
+              </div>
             </div>
-            <div className="shrink-0 text-right">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                +{s.gap}%
-              </span>
-              <p className="mt-0.5 text-[10px] font-medium text-gray-400">to gain +1 pt</p>
-            </div>
+            <p className="mt-1.5 text-[11px] leading-snug text-gray-500">{s.tip}</p>
           </div>
         ))}
       </div>
