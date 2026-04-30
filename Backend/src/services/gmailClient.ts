@@ -19,9 +19,15 @@ export interface GmailMessageDetail {
 
 interface GmailPayload {
   headers: { name: string; value: string }[];
-  body: { data?: string };
+  body: { data?: string; attachmentId?: string; size?: number };
   parts?: GmailPayload[];
   mimeType: string;
+  filename?: string;
+}
+
+export interface PdfAttachment {
+  filename: string;
+  base64: string;
 }
 
 // ── Token refresh ────────────────────────────────────────────────────────────
@@ -120,6 +126,59 @@ export function extractEmailBody(payload: GmailPayload): string {
   }
 
   return "";
+}
+
+// ── Attachment extraction ────────────────────────────────────────────────────
+
+const MAX_PDFS_PER_EMAIL = 2;
+const MAX_PDF_BYTES = 5 * 1024 * 1024; // 5 MB per PDF
+
+function collectPdfParts(payload: GmailPayload, out: GmailPayload[]) {
+  if (out.length >= MAX_PDFS_PER_EMAIL) return;
+  const isPdf =
+    payload.mimeType === "application/pdf" ||
+    (payload.filename ?? "").toLowerCase().endsWith(".pdf");
+  if (isPdf && payload.body.attachmentId) {
+    if ((payload.body.size ?? 0) <= MAX_PDF_BYTES) out.push(payload);
+    return;
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) collectPdfParts(part, out);
+  }
+}
+
+export async function getAttachment(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<string> {
+  const res = await fetch(
+    `${GMAIL_BASE}/messages/${messageId}/attachments/${attachmentId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Gmail getAttachment failed: ${await res.text()}`);
+  const data = await res.json();
+  // Gmail returns base64url; convert to standard base64 for the Anthropic API.
+  return Buffer.from(String(data.data ?? ""), "base64url").toString("base64");
+}
+
+/** Pull up to MAX_PDFS_PER_EMAIL PDF attachments out of a Gmail message. */
+export async function extractPdfAttachments(
+  accessToken: string,
+  message: GmailMessageDetail,
+): Promise<PdfAttachment[]> {
+  const parts: GmailPayload[] = [];
+  collectPdfParts(message.payload, parts);
+  const out: PdfAttachment[] = [];
+  for (const part of parts) {
+    try {
+      const base64 = await getAttachment(accessToken, message.id, part.body.attachmentId!);
+      out.push({ filename: part.filename ?? "document.pdf", base64 });
+    } catch {
+      // Skip attachments we can't fetch — body alone will be classified.
+    }
+  }
+  return out;
 }
 
 /** Extract a specific header value from a message. */

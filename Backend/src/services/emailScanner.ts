@@ -34,6 +34,7 @@ import {
   searchMessages,
   getMessage,
   extractEmailBody,
+  extractPdfAttachments,
   getHeader,
   getProfileHistoryId,
   getMessagesSinceHistory,
@@ -171,11 +172,17 @@ export async function scanUserEmails(userId: string): Promise<void> {
     }
   }
 
-  // 4. Load already-processed message IDs (prevents duplicate analysis across history fallbacks)
+  // 4. Load already-acted-on message IDs. We only dedupe against messages that
+  //    actually triggered a status update — previously "skipped" emails (where
+  //    Claude returned unknown/low-confidence) stay eligible for re-analysis
+  //    so improvements to the analyser (e.g. now reading PDF attachments) can
+  //    catch what was missed before. The analyser cache absorbs the rerun cost
+  //    for genuinely unchanged emails.
   const { data: processedLogs } = await supabaseAdmin
     .from("email_scan_logs")
     .select("gmail_message_id")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("action_taken", "status_updated");
 
   const processedIds = new Set(
     (processedLogs ?? []).map((l: { gmail_message_id: string }) => l.gmail_message_id)
@@ -335,8 +342,16 @@ export async function scanUserEmails(userId: string): Promise<void> {
       continue;
     }
 
+    // Pull any PDF attachments — submission/acceptance letters often live there.
+    let pdfAttachments: { filename: string; base64: string }[] = [];
+    try {
+      pdfAttachments = await extractPdfAttachments(accessToken, detail);
+    } catch (err) {
+      console.error(`[scanner] Could not fetch attachments for ${candidate.id}:`, err);
+    }
+
     // Claude Haiku call — only reaches here for emails confirmed from a university
-    const analysis = await analyzeEmail(from, subject, body, matchedUni.name);
+    const analysis = await analyzeEmail(from, subject, body, matchedUni.name, pdfAttachments);
     processedIds.add(candidate.id);
 
     if (analysis.status === "unknown" || analysis.confidence === "low") {
@@ -483,15 +498,18 @@ async function writeLog(
   previousStatus: string | null,
   actionTaken: string
 ) {
-  await supabaseAdmin.from("email_scan_logs").insert({
-    user_id:          userId,
-    application_id:   applicationId,
-    gmail_message_id: gmailMessageId,
-    email_subject:    subject,
-    email_from:       from,
-    email_date:       emailDate,
-    detected_status:  detectedStatus,
-    previous_status:  previousStatus,
-    action_taken:     actionTaken,
-  });
+  await supabaseAdmin.from("email_scan_logs").upsert(
+    {
+      user_id:          userId,
+      application_id:   applicationId,
+      gmail_message_id: gmailMessageId,
+      email_subject:    subject,
+      email_from:       from,
+      email_date:       emailDate,
+      detected_status:  detectedStatus,
+      previous_status:  previousStatus,
+      action_taken:     actionTaken,
+    },
+    { onConflict: "user_id,gmail_message_id" },
+  );
 }

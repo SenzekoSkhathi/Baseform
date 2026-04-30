@@ -48,31 +48,56 @@ const VALID_STATUSES: DetectedStatus[] = [
   "in_progress", "submitted", "accepted", "rejected", "waitlisted", "unknown",
 ];
 
-function cacheKeyFor(from: string, subject: string, body: string, universityName: string): string {
+export interface EmailAttachment {
+  filename: string;
+  /** Standard base64-encoded PDF bytes. */
+  base64: string;
+}
+
+function cacheKeyFor(
+  from: string,
+  subject: string,
+  body: string,
+  universityName: string,
+  attachments: EmailAttachment[],
+): string {
   // sha256 of the canonical content — same email always → same key.
+  // v2 includes attachments so messages previously classified body-only
+  // (e.g. "see attached letter") get re-analysed with the PDFs included.
   const h = createHash("sha256");
   h.update(universityName + "\n" + from + "\n" + subject + "\n" + body.slice(0, 2000));
-  return `email-analysis:v1:${h.digest("hex")}`;
+  for (const att of attachments) {
+    h.update("\n" + att.filename + "\n");
+    // hash the bytes themselves so different PDFs produce different keys
+    h.update(createHash("sha256").update(att.base64).digest("hex"));
+  }
+  return `email-analysis:v2:${h.digest("hex")}`;
 }
 
 export async function analyzeEmail(
   from: string,
   subject: string,
   body: string,
-  universityName: string
+  universityName: string,
+  attachments: EmailAttachment[] = [],
 ): Promise<EmailAnalysisResult> {
   const truncatedBody = body.slice(0, 2000);
-  const cacheKey = cacheKeyFor(from, subject, truncatedBody, universityName);
+  const cacheKey = cacheKeyFor(from, subject, truncatedBody, universityName, attachments);
 
   const cached = await cache.get<EmailAnalysisResult>(cacheKey);
   if (cached && VALID_STATUSES.includes(cached.status)) {
     return cached;
   }
 
-  const userMessage = `
+  const attachmentNote = attachments.length
+    ? `\nThis email includes ${attachments.length} attached PDF(s). The actual status confirmation often lives inside an attachment (acceptance letter, submission receipt, etc.) rather than the email body — read the attachments carefully and let them override the body when they conflict.`
+    : "";
+
+  const userText = `
 University: ${universityName}
 From: ${from}
 Subject: ${subject}
+${attachmentNote}
 
 Email body:
 ${truncatedBody}
@@ -86,6 +111,20 @@ Return JSON in exactly this shape:
   "reason": "<one sentence explaining your decision>"
 }`.trim();
 
+  type ContentBlock =
+    | { type: "text"; text: string }
+    | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
+
+  const content: ContentBlock[] = [
+    ...attachments.map(
+      (att): ContentBlock => ({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: att.base64 },
+      }),
+    ),
+    { type: "text", text: userText },
+  ];
+
   let result: EmailAnalysisResult;
   try {
     const message = await withRetry(
@@ -94,7 +133,7 @@ Return JSON in exactly this shape:
           model: EMAIL_MODEL,
           max_tokens: 200,
           system: SYSTEM,
-          messages: [{ role: "user", content: userMessage }],
+          messages: [{ role: "user", content }],
         }),
       { label: "anthropic.analyzeEmail" }
     );
