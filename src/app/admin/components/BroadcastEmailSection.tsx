@@ -11,29 +11,27 @@ type Tier = (typeof TIERS)[number];
 
 type TierCounts = Record<Tier, number>;
 
-// Same Baseform shell rendered server-side by wrapInStandardHtml. Kept in
-// sync here so the iframe preview matches what recipients will receive.
-// The icon path is relative for in-app preview; the server uses an absolute
-// URL because email clients can't resolve relative paths.
+// Mirror of the server-side wrapInStandardHtml shell. Intentionally minimal —
+// no big logo banner, no accent strips, no campaign-style chrome. This makes
+// the email read like a personal note rather than a marketing blast, which is
+// the strongest content-side signal for landing in Gmail's Primary tab.
 function wrapPreview(subject: string, bodyHtml: string): string {
   const safeSubject = subject.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
-  const logoUrl = "/logo.svg";
   const orange = "#f97316";
   const ink = "#111827";
+  const muted = "#6b7280";
   return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safeSubject}</title></head>
-  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${ink};">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f5;padding:24px 0;">
-      <tr><td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-          <tr><td style="height:4px;background:${orange};line-height:4px;font-size:0;">&nbsp;</td></tr>
-          <tr><td style="padding:22px 32px;border-bottom:1px solid #f1f1ef;">
-            <img src="${logoUrl}" width="180" height="42" alt="Baseform" style="display:block;border:0;height:42px;width:auto;max-width:180px;"/>
-          </td></tr>
-          <tr><td style="padding:32px;font-size:15px;line-height:1.65;color:${ink};">${bodyHtml}</td></tr>
-          <tr><td style="padding:20px 32px;background:#fafaf9;border-top:1px solid #f1f1ef;font-size:12px;color:#6b7280;">You received this email because you have a Baseform account.<br/><a href="https://baseformapplications.com" style="color:${orange};text-decoration:none;font-weight:600;">baseformapplications.com</a></td></tr>
-        </table>
-      </td></tr>
-    </table>
+  <body style="margin:0;padding:24px 16px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:${ink};font-size:15px;line-height:1.6;">
+    <div style="max-width:560px;margin:0 auto;">
+      <p style="margin:0 0 24px 0;font-weight:700;font-size:16px;letter-spacing:-0.01em;">
+        <span style="color:${ink};">base</span><span style="color:${orange};">form</span>
+      </p>
+      ${bodyHtml}
+      <p style="margin:32px 0 0 0;padding-top:16px;border-top:1px solid #eeeeec;font-size:12px;color:${muted};line-height:1.5;">
+        You're receiving this because you have a Baseform account.
+        <a href="https://baseformapplications.com/settings" style="color:${muted};text-decoration:underline;">Manage email preferences</a>.
+      </p>
+    </div>
   </body></html>`;
 }
 

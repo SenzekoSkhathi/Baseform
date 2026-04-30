@@ -3,6 +3,10 @@
 // broadcast finishes in ~10 HTTP calls instead of 1000.
 
 const FROM = process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>";
+// Set EMAIL_REPLY_TO to a real human inbox (e.g. "senzeko@baseformapplications.com").
+// Gmail down-ranks senders whose Reply-To matches a no-reply address — having a
+// real reply target is one of the strongest signals for Primary tab placement.
+const REPLY_TO = process.env.EMAIL_REPLY_TO ?? "";
 const BATCH_SIZE = 100;
 
 // Public host used for absolute image/link URLs inside email HTML. Email
@@ -35,8 +39,13 @@ export type BroadcastResult = {
  * Wrap raw body content in the Baseform-branded HTML shell. Pass the body's
  * inner HTML (no <html>/<body> tags) and you get a complete email document.
  */
+// Intentionally minimal HTML shell — no big logo banner, no accent strips, no
+// marketing-style buttons in the chrome. Gmail's Promotions classifier looks
+// at HTML weight, image-to-text ratio, and "marketing card" patterns. Keeping
+// the wrapper close to a plain personal letter is one of the strongest levers
+// we have for landing in the Primary tab. Brand colour is preserved via the
+// wordmark + footer link; that's enough identity without screaming "campaign."
 export function wrapInStandardHtml(subject: string, bodyHtml: string): string {
-  const logoUrl = `${EMAIL_BASE_URL}/logo.svg`;
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -44,46 +53,44 @@ export function wrapInStandardHtml(subject: string, bodyHtml: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(subject)}</title>
   </head>
-  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${BRAND.ink};">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f5;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${BRAND.paper};border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-            <!-- Brand accent strip -->
-            <tr><td style="height:4px;background:${BRAND.orange};line-height:4px;font-size:0;">&nbsp;</td></tr>
-
-            <!-- Logo header -->
-            <tr>
-              <td style="padding:22px 32px;border-bottom:1px solid ${BRAND.border};">
-                <img src="${logoUrl}" width="180" height="42" alt="Baseform"
-                     style="display:block;border:0;height:42px;width:auto;max-width:180px;" />
-              </td>
-            </tr>
-
-            <!-- Body -->
-            <tr>
-              <td style="padding:32px;font-size:15px;line-height:1.65;color:${BRAND.ink};">
-                ${bodyHtml}
-              </td>
-            </tr>
-
-            <!-- Footer -->
-            <tr>
-              <td style="padding:20px 32px;background:${BRAND.surface};border-top:1px solid ${BRAND.border};font-size:12px;color:${BRAND.muted};">
-                You received this email because you have a Baseform account.<br />
-                <a href="${EMAIL_BASE_URL}" style="color:${BRAND.orange};text-decoration:none;font-weight:600;">baseformapplications.com</a>
-                &nbsp;·&nbsp;
-                <a href="${EMAIL_BASE_URL}/dashboard" style="color:${BRAND.muted};text-decoration:underline;">Dashboard</a>
-                &nbsp;·&nbsp;
-                <a href="${EMAIL_BASE_URL}/settings" style="color:${BRAND.muted};text-decoration:underline;">Settings</a>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
+  <body style="margin:0;padding:24px 16px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:${BRAND.ink};font-size:15px;line-height:1.6;">
+    <div style="max-width:560px;margin:0 auto;">
+      <p style="margin:0 0 24px 0;font-weight:700;font-size:16px;letter-spacing:-0.01em;">
+        <span style="color:${BRAND.ink};">base</span><span style="color:${BRAND.orange};">form</span>
+      </p>
+      ${bodyHtml}
+      <p style="margin:32px 0 0 0;padding-top:16px;border-top:1px solid #eeeeec;font-size:12px;color:${BRAND.muted};line-height:1.5;">
+        You're receiving this because you have a Baseform account.
+        <a href="${EMAIL_BASE_URL}/settings" style="color:${BRAND.muted};text-decoration:underline;">Manage email preferences</a>.
+      </p>
+    </div>
   </body>
 </html>`;
+}
+
+/**
+ * Naive HTML → text conversion for the multipart plain-text alternative.
+ * Marketing emails almost never include a text/plain part — providing one
+ * pushes Gmail away from the Promotions classifier.
+ */
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function escapeHtml(s: string): string {
@@ -123,12 +130,18 @@ export async function sendBroadcast(opts: {
 
   for (let i = 0; i < opts.recipients.length; i += BATCH_SIZE) {
     const slice = opts.recipients.slice(i, i + BATCH_SIZE);
-    const payload = slice.map((r) => ({
-      from: FROM,
-      to: r.email,
-      subject: opts.subject,
-      html: personalize(opts.html, r),
-    }));
+    const payload = slice.map((r) => {
+      const personalisedHtml = personalize(opts.html, r);
+      const message: Record<string, unknown> = {
+        from: FROM,
+        to: r.email,
+        subject: opts.subject,
+        html: personalisedHtml,
+        text: htmlToPlainText(personalisedHtml),
+      };
+      if (REPLY_TO) message.reply_to = REPLY_TO;
+      return message;
+    });
 
     try {
       const res = await fetch("https://api.resend.com/emails/batch", {
