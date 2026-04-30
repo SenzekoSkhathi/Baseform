@@ -15,6 +15,7 @@ import { MetricsOverviewSection } from "./components/MetricsOverviewSection";
 import { ContentAuditSection } from "./components/ContentAuditSection";
 import { CreditVaultSection } from "./components/CreditVaultSection";
 import { CreditGrantSection } from "./components/CreditGrantSection";
+import { BroadcastEmailSection } from "./components/BroadcastEmailSection";
 import { PaymentReconcileSection } from "./components/PaymentReconcileSection";
 import { SystemHealthSection } from "./components/SystemHealthSection";
 import { paginate, sortBy } from "./utils";
@@ -1142,6 +1143,7 @@ export default function AdminClient() {
             ["sec-plans",        "Plans"],
             ["sec-vault",        "Credit Vault"],
             ["sec-grants",       "Credit Grants"],
+            ["sec-broadcast",    "Broadcast Email"],
             ["sec-reconcile",    "Reconcile Payment"],
             ["sec-health",       "Payment Health"],
             ["sec-settings",     "Settings"],
@@ -1389,6 +1391,10 @@ export default function AdminClient() {
 
         <div id="sec-grants">
         <CreditGrantSection onToast={pushToast} />
+        </div>
+
+        <div id="sec-broadcast">
+        <BroadcastEmailSection onToast={pushToast} />
         </div>
 
         <div id="sec-reconcile">
