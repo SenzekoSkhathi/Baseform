@@ -5,6 +5,22 @@
 const FROM = process.env.EMAIL_FROM ?? "Baseform Inc. <noreply@baseformapplications.com>";
 const BATCH_SIZE = 100;
 
+// Public host used for absolute image/link URLs inside email HTML. Email
+// clients won't resolve relative paths, so we always need this as an absolute
+// origin. Override per environment if your production host differs.
+export const EMAIL_BASE_URL = process.env.EMAIL_BASE_URL ?? "https://baseformapplications.com";
+
+// Brand palette — keep in sync with Logo component / Tailwind theme.
+export const BRAND = {
+  orange: "#f97316",   // orange-500 — primary accent
+  orangeDark: "#ea580c", // orange-600 — button hover / footer accents
+  ink: "#111827",      // gray-900 — primary text + wordmark "base"
+  paper: "#ffffff",
+  surface: "#fafaf9",  // footer bg
+  border: "#f1f1ef",
+  muted: "#6b7280",    // gray-500 — footer copy
+} as const;
+
 export type BroadcastRecipient = {
   email: string;
   firstName: string | null;
@@ -20,6 +36,7 @@ export type BroadcastResult = {
  * inner HTML (no <html>/<body> tags) and you get a complete email document.
  */
 export function wrapInStandardHtml(subject: string, bodyHtml: string): string {
+  const logoUrl = `${EMAIL_BASE_URL}/logo.svg`;
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -27,25 +44,38 @@ export function wrapInStandardHtml(subject: string, bodyHtml: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(subject)}</title>
   </head>
-  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937;">
+  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${BRAND.ink};">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f5;padding:24px 0;">
       <tr>
         <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${BRAND.paper};border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+            <!-- Brand accent strip -->
+            <tr><td style="height:4px;background:${BRAND.orange};line-height:4px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Logo header -->
             <tr>
-              <td style="padding:24px 32px;border-bottom:1px solid #f1f1ef;">
-                <span style="display:inline-block;font-weight:800;font-size:18px;color:#111827;letter-spacing:-0.01em;">Baseform</span>
+              <td style="padding:22px 32px;border-bottom:1px solid ${BRAND.border};">
+                <img src="${logoUrl}" width="180" height="42" alt="Baseform"
+                     style="display:block;border:0;height:42px;width:auto;max-width:180px;" />
               </td>
             </tr>
+
+            <!-- Body -->
             <tr>
-              <td style="padding:32px;font-size:15px;line-height:1.65;color:#1f2937;">
+              <td style="padding:32px;font-size:15px;line-height:1.65;color:${BRAND.ink};">
                 ${bodyHtml}
               </td>
             </tr>
+
+            <!-- Footer -->
             <tr>
-              <td style="padding:20px 32px;background:#fafaf9;border-top:1px solid #f1f1ef;font-size:12px;color:#6b7280;">
+              <td style="padding:20px 32px;background:${BRAND.surface};border-top:1px solid ${BRAND.border};font-size:12px;color:${BRAND.muted};">
                 You received this email because you have a Baseform account.<br />
-                <a href="https://baseformapplications.com" style="color:#f97316;text-decoration:none;">baseformapplications.com</a>
+                <a href="${EMAIL_BASE_URL}" style="color:${BRAND.orange};text-decoration:none;font-weight:600;">baseformapplications.com</a>
+                &nbsp;·&nbsp;
+                <a href="${EMAIL_BASE_URL}/dashboard" style="color:${BRAND.muted};text-decoration:underline;">Dashboard</a>
+                &nbsp;·&nbsp;
+                <a href="${EMAIL_BASE_URL}/settings" style="color:${BRAND.muted};text-decoration:underline;">Settings</a>
               </td>
             </tr>
           </table>

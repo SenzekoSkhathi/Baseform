@@ -13,16 +13,24 @@ type TierCounts = Record<Tier, number>;
 
 // Same Baseform shell rendered server-side by wrapInStandardHtml. Kept in
 // sync here so the iframe preview matches what recipients will receive.
+// The icon path is relative for in-app preview; the server uses an absolute
+// URL because email clients can't resolve relative paths.
 function wrapPreview(subject: string, bodyHtml: string): string {
   const safeSubject = subject.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+  const logoUrl = "/logo.svg";
+  const orange = "#f97316";
+  const ink = "#111827";
   return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${safeSubject}</title></head>
-  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937;">
+  <body style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${ink};">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f5;padding:24px 0;">
       <tr><td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-          <tr><td style="padding:24px 32px;border-bottom:1px solid #f1f1ef;"><span style="display:inline-block;font-weight:800;font-size:18px;color:#111827;letter-spacing:-0.01em;">Baseform</span></td></tr>
-          <tr><td style="padding:32px;font-size:15px;line-height:1.65;color:#1f2937;">${bodyHtml}</td></tr>
-          <tr><td style="padding:20px 32px;background:#fafaf9;border-top:1px solid #f1f1ef;font-size:12px;color:#6b7280;">You received this email because you have a Baseform account.<br/><a href="https://baseformapplications.com" style="color:#f97316;text-decoration:none;">baseformapplications.com</a></td></tr>
+          <tr><td style="height:4px;background:${orange};line-height:4px;font-size:0;">&nbsp;</td></tr>
+          <tr><td style="padding:22px 32px;border-bottom:1px solid #f1f1ef;">
+            <img src="${logoUrl}" width="180" height="42" alt="Baseform" style="display:block;border:0;height:42px;width:auto;max-width:180px;"/>
+          </td></tr>
+          <tr><td style="padding:32px;font-size:15px;line-height:1.65;color:${ink};">${bodyHtml}</td></tr>
+          <tr><td style="padding:20px 32px;background:#fafaf9;border-top:1px solid #f1f1ef;font-size:12px;color:#6b7280;">You received this email because you have a Baseform account.<br/><a href="https://baseformapplications.com" style="color:${orange};text-decoration:none;font-weight:600;">baseformapplications.com</a></td></tr>
         </table>
       </td></tr>
     </table>
@@ -227,7 +235,7 @@ export function BroadcastEmailSection({ onToast }: Props) {
               title="Email preview"
               sandbox=""
               srcDoc={previewHtml}
-              className="h-[600px] w-full rounded-lg border border-gray-200 bg-white"
+              className="h-150 w-full rounded-lg border border-gray-200 bg-white"
             />
             <p className="mt-2 text-[11px] text-gray-500">
               The <code>{"{{first_name}}"}</code> token is replaced per recipient at send time. The preview shows it as-is.
