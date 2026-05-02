@@ -150,6 +150,7 @@ export type AdminUser = {
   guardian_whatsapp_number: string | null;
   guardian_relationship: string | null;
   guardian_email: string | null;
+  cell_phone: string | null;
   subjects: AdminUserSubject[];
   aps: number;
 };

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { HeartbeatProvider } from "@/components/HeartbeatProvider";
 
 export const metadata: Metadata = {
   title: "Baseform — Your University Application Co-pilot",
@@ -63,6 +64,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <HeartbeatProvider />
         {children}
       </body>
     </html>

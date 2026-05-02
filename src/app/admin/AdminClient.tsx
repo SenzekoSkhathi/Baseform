@@ -12,6 +12,8 @@ import {
 import { PlanManagementSection } from "./components/PlanManagementSection";
 import { SiteSettingsSection } from "./components/SiteSettingsSection";
 import { MetricsOverviewSection } from "./components/MetricsOverviewSection";
+import { AnalyticsDashboardSection } from "./components/AnalyticsDashboardSection";
+import type { AnalyticsResponse } from "@/lib/admin/userAnalytics";
 import { ContentAuditSection } from "./components/ContentAuditSection";
 import { CreditVaultSection } from "./components/CreditVaultSection";
 import { CreditGrantSection } from "./components/CreditGrantSection";
@@ -40,6 +42,8 @@ const PAGE_SIZE = 10;
 
 export default function AdminClient() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [universities, setUniversities] = useState<University[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
@@ -248,6 +252,28 @@ export default function AdminClient() {
   useEffect(() => {
     loadAll();
   }, [rangePreset, appliedCustomFrom, appliedCustomTo, alertHistorySeverity, alertHistoryKey, alertHistoryFrom, alertHistoryTo, contentAuditEntityType, contentAuditAction, contentAuditFrom, contentAuditTo]);
+
+  async function loadAnalytics() {
+    setAnalyticsLoading(true);
+    try {
+      const params = buildMetricsQueryParams();
+      const res = await fetch(`/api/admin/analytics?${params.toString()}`);
+      const payload = (await readJsonSafe(res)) as AnalyticsResponse;
+      setAnalytics(payload);
+    } catch (error) {
+      pushToast("error", error instanceof Error ? error.message : "Could not load analytics");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAnalytics();
+    const interval = window.setInterval(() => {
+      void loadAnalytics();
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [rangePreset, appliedCustomFrom, appliedCustomTo]);
 
   async function loadUsers() {
     setUserLoading(true);
@@ -1136,6 +1162,7 @@ export default function AdminClient() {
         <div className="sticky top-0 z-20 -mx-4 flex gap-2 overflow-x-auto bg-[#fff9f2]/90 px-4 py-2 backdrop-blur-sm md:-mx-6 md:px-6">
           {([
             ["sec-metrics",      "Metrics"],
+            ["sec-analytics",    "Analytics"],
             ["sec-users",        "Users"],
             ["sec-universities", "Universities"],
             ["sec-programmes",   "Programmes"],
@@ -1185,6 +1212,14 @@ export default function AdminClient() {
           onAlertHistoryFromChange={setAlertHistoryFrom}
           alertHistoryTo={alertHistoryTo}
           onAlertHistoryToChange={setAlertHistoryTo}
+        />
+        </div>
+
+        <div id="sec-analytics">
+        <AnalyticsDashboardSection
+          analytics={analytics}
+          loading={analyticsLoading}
+          onRefresh={loadAnalytics}
         />
         </div>
 

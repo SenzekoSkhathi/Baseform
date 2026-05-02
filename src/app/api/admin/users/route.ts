@@ -63,6 +63,7 @@ export async function GET(req: Request) {
 
   const profileIds = pageItems.map((p) => p.id);
   const subjectsByUser: Record<string, { subject_name: string; mark: number }[]> = {};
+  const phoneByUser: Record<string, string | null> = {};
 
   if (profileIds.length > 0) {
     const { data: subjectRows } = await admin
@@ -76,6 +77,14 @@ export async function GET(req: Request) {
       if (!subjectsByUser[key]) subjectsByUser[key] = [];
       subjectsByUser[key].push({ subject_name: row.subject_name, mark: row.mark });
     }
+
+    const phoneResults = await Promise.all(
+      profileIds.map((id) => admin.auth.admin.getUserById(id))
+    );
+    phoneResults.forEach((res, i) => {
+      const phone = res.data?.user?.phone;
+      phoneByUser[profileIds[i]] = phone && phone.trim() ? phone : null;
+    });
   }
 
   return NextResponse.json(
@@ -101,6 +110,7 @@ export async function GET(req: Request) {
           guardian_whatsapp_number: profile.guardian_whatsapp_number ?? null,
           guardian_relationship: profile.guardian_relationship ?? null,
           guardian_email: profile.guardian_email ?? null,
+          cell_phone: phoneByUser[profile.id] ?? null,
           subjects,
           aps,
         };

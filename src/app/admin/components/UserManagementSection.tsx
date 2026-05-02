@@ -69,6 +69,7 @@ function UserDetails({ user }: { user: AdminUser }) {
       <div className="grid gap-3 md:grid-cols-3">
         <DetailField label="Full name" value={user.full_name} />
         <DetailField label="Email" value={user.email} />
+        <DetailField label="Cell phone" value={user.cell_phone} />
         <DetailField label="Tier" value={user.tier} />
         <DetailField label="School" value={user.school_name} />
         <DetailField label="Grade" value={user.grade_year} />
@@ -197,6 +198,7 @@ export function UserManagementSection(props: UserManagementSectionProps) {
               <th className="px-2 py-2">
                 <SortButton label="Email" active={props.userSortKey === "email"} direction={props.userSortDirection} onClick={props.onSortByEmail} />
               </th>
+              <th className="px-2 py-2">Cell phone</th>
               <th className="px-2 py-2">School</th>
               <th className="px-2 py-2">Grade</th>
               <th className="px-2 py-2">APS</th>
@@ -243,6 +245,15 @@ export function UserManagementSection(props: UserManagementSectionProps) {
                       </div>
                     </td>
                     <td className="px-2 py-2 text-gray-600">{user.email || "-"}</td>
+                    <td className="px-2 py-2 text-gray-600">
+                      {user.cell_phone ? (
+                        <a href={`tel:${user.cell_phone}`} className="text-blue-600 hover:underline">
+                          {user.cell_phone}
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-gray-600">{user.school_name || "-"}</td>
                     <td className="px-2 py-2 text-gray-600">{user.grade_year || "-"}</td>
                     <td className="px-2 py-2 font-semibold text-orange-600">{user.aps ? user.aps : "-"}</td>
@@ -269,7 +280,7 @@ export function UserManagementSection(props: UserManagementSectionProps) {
                   {isExpanded && (
                     <tr className="border-b border-gray-100 bg-gray-50/40">
                       <td></td>
-                      <td colSpan={8} className="px-2 py-3">
+                      <td colSpan={9} className="px-2 py-3">
                         <UserDetails user={user} />
                       </td>
                     </tr>

@@ -273,7 +273,7 @@ export function MetricsOverviewSection(props: MetricsOverviewSectionProps) {
 
       <div className="mt-5 rounded-2xl border border-gray-100 bg-white p-4">
         <p className="text-sm font-bold text-gray-900">BaseBot token usage by day</p>
-        <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+        <div className="mt-3 max-h-90 space-y-2 overflow-y-auto pr-1">
           {daily.map((point) => (
             <div key={point.day} className="grid grid-cols-[90px_1fr_70px] items-center gap-2">
               <p className="text-xs text-gray-500">{point.day.slice(5)}</p>
