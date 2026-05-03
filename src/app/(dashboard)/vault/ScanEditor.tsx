@@ -149,18 +149,22 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
   }, [displayedFile]);
 
   // ---- Stage size tracking ------------------------------------------------
+  // Depend on imgDim too: on first mount we render a spinner until the image
+  // dimensions resolve, so the stage div doesn't exist yet. We need to
+  // re-measure once it appears, otherwise displayGeom stays null and the
+  // viewfinder renders fully black.
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      setStageBox({ w: r.width, h: r.height });
+      if (r.width > 0 && r.height > 0) setStageBox({ w: r.width, h: r.height });
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tab]);
+  }, [tab, imgDim]);
 
   // ---- Auto-seed the quad the first time we know image dimensions --------
   useEffect(() => {
