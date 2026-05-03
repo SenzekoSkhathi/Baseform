@@ -336,6 +336,18 @@ function boxBlurGray(src: Float32Array, w: number, h: number, radius: number): F
   return out;
 }
 
+/**
+ * Subtractive illumination flattening. Each pixel is shifted by `ref - bg`
+ * where `bg` is the local low-frequency mean and `ref` is the well-lit
+ * reference (~95th-percentile of the background). The shift is capped so a
+ * glowing region in the frame (laptop screen, window) doesn't drag everything
+ * else into clipping.
+ *
+ * Used as a pre-pass for B&W binarisation only; do NOT call this from the
+ * colour-preserving Auto / Magic filters — divisive correction crushes
+ * highlights and produces the "white blowout" look on photos that contain
+ * naturally bright objects.
+ */
 export function flattenIllumination(src: HTMLCanvasElement): HTMLCanvasElement {
   const w = src.width, h = src.height;
   const out = document.createElement("canvas");
@@ -346,9 +358,14 @@ export function flattenIllumination(src: HTMLCanvasElement): HTMLCanvasElement {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
 
-  // Per-channel illumination map. Radius scales with image size.
-  const radius = Math.max(8, Math.round(Math.min(w, h) / 12));
-  const channels: Float32Array[] = [new Float32Array(w * h), new Float32Array(w * h), new Float32Array(w * h)];
+  const radius = Math.max(8, Math.round(Math.min(w, h) / 10));
+  const MAX_SHIFT = 55;
+
+  const channels: Float32Array[] = [
+    new Float32Array(w * h),
+    new Float32Array(w * h),
+    new Float32Array(w * h),
+  ];
   for (let i = 0, p = 0; i < d.length; i += 4, p++) {
     channels[0][p] = d[i];
     channels[1][p] = d[i + 1];
@@ -357,14 +374,18 @@ export function flattenIllumination(src: HTMLCanvasElement): HTMLCanvasElement {
 
   for (let c = 0; c < 3; c++) {
     const bg = boxBlurGray(channels[c], w, h, radius);
+
+    // Reference brightness = 90th percentile of the background, sampled.
+    // A full sort on every pixel would be wasteful at high res; sample stride.
+    const stride = Math.max(1, Math.floor((w * h) / 4096));
+    const sample: number[] = [];
+    for (let p = 0; p < w * h; p += stride) sample.push(bg[p]);
+    sample.sort((a, b) => a - b);
+    const ref = sample[Math.floor(sample.length * 0.9)] ?? 220;
+
     for (let p = 0; p < w * h; p++) {
-      const v = channels[c][p];
-      const b = bg[p];
-      // Divide-and-rescale: keep dark text dark, push paper to ~245.
-      const ratio = b > 1 ? v / b : 1;
-      const norm = ratio * 235;
-      const i = p * 4 + c;
-      d[i] = clampByte(norm);
+      const shift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, ref - bg[p]));
+      d[p * 4 + c] = clampByte(channels[c][p] + shift);
     }
   }
 
@@ -385,28 +406,28 @@ function copyCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 export function applyAutoEnhance(src: HTMLCanvasElement): HTMLCanvasElement {
-  // Flatten illumination first so the contrast boost lands on a clean page.
-  const flat = flattenIllumination(src);
-  const ctx = flat.getContext("2d", { willReadFrequently: true })!;
-  const img = ctx.getImageData(0, 0, flat.width, flat.height);
+  // Gentle contrast + slight brightness lift. No illumination flattening —
+  // for colour photos that crushes highlights and produces a washed-out look.
+  const out = copyCanvas(src);
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  const img = ctx.getImageData(0, 0, out.width, out.height);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const r = (d[i] - 128) * 1.25 + 128 + 6;
-    const g = (d[i + 1] - 128) * 1.25 + 128 + 6;
-    const b = (d[i + 2] - 128) * 1.25 + 128 + 6;
-    d[i] = clampByte(r);
-    d[i + 1] = clampByte(g);
-    d[i + 2] = clampByte(b);
+    d[i] = clampByte((d[i] - 128) * 1.18 + 128 + 4);
+    d[i + 1] = clampByte((d[i + 1] - 128) * 1.18 + 128 + 4);
+    d[i + 2] = clampByte((d[i + 2] - 128) * 1.18 + 128 + 4);
     d[i + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
-  return flat;
+  return out;
 }
 
 export function applyMagicColor(src: HTMLCanvasElement): HTMLCanvasElement {
-  const flat = flattenIllumination(src);
-  const ctx = flat.getContext("2d", { willReadFrequently: true })!;
-  const img = ctx.getImageData(0, 0, flat.width, flat.height);
+  // Per-channel percentile stretch. Removes warm/cool casts from indoor
+  // lighting while preserving original colour.
+  const out = copyCanvas(src);
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  const img = ctx.getImageData(0, 0, out.width, out.height);
   const d = img.data;
 
   const histR = new Uint32Array(256);
@@ -445,7 +466,7 @@ export function applyMagicColor(src: HTMLCanvasElement): HTMLCanvasElement {
     d[i + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
-  return flat;
+  return out;
 }
 
 export function applyGrayscale(src: HTMLCanvasElement): HTMLCanvasElement {

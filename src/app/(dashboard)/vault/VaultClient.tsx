@@ -509,7 +509,7 @@ export default function VaultClient({ initialFiles }: Props) {
   const [autoCapture, setAutoCapture] = useState(true);
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
-  const [captureFilter, setCaptureFilter] = useState<FilterMode>("auto");
+  const [captureFilter, setCaptureFilter] = useState<FilterMode>("original");
   const [ocrEnabled, setOcrEnabled] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<{ page: number; total: number; status: string } | null>(null);
   const liveQuadRef = useRef<Point[] | null>(null);
@@ -1071,6 +1071,19 @@ export default function VaultClient({ initialFiles }: Props) {
     window.open(json.url, "_blank", "noopener,noreferrer");
   }
 
+  // Track blob URLs created for the reader so we can revoke them. Mobile
+  // browsers (Samsung Internet, some Chrome builds) refuse to render PDFs
+  // from a cross-origin signed URL inside an <iframe>; fetching the bytes
+  // and pointing the iframe at a same-origin blob: URL sidesteps that.
+  const readerBlobUrlRef = useRef<string | null>(null);
+
+  function revokeReaderBlobUrl() {
+    if (readerBlobUrlRef.current) {
+      URL.revokeObjectURL(readerBlobUrlRef.current);
+      readerBlobUrlRef.current = null;
+    }
+  }
+
   async function openReader(file: VaultFile) {
     setReaderFile(file);
     setReaderKind(readerKindForFile(file));
@@ -1078,6 +1091,7 @@ export default function VaultClient({ initialFiles }: Props) {
     setReaderText(null);
     setReaderError(null);
     setReaderLoading(true);
+    revokeReaderBlobUrl();
 
     try {
       const res = await fetch(`/api/vault/download?path=${encodeURIComponent(file.path)}`);
@@ -1091,15 +1105,32 @@ export default function VaultClient({ initialFiles }: Props) {
       const signedUrl = json.url as string;
       const kind = readerKindForFile(file);
       setReaderKind(kind);
-      setReaderUrl(signedUrl);
 
-      if (kind === "text") {
+      if (kind === "pdf") {
+        // Fetch as blob and inline via blob: URL — iframe inherits our origin
+        // and the storage host's frame-options no longer apply.
+        try {
+          const pdfRes = await fetch(signedUrl);
+          if (!pdfRes.ok) throw new Error("fetch failed");
+          const blob = await pdfRes.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          readerBlobUrlRef.current = blobUrl;
+          setReaderUrl(blobUrl);
+        } catch {
+          // Fallback: direct signed URL. Some browsers will still render it,
+          // and even when blocked the user can still hit Download.
+          setReaderUrl(signedUrl);
+        }
+      } else if (kind === "text") {
+        setReaderUrl(signedUrl);
         const textRes = await fetch(signedUrl);
         if (!textRes.ok) {
           setReaderError("Could not load text preview.");
         } else {
           setReaderText(await textRes.text());
         }
+      } else {
+        setReaderUrl(signedUrl);
       }
     } catch {
       setReaderError("Could not open this document right now.");
@@ -1109,6 +1140,7 @@ export default function VaultClient({ initialFiles }: Props) {
   }
 
   function closeReader() {
+    revokeReaderBlobUrl();
     setReaderFile(null);
     setReaderUrl(null);
     setReaderText(null);
