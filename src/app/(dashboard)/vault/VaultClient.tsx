@@ -226,6 +226,21 @@ async function loadImageForPdf(file: File): Promise<{ canvas: HTMLCanvasElement;
   }
 }
 
+// Stamp a tiny "baseform" mark in the bottom-right corner of the current
+// jsPDF page. Light gray, small font, positioned just inside the page edge.
+function stampBaseformWatermark(
+  pdf: import("jspdf").jsPDF,
+  pageWidth: number,
+  pageHeight: number,
+): void {
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7);
+  pdf.setTextColor(170, 170, 170);
+  pdf.text("baseform", pageWidth - 14, pageHeight - 10, { align: "right", baseline: "alphabetic" });
+  // Restore defaults so subsequent OCR / drawing isn't affected.
+  pdf.setTextColor(0, 0, 0);
+}
+
 async function buildPdfFromImages(images: File[]): Promise<Blob> {
   if (!images.length) throw new Error("No images selected.");
 
@@ -250,6 +265,8 @@ async function buildPdfFromImages(images: File[]): Promise<Blob> {
     // Pass canvas directly to avoid huge Base64 strings in JS memory.
     // MEDIUM compression keeps scanned text readable without bloating the PDF.
     pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "MEDIUM");
+
+    stampBaseformWatermark(pdf, pageWidth, pageHeight);
 
     // Release backing pixels as soon as page has been added.
     image.canvas.width = 1;
@@ -440,6 +457,8 @@ async function buildSearchablePdfFromImages(
       const y = (pageHeight - renderHeight) / 2;
 
       pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "MEDIUM");
+
+      stampBaseformWatermark(pdf, pageWidth, pageHeight);
 
       // Run OCR on the canvas BEFORE we shrink it. tesseract.js accepts the
       // canvas directly and gives us per-word pixel-space bounding boxes.
