@@ -15,10 +15,23 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  Zap,
+  ZapOff,
+  ScanText,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import ScanEditor, { type ScanEditorSavePayload } from "./ScanEditor";
+import {
+  type FilterMode,
+  type Point,
+  applyFilter,
+  detectDocumentQuad,
+  downscaleGray,
+  imageDataToGray,
+  quadIsStable,
+  warpQuadToRect,
+} from "./scanPipeline";
 
 export type VaultFile = {
   path: string;
@@ -344,6 +357,130 @@ async function autoRotateScanImageFile(input: File): Promise<File> {
   return rotateScanImageFile(input, "right");
 }
 
+// Bake a captured camera frame into a deskewed, filtered, and compressed
+// scan-ready JPEG. Runs entirely in-memory; the source canvas is released
+// before the function returns.
+async function bakeCapturedFrame(
+  source: HTMLCanvasElement,
+  detectedQuad: Point[] | null,
+  filter: FilterMode,
+): Promise<File> {
+  let working: HTMLCanvasElement = source;
+  if (detectedQuad) {
+    try {
+      working = warpQuadToRect(source, detectedQuad);
+      source.width = 1;
+      source.height = 1;
+    } catch {
+      // Singular/degenerate quads fall back to the raw frame.
+      working = source;
+    }
+  }
+  const filtered = filter === "original" ? working : applyFilter(working, filter);
+  if (filtered !== working) {
+    working.width = 1;
+    working.height = 1;
+  }
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    filtered.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Could not encode scan."))),
+      "image/jpeg",
+      0.92,
+    );
+  });
+  filtered.width = 1;
+  filtered.height = 1;
+  return new File([blob], `scan-${Date.now()}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+}
+
+// Build a searchable PDF: each page contains the scanned image plus an
+// invisible OCR text layer aligned with the page bounds. Tesseract is
+// loaded lazily so users who never enable OCR never download the WASM.
+async function buildSearchablePdfFromImages(
+  images: File[],
+  onProgress?: (pageIndex: number, totalPages: number, status: string) => void,
+): Promise<Blob> {
+  if (!images.length) throw new Error("No images selected.");
+
+  const [{ jsPDF }, tesseractModule] = await Promise.all([
+    import("jspdf"),
+    import("tesseract.js"),
+  ]);
+  const tesseract = tesseractModule as unknown as {
+    createWorker: (lang: string) => Promise<{
+      recognize: (image: HTMLCanvasElement | File) => Promise<{
+        data: { words: { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] };
+      }>;
+      terminate: () => Promise<void>;
+    }>;
+  };
+
+  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 24;
+
+  onProgress?.(0, images.length, "Loading OCR engine");
+  const worker = await tesseract.createWorker("eng");
+  try {
+    for (let index = 0; index < images.length; index += 1) {
+      if (index > 0) pdf.addPage("a4", "portrait");
+
+      onProgress?.(index, images.length, "Reading text");
+      const image = await loadImageForPdf(images[index]);
+      const maxWidth = pageWidth - margin * 2;
+      const maxHeight = pageHeight - margin * 2;
+      const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+      const renderWidth = image.width * scale;
+      const renderHeight = image.height * scale;
+      const x = (pageWidth - renderWidth) / 2;
+      const y = (pageHeight - renderHeight) / 2;
+
+      pdf.addImage(image.canvas, "JPEG", x, y, renderWidth, renderHeight, undefined, "MEDIUM");
+
+      // Run OCR on the canvas BEFORE we shrink it. tesseract.js accepts the
+      // canvas directly and gives us per-word pixel-space bounding boxes.
+      const result = await worker.recognize(image.canvas);
+      const words = result.data.words ?? [];
+      const pxToPt = renderWidth / image.width;
+
+      // Render invisible text behind the image so PDF readers can select it.
+      // Rendering mode 3 = invisible (paint nothing), but glyphs still feed
+      // the text-extraction layer.
+      // jsPDF type defs don't expose every option, so cast where needed.
+      // Anchor each word at its baseline in pt-space.
+      const setRenderingMode = (pdf as unknown as {
+        setTextRenderingMode?: (mode: number) => void;
+      }).setTextRenderingMode;
+      if (setRenderingMode) setRenderingMode.call(pdf, 3);
+
+      for (const w of words) {
+        if (!w.text.trim()) continue;
+        const wPt = (w.bbox.x1 - w.bbox.x0) * pxToPt;
+        const hPt = (w.bbox.y1 - w.bbox.y0) * pxToPt;
+        if (wPt <= 0 || hPt <= 0) continue;
+        const xPt = x + w.bbox.x0 * pxToPt;
+        const yPt = y + w.bbox.y1 * pxToPt;
+        // Approximate text size from the bbox height. jsPDF measures size in pt.
+        const fontSize = Math.max(2, hPt * 0.85);
+        pdf.setFontSize(fontSize);
+        pdf.text(w.text, xPt, yPt, { baseline: "alphabetic" });
+      }
+      if (setRenderingMode) setRenderingMode.call(pdf, 0);
+
+      image.canvas.width = 1;
+      image.canvas.height = 1;
+    }
+  } finally {
+    await worker.terminate().catch(() => undefined);
+  }
+
+  return pdf.output("blob");
+}
+
 export default function VaultClient({ initialFiles }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -367,6 +504,20 @@ export default function VaultClient({ initialFiles }: Props) {
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [captureFlash, setCaptureFlash] = useState(false);
+  const [liveQuad, setLiveQuad] = useState<Point[] | null>(null);
+  const [liveQuadStable, setLiveQuadStable] = useState(false);
+  const [autoCapture, setAutoCapture] = useState(true);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [captureFilter, setCaptureFilter] = useState<FilterMode>("auto");
+  const [ocrEnabled, setOcrEnabled] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<{ page: number; total: number; status: string } | null>(null);
+  const liveQuadRef = useRef<Point[] | null>(null);
+  const liveQuadStableSinceRef = useRef<number | null>(null);
+  const detectionFrameRef = useRef<number | null>(null);
+  const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const captureLockRef = useRef(false);
+  const videoNaturalSizeRef = useRef<{ w: number; h: number } | null>(null);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
   const [editingPage, setEditingPage] = useState<ScanDraftPage | null>(null);
@@ -406,6 +557,105 @@ export default function VaultClient({ initialFiles }: Props) {
       video.play().catch(() => undefined);
     }
   }, [cameraOpen]);
+
+  // Live document-edge detection. Runs while the camera is open. We sample
+  // the video at ~10 fps onto a hidden 240-px-wide canvas, run the quad
+  // detector, and (when stable for ~900 ms) auto-trigger capture.
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const video = cameraVideoRef.current;
+    if (!video) return;
+
+    let cancelled = false;
+    let lastRun = 0;
+    const DETECT_INTERVAL_MS = 100;
+    const STABLE_MS = 900;
+    const STABILITY_TOLERANCE_DETECT_PX = 8; // tolerance in detect-canvas pixels
+
+    const tick = (ts: number) => {
+      if (cancelled) return;
+      detectionFrameRef.current = requestAnimationFrame(tick);
+      if (ts - lastRun < DETECT_INTERVAL_MS) return;
+      lastRun = ts;
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return;
+      videoNaturalSizeRef.current = { w: vw, h: vh };
+
+      let detectCanvas = detectionCanvasRef.current;
+      if (!detectCanvas) {
+        detectCanvas = document.createElement("canvas");
+        detectionCanvasRef.current = detectCanvas;
+      }
+      const targetSide = 240;
+      const scale = Math.min(1, targetSide / Math.max(vw, vh));
+      const dw = Math.max(1, Math.round(vw * scale));
+      const dh = Math.max(1, Math.round(vh * scale));
+      if (detectCanvas.width !== dw) detectCanvas.width = dw;
+      if (detectCanvas.height !== dh) detectCanvas.height = dh;
+
+      const ctx = detectCanvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      try {
+        ctx.drawImage(video, 0, 0, dw, dh);
+      } catch {
+        return;
+      }
+      const { data } = ctx.getImageData(0, 0, dw, dh);
+      const gray = imageDataToGray(data, dw * dh);
+      const detected = detectDocumentQuad(gray, dw, dh);
+
+      if (!detected) {
+        liveQuadRef.current = null;
+        liveQuadStableSinceRef.current = null;
+        setLiveQuad((prev) => (prev ? null : prev));
+        setLiveQuadStable((prev) => (prev ? false : prev));
+        return;
+      }
+
+      // Translate detect-space quad to natural-video coordinates so the
+      // capture path can use it directly.
+      const upscaled: Point[] = detected.map((p) => ({ x: p.x / scale, y: p.y / scale }));
+
+      const previous = liveQuadRef.current;
+      const stableNow =
+        previous !== null &&
+        quadIsStable(previous, upscaled, STABILITY_TOLERANCE_DETECT_PX / scale);
+
+      liveQuadRef.current = upscaled;
+      setLiveQuad(upscaled);
+
+      if (stableNow) {
+        if (liveQuadStableSinceRef.current === null) {
+          liveQuadStableSinceRef.current = ts;
+          setLiveQuadStable(false);
+        } else if (ts - liveQuadStableSinceRef.current >= STABLE_MS) {
+          setLiveQuadStable(true);
+          if (autoCapture && !captureLockRef.current) {
+            void captureFromInAppCamera();
+          }
+        }
+      } else {
+        liveQuadStableSinceRef.current = null;
+        setLiveQuadStable(false);
+      }
+    };
+
+    detectionFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      if (detectionFrameRef.current !== null) {
+        cancelAnimationFrame(detectionFrameRef.current);
+        detectionFrameRef.current = null;
+      }
+    };
+  // captureFromInAppCamera is referenced through the ref/lock; deps kept tight
+  // intentionally to avoid restarting the loop on unrelated state churn.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOpen, autoCapture]);
 
   useEffect(() => {
     return () => {
@@ -509,13 +759,21 @@ export default function VaultClient({ initialFiles }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          aspectRatio: { ideal: 3 / 4 },
+          width: { ideal: 1920 },
+          height: { ideal: 1440 },
         },
         audio: false,
       });
 
       cameraStreamRef.current = stream;
-      setCameraOpen(true); // triggers the useEffect that attaches srcObject after render
+
+      // Detect torch capability (Chrome on Android exposes this; iOS Safari does not).
+      const track = stream.getVideoTracks()[0];
+      const caps = track && "getCapabilities" in track ? (track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean }) : undefined;
+      setTorchSupported(Boolean(caps?.torch));
+      setTorchOn(false);
+
+      setCameraOpen(true);
     } catch {
       setCameraError("Could not open camera stream. Using image picker instead.");
       scannerInputRef.current?.click();
@@ -524,9 +782,33 @@ export default function VaultClient({ initialFiles }: Props) {
     }
   }
 
+  async function toggleTorch() {
+    const track = cameraStreamRef.current?.getVideoTracks()[0];
+    if (!track || !torchSupported) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet & { torch?: boolean }] });
+      setTorchOn(next);
+    } catch {
+      setCameraError("Torch is not available right now.");
+    }
+  }
+
   function closeInAppCamera() {
     setCameraOpen(false);
     setCameraError(null);
+    setLiveQuad(null);
+    setLiveQuadStable(false);
+    liveQuadRef.current = null;
+    liveQuadStableSinceRef.current = null;
+    if (detectionFrameRef.current !== null) {
+      cancelAnimationFrame(detectionFrameRef.current);
+      detectionFrameRef.current = null;
+    }
+    captureLockRef.current = false;
+    videoNaturalSizeRef.current = null;
+    setTorchOn(false);
+    setTorchSupported(false);
     stopCameraStream();
   }
 
@@ -568,6 +850,7 @@ export default function VaultClient({ initialFiles }: Props) {
   }
 
   async function captureFromInAppCamera() {
+    if (captureLockRef.current) return;
     const video = cameraVideoRef.current;
     if (!video) return;
 
@@ -578,12 +861,13 @@ export default function VaultClient({ initialFiles }: Props) {
       return;
     }
 
+    captureLockRef.current = true;
     setCameraLoading(true);
     try {
-      // Capture at near-native camera resolution so the editor has enough
-      // pixels for quad-warp + filters without upsampling. 2400 px on the
-      // long side is large enough for readable text after cropping yet
-      // stays within typical Android Chrome canvas memory limits.
+      // Capture at near-native camera resolution so the warp + filters have
+      // enough pixels for readable body text after cropping. 2400 px on the
+      // long side is large enough yet stays within typical Android Chrome
+      // canvas memory limits.
       const maxSide = 2400;
       const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
       const width = Math.max(1, Math.round(sourceWidth * scale));
@@ -599,35 +883,55 @@ export default function VaultClient({ initialFiles }: Props) {
       context.fillRect(0, 0, width, height);
       context.drawImage(video, 0, 0, width, height);
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
-          if (!result) {
-            reject(new Error("Could not encode camera frame."));
-            return;
-          }
-          resolve(result);
-        }, "image/jpeg", 0.92);
-      });
+      // Translate the live (downscaled) quad into the captured-frame coordinate
+      // system. liveQuad is in the natural video resolution.
+      const detected = liveQuadRef.current;
+      let scaledQuad: Point[] | null = null;
+      if (detected && videoNaturalSizeRef.current) {
+        const sx = width / videoNaturalSizeRef.current.w;
+        const sy = height / videoNaturalSizeRef.current.h;
+        scaledQuad = detected.map((p) => ({ x: p.x * sx, y: p.y * sy }));
+      }
 
-      // Release canvas backing pixels immediately after encoding.
-      canvas.width = 1;
-      canvas.height = 1;
-
-      const file = new File([blob], `scan-${Date.now()}.jpg`, {
-        type: "image/jpeg",
-        lastModified: Date.now(),
-      });
-
-      // Flash to confirm capture before async processing.
       setCaptureFlash(true);
       setTimeout(() => setCaptureFlash(false), 120);
 
-      await addScanDraftFiles([file]);
+      // Bake = warp-to-rect + apply selected filter + JPEG encode.
+      const baked = await bakeCapturedFrame(canvas, scaledQuad, captureFilter);
+      const oriented = autoRotateScans ? await autoRotateScanImageFile(baked) : baked;
+      const normalized = await normalizeScanImageFile(oriented);
+
+      const newPage: ScanDraftPage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${normalized.name}`,
+        file: normalized,
+        previewUrl: URL.createObjectURL(normalized),
+        fallbackFile: null,
+        fallbackPreviewUrl: null,
+        isTextEnhanced: captureFilter !== "original",
+        isEdited: scaledQuad !== null,
+      };
+
+      setScanDraftPages((prev) => {
+        const next = [...prev, newPage];
+        if (next.length >= MAX_SCAN_PAGES) {
+          setUploadError(`Scan limit reached. Please keep each scan PDF to ${MAX_SCAN_PAGES} pages or fewer.`);
+        }
+        return next;
+      });
+      setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
+      setShowScanReview(true);
+
+      // Reset stability tracker so auto-capture doesn't immediately fire again
+      // on the same stable frame.
+      liveQuadStableSinceRef.current = null;
+      setLiveQuadStable(false);
       setCameraError(null);
     } catch {
       setCameraError("Capture failed due to low memory. Close apps and try again.");
     } finally {
       setCameraLoading(false);
+      // Brief cool-down before another auto-capture can fire.
+      setTimeout(() => { captureLockRef.current = false; }, 800);
     }
   }
 
@@ -725,10 +1029,15 @@ export default function VaultClient({ initialFiles }: Props) {
     setUploadError(null);
     setUploadSuccess(null);
     setScannerConverting(true);
+    setOcrProgress(null);
 
     try {
       const filesForPdf = scanDraftPages.map((page) => page.file);
-      const pdfBlob = await buildPdfFromImages(filesForPdf);
+      const pdfBlob = ocrEnabled
+        ? await buildSearchablePdfFromImages(filesForPdf, (page, total, status) =>
+            setOcrProgress({ page, total, status }),
+          )
+        : await buildPdfFromImages(filesForPdf);
       const safeBaseName = sanitizeDocumentName(scanOutputName || `${uploadCategory}-scan`) || `${uploadCategory}-scan`;
       const pdfFile = new File(
         [pdfBlob],
@@ -736,7 +1045,7 @@ export default function VaultClient({ initialFiles }: Props) {
         { type: "application/pdf" }
       );
 
-      const pageLabel = `${filesForPdf.length} scanned page${filesForPdf.length > 1 ? "s" : ""} PDF`;
+      const pageLabel = `${filesForPdf.length} scanned page${filesForPdf.length > 1 ? "s" : ""} PDF${ocrEnabled ? " (searchable)" : ""}`;
       const uploaded = await uploadFileToVault(pdfFile, pageLabel);
       if (uploaded) {
         clearScanDraft();
@@ -744,9 +1053,14 @@ export default function VaultClient({ initialFiles }: Props) {
         setShowScanReview(false);
       }
     } catch {
-      setUploadError("Could not create PDF from your images. Please try again.");
+      setUploadError(
+        ocrEnabled
+          ? "Could not create searchable PDF. Try again, or turn off Searchable text and retry."
+          : "Could not create PDF from your images. Please try again.",
+      );
     } finally {
       setScannerConverting(false);
+      setOcrProgress(null);
     }
   }
 
@@ -909,11 +1223,25 @@ export default function VaultClient({ initialFiles }: Props) {
                 <X size={20} />
               </button>
 
-              {pendingScanCount > 0 && (
-                <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
-                  {pendingScanCount} page{pendingScanCount > 1 ? "s" : ""} captured
+              <div className="flex items-center gap-2">
+                {pendingScanCount > 0 && (
+                  <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
+                    {pendingScanCount} captured
+                  </span>
+                )}
+                <span
+                  className={[
+                    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider backdrop-blur-sm transition-colors",
+                    liveQuadStable
+                      ? "bg-emerald-500/90 text-white"
+                      : liveQuad
+                        ? "bg-amber-400/90 text-amber-900"
+                        : "bg-white/15 text-white/70",
+                  ].join(" ")}
+                >
+                  {liveQuadStable ? "Hold steady…" : liveQuad ? "Page detected" : "Looking for page"}
                 </span>
-              )}
+              </div>
 
               <button
                 type="button"
@@ -923,6 +1251,48 @@ export default function VaultClient({ initialFiles }: Props) {
               >
                 Gallery
               </button>
+            </div>
+
+            {/* Quick controls row — torch / auto-capture / filter */}
+            <div className="flex items-center justify-center gap-2 px-3 pb-2">
+              {torchSupported && (
+                <button
+                  type="button"
+                  onClick={toggleTorch}
+                  className={[
+                    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur-sm",
+                    torchOn ? "bg-amber-400 text-amber-900" : "bg-white/10 text-white",
+                  ].join(" ")}
+                >
+                  {torchOn ? <Zap size={12} /> : <ZapOff size={12} />}
+                  {torchOn ? "Torch on" : "Torch"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setAutoCapture((v) => !v)}
+                className={[
+                  "rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur-sm",
+                  autoCapture ? "bg-emerald-500 text-white" : "bg-white/10 text-white",
+                ].join(" ")}
+              >
+                Auto-capture: {autoCapture ? "On" : "Off"}
+              </button>
+              <div className="flex items-center gap-1 rounded-full bg-white/10 p-1 backdrop-blur-sm">
+                {(["original", "auto", "magic", "bw"] as FilterMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setCaptureFilter(mode)}
+                    className={[
+                      "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
+                      captureFilter === mode ? "bg-white text-black" : "text-white/70",
+                    ].join(" ")}
+                  >
+                    {mode === "bw" ? "B&W" : mode === "original" ? "Raw" : mode}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Viewfinder — flex-1 fills all remaining space */}
@@ -940,15 +1310,35 @@ export default function VaultClient({ initialFiles }: Props) {
                 <div className="pointer-events-none absolute inset-0 bg-white opacity-70" />
               )}
 
-              {/* Document guide corners */}
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="relative aspect-3/4 w-4/5">
-                  <div className="absolute left-0 top-0 h-8 w-8 rounded-tl-lg border-l-2 border-t-2 border-white/80" />
-                  <div className="absolute right-0 top-0 h-8 w-8 rounded-tr-lg border-r-2 border-t-2 border-white/80" />
-                  <div className="absolute bottom-0 left-0 h-8 w-8 rounded-bl-lg border-b-2 border-l-2 border-white/80" />
-                  <div className="absolute bottom-0 right-0 h-8 w-8 rounded-br-lg border-b-2 border-r-2 border-white/80" />
+              {/* Live quad overlay. Drawn in normalised video coords so it
+                  tracks the page wherever it sits in the frame. */}
+              {liveQuad && videoNaturalSizeRef.current && (
+                <svg
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  viewBox={`0 0 ${videoNaturalSizeRef.current.w} ${videoNaturalSizeRef.current.h}`}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <polygon
+                    points={liveQuad.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill={liveQuadStable ? "rgba(16,185,129,0.18)" : "rgba(251,146,60,0.12)"}
+                    stroke={liveQuadStable ? "#10b981" : "#fb923c"}
+                    strokeWidth={Math.max(3, videoNaturalSizeRef.current.w / 240)}
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+
+              {/* Idle guide when no page is detected yet */}
+              {!liveQuad && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="relative aspect-3/4 w-4/5">
+                    <div className="absolute left-0 top-0 h-8 w-8 rounded-tl-lg border-l-2 border-t-2 border-white/40" />
+                    <div className="absolute right-0 top-0 h-8 w-8 rounded-tr-lg border-r-2 border-t-2 border-white/40" />
+                    <div className="absolute bottom-0 left-0 h-8 w-8 rounded-bl-lg border-b-2 border-l-2 border-white/40" />
+                    <div className="absolute bottom-0 right-0 h-8 w-8 rounded-br-lg border-b-2 border-r-2 border-white/40" />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Error toast */}
@@ -977,10 +1367,18 @@ export default function VaultClient({ initialFiles }: Props) {
                 onClick={captureFromInAppCamera}
                 disabled={cameraLoading || scannerConverting}
                 aria-label="Capture page"
-                className="flex h-18 w-18 items-center justify-center rounded-full bg-white shadow-lg disabled:opacity-60 active:scale-95 transition-transform"
+                className={[
+                  "flex items-center justify-center rounded-full shadow-lg disabled:opacity-60 active:scale-95 transition-transform",
+                  liveQuadStable && autoCapture ? "bg-emerald-400" : "bg-white",
+                ].join(" ")}
                 style={{ height: 72, width: 72 }}
               >
-                <div className="h-16 w-16 rounded-full border-[3px] border-gray-300 bg-white" />
+                <div
+                  className={[
+                    "h-16 w-16 rounded-full border-[3px] bg-white",
+                    liveQuadStable && autoCapture ? "border-emerald-600" : "border-gray-300",
+                  ].join(" ")}
+                />
               </button>
 
               {/* Done button — appears once pages are captured */}
@@ -1166,6 +1564,49 @@ export default function VaultClient({ initialFiles }: Props) {
                 className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 disabled:opacity-60"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={() => setOcrEnabled((v) => !v)}
+              disabled={scannerConverting}
+              className={[
+                "mt-3 flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-60",
+                ocrEnabled
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50",
+              ].join(" ")}
+            >
+              <div className="flex items-center gap-2">
+                <ScanText size={16} className={ocrEnabled ? "text-emerald-600" : "text-gray-400"} />
+                <div>
+                  <p className={["text-xs font-bold", ocrEnabled ? "text-emerald-700" : "text-gray-700"].join(" ")}>
+                    Searchable text {ocrEnabled ? "On" : "Off"}
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    Adds an invisible OCR layer so the PDF can be searched and copied. Adds a few seconds per page.
+                  </p>
+                </div>
+              </div>
+              <span
+                className={[
+                  "inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors",
+                  ocrEnabled ? "bg-emerald-500" : "bg-gray-300",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    ocrEnabled ? "translate-x-4" : "translate-x-0",
+                  ].join(" ")}
+                />
+              </span>
+            </button>
+
+            {ocrProgress && (
+              <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+                {ocrProgress.status} — page {Math.min(ocrProgress.page + 1, ocrProgress.total)} of {ocrProgress.total}
+              </div>
+            )}
 
             <div className="mt-3 flex gap-2">
               <button
