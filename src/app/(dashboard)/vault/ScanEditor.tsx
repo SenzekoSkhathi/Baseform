@@ -16,10 +16,13 @@ import type { ScanDraftPage } from "./VaultClient";
 import {
   type FilterMode,
   type Point,
+  type Rotation,
+  type ScanTransforms,
   applyFilter,
   detectDocumentQuad,
+  fileToCanvas,
   imageDataToGray,
-  warpQuadToRect,
+  renderPage,
 } from "./scanPipeline";
 
 // ===========================================================================
@@ -30,9 +33,8 @@ type Tab = "crop" | "filter" | "rotate";
 
 export type ScanEditorSavePayload = {
   pageId: string;
-  newFile: File;
-  isTextEnhanced: boolean;
-  fallbackFile: File | null;
+  transforms: ScanTransforms;
+  renderedFile: File;
 };
 
 type Props = {
@@ -42,56 +44,14 @@ type Props = {
 };
 
 // ===========================================================================
-// Canvas I/O helpers — binary only, no base64 round-trips
-// ===========================================================================
-
-async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("Image load failed."));
-      el.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("Canvas unavailable.");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, img.width, img.height);
-    ctx.drawImage(img, 0, 0);
-    return canvas;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function canvasToFile(
-  canvas: HTMLCanvasElement,
-  name: string,
-  quality = 0.9,
-): Promise<File> {
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Encode failed."))),
-      "image/jpeg",
-      quality,
-    );
-  });
-  canvas.width = 1;
-  canvas.height = 1;
-  return new File([blob], name, { type: "image/jpeg", lastModified: Date.now() });
-}
-
-function releaseCanvas(c: HTMLCanvasElement) {
-  c.width = 1;
-  c.height = 1;
-}
-
-// ===========================================================================
 // Component
+//
+// The editor never mutates page.sourceFile. All UI state lives in `transforms`
+// (crop quad, rotation, filter). On every change the displayed image is
+// re-derived from the immutable source. "Original" filter therefore always
+// returns the user to truly original pixels, even after multiple crop/rotate
+// cycles. The filter thumbnails respect the current crop+rotation so users
+// see what each filter looks like *after* their edits.
 // ===========================================================================
 
 const FILTER_LABELS: Record<FilterMode, string> = {
@@ -104,25 +64,69 @@ const FILTER_LABELS: Record<FilterMode, string> = {
 
 const FILTER_ORDER: FilterMode[] = ["original", "auto", "magic", "grayscale", "bw"];
 
-export default function ScanEditor({ page, onSave, onClose }: Props) {
-  // workingFile = the baseline image we apply filters to (i.e. after any
-  // destructive crop or rotate). fallbackFile is what "Original" filter
-  // restores back to. isFilterEnhanced is true when current filter ≠ original.
-  const [workingFile, setWorkingFile] = useState<File>(page.fallbackFile ?? page.file);
-  const [activeFilter, setActiveFilter] = useState<FilterMode>(
-    page.isTextEnhanced ? "auto" : "original",
-  );
-  const [displayedFile, setDisplayedFile] = useState<File>(page.file);
+// Rotate a 4-point quad by ±90° in-place around a (W,H) frame. Used when the
+// user rotates the source — the cropQuad lives in raw-source coords, so it
+// needs to track the rotation to stay aligned with the document.
+function rotateQuad(
+  quad: Point[],
+  fromRotation: Rotation,
+  toRotation: Rotation,
+  rawW: number,
+  rawH: number,
+): Point[] {
+  // We only ever step by ±90°, so apply that delta directly.
+  const delta = ((toRotation - fromRotation + 360) % 360) as Rotation;
+  if (delta === 0) return quad;
+  const apply = (p: Point, w: number, h: number, d: Rotation): Point => {
+    if (d === 90) return { x: h - p.y, y: p.x };
+    if (d === 180) return { x: w - p.x, y: h - p.y };
+    if (d === 270) return { x: p.y, y: w - p.x };
+    return p;
+  };
+  let w = rawW, h = rawH;
+  let out = quad;
+  // Step 90° at a time so dimensions track correctly.
+  for (let step = 0; step < delta / 90; step++) {
+    out = out.map((p) => apply(p, w, h, 90));
+    [w, h] = [h, w];
+  }
+  return out;
+}
 
-  const [displayUrl, setDisplayUrl] = useState<string>("");
-  const displayUrlRef = useRef("");
-  const [imgDim, setImgDim] = useState<{ w: number; h: number } | null>(null);
+function defaultQuad(w: number, h: number): Point[] {
+  return [
+    { x: 0, y: 0 },
+    { x: w - 1, y: 0 },
+    { x: w - 1, y: h - 1 },
+    { x: 0, y: h - 1 },
+  ];
+}
+
+export default function ScanEditor({ page, onSave, onClose }: Props) {
+  // Local edit state. Starts from the page's saved transforms so reopening
+  // the editor on an already-edited page restores the same crop/rotation/filter.
+  const [transforms, setTransforms] = useState<ScanTransforms>(() => ({
+    ...page.transforms,
+    cropQuad: page.transforms.cropQuad ? page.transforms.cropQuad.map((p) => ({ ...p })) : null,
+  }));
 
   const [tab, setTab] = useState<Tab>("crop");
-  const [quad, setQuad] = useState<Point[] | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Raw source dimensions (immutable across the editor session).
+  const [sourceDim, setSourceDim] = useState<{ w: number; h: number } | null>(null);
+
+  // Preview image: in the crop tab, the unwarped (but rotated+filtered)
+  // source so the quad overlay makes sense; in other tabs, the fully
+  // transformed render.
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [previewDim, setPreviewDim] = useState<{ w: number; h: number } | null>(null);
+  const previewUrlRef = useRef<string>("");
+
+  // Filter thumbnails — keyed by filter mode, regenerated when crop/rotation
+  // change. Tracked in a ref so we can revoke previous URLs *after* the new
+  // ones are committed (avoids the broken-image flash from naive cleanup).
   const [filterThumbs, setFilterThumbs] = useState<Record<FilterMode, string>>({
     original: "",
     auto: "",
@@ -130,29 +134,65 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
     grayscale: "",
     bw: "",
   });
+  const filterThumbsUrlsRef = useRef<string[]>([]);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageBox, setStageBox] = useState<{ w: number; h: number } | null>(null);
 
-  // ---- Object URL lifecycle for the main displayed image ------------------
+  // ---- Load source dimensions once ---------------------------------------
   useEffect(() => {
-    const url = URL.createObjectURL(displayedFile);
-    displayUrlRef.current = url;
-    setDisplayUrl(url);
-    const el = new Image();
-    el.onload = () => setImgDim({ w: el.width, h: el.height });
-    el.src = url;
-    return () => {
-      URL.revokeObjectURL(url);
-      if (displayUrlRef.current === url) displayUrlRef.current = "";
-    };
-  }, [displayedFile]);
+    let cancelled = false;
+    (async () => {
+      const url = URL.createObjectURL(page.sourceFile);
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error("Image load failed."));
+          el.src = url;
+        });
+        if (cancelled) return;
+        setSourceDim({ w: img.width, h: img.height });
+      } catch {
+        if (!cancelled) setError("Could not load image.");
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [page.sourceFile]);
 
-  // ---- Stage size tracking ------------------------------------------------
-  // Depend on imgDim too: on first mount we render a spinner until the image
-  // dimensions resolve, so the stage div doesn't exist yet. We need to
-  // re-measure once it appears, otherwise displayGeom stays null and the
-  // viewfinder renders fully black.
+  // ---- Auto-seed the crop quad on first load if none is set --------------
+  useEffect(() => {
+    if (!sourceDim || transforms.cropQuad) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const canvas = await fileToCanvas(page.sourceFile);
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const gray = imageDataToGray(data, canvas.width * canvas.height);
+        const detected = detectDocumentQuad(gray, canvas.width, canvas.height);
+        canvas.width = 1;
+        canvas.height = 1;
+        if (cancelled) return;
+        setTransforms((prev) => ({
+          ...prev,
+          cropQuad: detected ?? defaultQuad(sourceDim.w, sourceDim.h),
+        }));
+      } catch {
+        if (cancelled) return;
+        setTransforms((prev) => ({
+          ...prev,
+          cropQuad: defaultQuad(sourceDim.w, sourceDim.h),
+        }));
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceDim]);
+
+  // ---- Stage size tracking -----------------------------------------------
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -164,66 +204,89 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tab, imgDim]);
+  }, [tab, sourceDim]);
 
-  // ---- Auto-seed the quad the first time we know image dimensions --------
+  // ---- Render the live preview whenever transforms or tab change ---------
+  // In CROP tab we render with cropQuad disabled so the user can drag the
+  // quad over the full source; in other tabs we render the full pipeline.
   useEffect(() => {
-    if (!imgDim || quad) return;
+    if (!sourceDim) return;
     let cancelled = false;
     (async () => {
       try {
-        const canvas = await fileToCanvas(workingFile);
-        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const gray = imageDataToGray(data, canvas.width * canvas.height);
-        const detected = detectDocumentQuad(gray, canvas.width, canvas.height);
-        releaseCanvas(canvas);
+        const previewTransforms: ScanTransforms = tab === "crop"
+          ? { ...transforms, cropQuad: null }
+          : transforms;
+        const file = await renderPage(page.sourceFile, previewTransforms, "preview.jpg", 0.85);
         if (cancelled) return;
-        setQuad(
-          detected ?? [
-            { x: imgDim.w * 0.05, y: imgDim.h * 0.05 },
-            { x: imgDim.w * 0.95, y: imgDim.h * 0.05 },
-            { x: imgDim.w * 0.95, y: imgDim.h * 0.95 },
-            { x: imgDim.w * 0.05, y: imgDim.h * 0.95 },
-          ],
-        );
+        const url = URL.createObjectURL(file);
+        // Swap atomically: install new URL, then revoke previous.
+        const prev = previewUrlRef.current;
+        previewUrlRef.current = url;
+        setPreviewUrl(url);
+        // Compute preview dimensions (rotation may have swapped them).
+        const swap = previewTransforms.rotation === 90 || previewTransforms.rotation === 270;
+        if (previewTransforms.cropQuad) {
+          // For non-crop tabs we'd need the warped output dims — easiest to
+          // measure from the encoded file. The `<img>` onLoad below sets
+          // them; until then we fall back to the swapped raw dims.
+        }
+        setPreviewDim({
+          w: swap ? sourceDim.h : sourceDim.w,
+          h: swap ? sourceDim.w : sourceDim.h,
+        });
+        if (prev) URL.revokeObjectURL(prev);
       } catch {
-        if (cancelled) return;
-        setQuad([
-          { x: imgDim.w * 0.05, y: imgDim.h * 0.05 },
-          { x: imgDim.w * 0.95, y: imgDim.h * 0.05 },
-          { x: imgDim.w * 0.95, y: imgDim.h * 0.95 },
-          { x: imgDim.w * 0.05, y: imgDim.h * 0.95 },
-        ]);
+        if (!cancelled) setError("Preview failed.");
       }
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imgDim]);
+  }, [sourceDim, tab, transforms.rotation, transforms.filter, transforms.cropQuad]);
 
-  // ---- Filter thumbnails (regenerated whenever workingFile changes) -------
+  // Cleanup the preview URL on unmount.
   useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = "";
+      }
+    };
+  }, []);
+
+  // ---- Filter thumbnails -------------------------------------------------
+  // Regenerate when crop/rotation change so each thumb reflects the user's
+  // current edit state, not the raw source. URLs are committed via ref and
+  // revoked only *after* replacement to avoid the broken-image flash.
+  useEffect(() => {
+    if (!sourceDim) return;
     let cancelled = false;
-    const urls: string[] = [];
     (async () => {
       try {
-        const full = await fileToCanvas(workingFile);
+        // Render the cropped+rotated source once, then apply each filter.
+        const baseTransforms: ScanTransforms = {
+          cropQuad: transforms.cropQuad,
+          rotation: transforms.rotation,
+          filter: "original",
+        };
+        const baseFile = await renderPage(page.sourceFile, baseTransforms, "thumb-base.jpg", 0.85);
+        if (cancelled) return;
+        const baseCanvas = await fileToCanvas(baseFile);
+
         const THUMB_MAX = 180;
-        const scale = Math.min(1, THUMB_MAX / Math.max(full.width, full.height));
-        const tw = Math.max(1, Math.round(full.width * scale));
-        const th = Math.max(1, Math.round(full.height * scale));
+        const scale = Math.min(1, THUMB_MAX / Math.max(baseCanvas.width, baseCanvas.height));
+        const tw = Math.max(1, Math.round(baseCanvas.width * scale));
+        const th = Math.max(1, Math.round(baseCanvas.height * scale));
         const small = document.createElement("canvas");
         small.width = tw;
         small.height = th;
-        small.getContext("2d")!.drawImage(full, 0, 0, tw, th);
-        releaseCanvas(full);
+        small.getContext("2d")!.drawImage(baseCanvas, 0, 0, tw, th);
+        baseCanvas.width = 1;
+        baseCanvas.height = 1;
 
+        const newUrls: string[] = [];
         const out: Record<FilterMode, string> = {
-          original: "",
-          auto: "",
-          magic: "",
-          grayscale: "",
-          bw: "",
+          original: "", auto: "", magic: "", grayscale: "", bw: "",
         };
         for (const mode of FILTER_ORDER) {
           if (cancelled) return;
@@ -235,29 +298,48 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
               0.8,
             );
           });
-          releaseCanvas(filtered);
+          filtered.width = 1;
+          filtered.height = 1;
           const url = URL.createObjectURL(blob);
-          urls.push(url);
+          newUrls.push(url);
           out[mode] = url;
         }
-        releaseCanvas(small);
-        if (!cancelled) setFilterThumbs(out);
+        small.width = 1;
+        small.height = 1;
+
+        if (cancelled) {
+          // We already produced URLs but no consumer; revoke immediately.
+          newUrls.forEach(URL.revokeObjectURL);
+          return;
+        }
+
+        const previousUrls = filterThumbsUrlsRef.current;
+        filterThumbsUrlsRef.current = newUrls;
+        setFilterThumbs(out);
+        // Revoke the previous batch *after* the new URLs are installed in
+        // state, so the displayed thumbnails never reference revoked URLs.
+        previousUrls.forEach(URL.revokeObjectURL);
       } catch {
         // Thumbnails are cosmetic — failure is non-fatal.
       }
     })();
-    return () => {
-      cancelled = true;
-      urls.forEach(URL.revokeObjectURL);
-    };
-  }, [workingFile]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceDim, transforms.cropQuad, transforms.rotation]);
 
-  // ---- Display geometry (image letterboxed into the stage) ---------------
+  useEffect(() => {
+    return () => {
+      filterThumbsUrlsRef.current.forEach(URL.revokeObjectURL);
+      filterThumbsUrlsRef.current = [];
+    };
+  }, []);
+
+  // ---- Display geometry --------------------------------------------------
   const displayGeom = useMemo(() => {
-    if (!imgDim || !stageBox) return null;
-    const scale = Math.min(stageBox.w / imgDim.w, stageBox.h / imgDim.h);
-    const w = imgDim.w * scale;
-    const h = imgDim.h * scale;
+    if (!previewDim || !stageBox) return null;
+    const scale = Math.min(stageBox.w / previewDim.w, stageBox.h / previewDim.h);
+    const w = previewDim.w * scale;
+    const h = previewDim.h * scale;
     return {
       scale,
       w,
@@ -265,21 +347,46 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
       offsetX: (stageBox.w - w) / 2,
       offsetY: (stageBox.h - h) / 2,
     };
-  }, [imgDim, stageBox]);
+  }, [previewDim, stageBox]);
 
-  // ---- Quad drag handlers ------------------------------------------------
+  // ---- Quad drag handlers (CROP tab only) --------------------------------
+  // The displayed image in CROP tab is the *rotated* source (no crop applied),
+  // so quad coords drawn here are in rotated-source space. We convert to raw
+  // source space when committing to transforms.cropQuad.
   const dragIndex = useRef<number | null>(null);
 
+  // The quad we render lives in preview-image (rotated-source) coords.
+  // Convert transforms.cropQuad (raw-source coords) into preview coords for
+  // display, and reverse on commit.
+  const rotatedQuad = useMemo(() => {
+    if (!transforms.cropQuad || !sourceDim) return null;
+    return rotateQuad(transforms.cropQuad, 0, transforms.rotation, sourceDim.w, sourceDim.h);
+  }, [transforms.cropQuad, transforms.rotation, sourceDim]);
+
+  const setRotatedQuad = useCallback((next: Point[]) => {
+    if (!sourceDim) return;
+    // Inverse-rotate back to raw source coords.
+    const rawQuad = rotateQuad(
+      next,
+      transforms.rotation,
+      0,
+      // Width/height of rotated frame:
+      transforms.rotation === 90 || transforms.rotation === 270 ? sourceDim.h : sourceDim.w,
+      transforms.rotation === 90 || transforms.rotation === 270 ? sourceDim.w : sourceDim.h,
+    );
+    setTransforms((prev) => ({ ...prev, cropQuad: rawQuad }));
+  }, [sourceDim, transforms.rotation]);
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!quad || !displayGeom || !imgDim) return;
+    if (!rotatedQuad || !displayGeom || !previewDim) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     let best = -1;
     let bestDist = Infinity;
     for (let i = 0; i < 4; i++) {
-      const cx = displayGeom.offsetX + quad[i].x * displayGeom.scale;
-      const cy = displayGeom.offsetY + quad[i].y * displayGeom.scale;
+      const cx = displayGeom.offsetX + rotatedQuad[i].x * displayGeom.scale;
+      const cy = displayGeom.offsetY + rotatedQuad[i].y * displayGeom.scale;
       const dd = Math.hypot(cx - px, cy - py);
       if (dd < bestDist) { bestDist = dd; best = i; }
     }
@@ -290,15 +397,15 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (dragIndex.current === null || !quad || !displayGeom || !imgDim) return;
+    if (dragIndex.current === null || !rotatedQuad || !displayGeom || !previewDim) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
-    const ix = Math.max(0, Math.min(imgDim.w, (px - displayGeom.offsetX) / displayGeom.scale));
-    const iy = Math.max(0, Math.min(imgDim.h, (py - displayGeom.offsetY) / displayGeom.scale));
-    const next = quad.slice();
+    const ix = Math.max(0, Math.min(previewDim.w, (px - displayGeom.offsetX) / displayGeom.scale));
+    const iy = Math.max(0, Math.min(previewDim.h, (py - displayGeom.offsetY) / displayGeom.scale));
+    const next = rotatedQuad.slice();
     next[dragIndex.current] = { x: ix, y: iy };
-    setQuad(next);
+    setRotatedQuad(next);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -307,105 +414,52 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
     dragIndex.current = null;
   };
 
-  // ---- Operation wrapper --------------------------------------------------
-  const run = async (fn: () => Promise<void>) => {
+  // ---- Commands ----------------------------------------------------------
+  const handleResetQuad = () => {
+    if (!sourceDim) return;
+    const rotated = transforms.rotation === 90 || transforms.rotation === 270;
+    const w = rotated ? sourceDim.h : sourceDim.w;
+    const h = rotated ? sourceDim.w : sourceDim.h;
+    setRotatedQuad(defaultQuad(w, h));
+  };
+
+  const handleRotate = (dir: "left" | "right") => {
+    setTransforms((prev) => {
+      const delta = dir === "right" ? 90 : -90;
+      const next = (((prev.rotation + delta) % 360) + 360) % 360 as Rotation;
+      return { ...prev, rotation: next };
+    });
+  };
+
+  const pickFilter = useCallback((mode: FilterMode) => {
+    setTransforms((prev) => ({ ...prev, filter: mode }));
+  }, []);
+
+  // ---- Save (commit + render) -------------------------------------------
+  const handleSave = async () => {
     setError(null);
     setProcessing(true);
-    try { await fn(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Operation failed."); }
-    finally { setProcessing(false); }
-  };
-
-  // ---- Apply quad crop + perspective warp --------------------------------
-  const handleApplyCrop = () =>
-    run(async () => {
-      if (!quad) return;
-      const src = await fileToCanvas(workingFile);
-      const warped = warpQuadToRect(src, quad);
-      releaseCanvas(src);
-      const baselineFile = await canvasToFile(
-        warped,
-        workingFile.name,
+    try {
+      const renderedFile = await renderPage(
+        page.sourceFile,
+        transforms,
+        page.renderedFile.name,
         0.92,
       );
-      const filtered = applyFilter(await fileToCanvas(baselineFile), activeFilter);
-      const displayed = activeFilter === "original"
-        ? baselineFile
-        : await canvasToFile(filtered, workingFile.name, 0.92);
-      releaseCanvas(filtered);
-      setWorkingFile(baselineFile);
-      setDisplayedFile(displayed);
-      setQuad(null);
-      setImgDim(null);
-    });
-
-  // ---- Rotate -------------------------------------------------------------
-  const handleRotate = (dir: "left" | "right") =>
-    run(async () => {
-      const src = await fileToCanvas(workingFile);
-      const out = document.createElement("canvas");
-      out.width = src.height;
-      out.height = src.width;
-      const ctx = out.getContext("2d")!;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, out.width, out.height);
-      ctx.translate(out.width / 2, out.height / 2);
-      ctx.rotate((dir === "right" ? 90 : -90) * (Math.PI / 180));
-      ctx.drawImage(src, -src.width / 2, -src.height / 2);
-      releaseCanvas(src);
-      const baselineFile = await canvasToFile(out, workingFile.name, 0.92);
-      const filtered = applyFilter(await fileToCanvas(baselineFile), activeFilter);
-      const displayed = activeFilter === "original"
-        ? baselineFile
-        : await canvasToFile(filtered, workingFile.name, 0.92);
-      releaseCanvas(filtered);
-      setWorkingFile(baselineFile);
-      setDisplayedFile(displayed);
-      setQuad(null);
-      setImgDim(null);
-    });
-
-  // ---- Apply filter -------------------------------------------------------
-  const pickFilter = useCallback((mode: FilterMode) => {
-    if (mode === activeFilter) return;
-    run(async () => {
-      if (mode === "original") {
-        setActiveFilter(mode);
-        setDisplayedFile(workingFile);
-        return;
-      }
-      const src = await fileToCanvas(workingFile);
-      const filtered = applyFilter(src, mode);
-      releaseCanvas(src);
-      const out = await canvasToFile(filtered, workingFile.name, 0.92);
-      setActiveFilter(mode);
-      setDisplayedFile(out);
-    });
-  }, [activeFilter, workingFile]);
-
-  // ---- Reset crop to image edges -----------------------------------------
-  const handleResetQuad = () => {
-    if (!imgDim) return;
-    setQuad([
-      { x: 0, y: 0 },
-      { x: imgDim.w - 1, y: 0 },
-      { x: imgDim.w - 1, y: imgDim.h - 1 },
-      { x: 0, y: imgDim.h - 1 },
-    ]);
+      onSave({
+        pageId: page.id,
+        transforms,
+        renderedFile,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed.");
+      setProcessing(false);
+    }
   };
 
-  const handleSave = () => {
-    onSave({
-      pageId: page.id,
-      newFile: displayedFile,
-      isTextEnhanced: activeFilter !== "original",
-      fallbackFile: activeFilter !== "original" ? workingFile : null,
-    });
-  };
+  // ---- Render ------------------------------------------------------------
 
-  // ---- Render -------------------------------------------------------------
-
-  if (!displayUrl || !imgDim) {
+  if (!sourceDim || !previewUrl) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
         <Loader2 size={22} className="animate-spin text-orange-500" />
@@ -449,10 +503,9 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
         style={{ touchAction: "none" }}
       >
-        {/* image */}
         {displayGeom && (
           <img
-            src={displayUrl}
+            src={previewUrl}
             alt="Scan"
             draggable={false}
             className="pointer-events-none absolute"
@@ -462,11 +515,16 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
               width: displayGeom.w,
               height: displayGeom.h,
             }}
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                setPreviewDim({ w: img.naturalWidth, h: img.naturalHeight });
+              }
+            }}
           />
         )}
 
-        {/* quad overlay (only in CROP tab) */}
-        {tab === "crop" && quad && displayGeom && (
+        {tab === "crop" && rotatedQuad && displayGeom && (
           <svg
             className="pointer-events-none absolute inset-0 h-full w-full"
             viewBox={`0 0 ${stageBox?.w ?? 0} ${stageBox?.h ?? 0}`}
@@ -477,9 +535,8 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
                 <stop offset="100%" stopColor="#fb923c" />
               </linearGradient>
             </defs>
-            {/* dim outside the quad */}
             <path
-              d={`M 0 0 H ${stageBox?.w ?? 0} V ${stageBox?.h ?? 0} H 0 Z M ${quad
+              d={`M 0 0 H ${stageBox?.w ?? 0} V ${stageBox?.h ?? 0} H 0 Z M ${rotatedQuad
                 .map(
                   (p) =>
                     `${displayGeom.offsetX + p.x * displayGeom.scale},${
@@ -491,7 +548,7 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
               fillRule="evenodd"
             />
             <polygon
-              points={quad
+              points={rotatedQuad
                 .map(
                   (p) =>
                     `${displayGeom.offsetX + p.x * displayGeom.scale},${
@@ -503,7 +560,7 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
               stroke="url(#quadStroke)"
               strokeWidth={2.5}
             />
-            {quad.map((p, i) => {
+            {rotatedQuad.map((p, i) => {
               const cx = displayGeom.offsetX + p.x * displayGeom.scale;
               const cy = displayGeom.offsetY + p.y * displayGeom.scale;
               return (
@@ -530,7 +587,6 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
         )}
       </div>
 
-      {/* Tab-specific controls */}
       {tab === "crop" && (
         <div className="flex items-center gap-2 bg-black/90 px-3 py-2.5">
           <button
@@ -544,11 +600,11 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
           </button>
           <button
             type="button"
-            onClick={handleApplyCrop}
-            disabled={processing || !quad}
+            onClick={() => setTab("filter")}
+            disabled={processing || !rotatedQuad}
             className="flex-1 rounded-lg bg-orange-500 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
           >
-            Apply crop
+            Confirm crop
           </button>
         </div>
       )}
@@ -557,7 +613,7 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
         <div className="bg-black/90 px-3 py-3">
           <div className="flex gap-2 overflow-x-auto scrollbar-none">
             {FILTER_ORDER.map((mode) => {
-              const active = activeFilter === mode;
+              const active = transforms.filter === mode;
               const thumb = filterThumbs[mode];
               return (
                 <button
@@ -629,7 +685,6 @@ export default function ScanEditor({ page, onSave, onClose }: Props) {
         </div>
       )}
 
-      {/* Bottom tab bar */}
       <nav className="flex items-stretch bg-black text-white pb-safe">
         {(
           [

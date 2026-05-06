@@ -23,14 +23,20 @@ import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import ScanEditor, { type ScanEditorSavePayload } from "./ScanEditor";
 import {
+  AUTO_CAPTURE_STABLE_MS,
+  AUTO_CAPTURE_MIN_AREA_RATIO,
+  AUTO_CAPTURE_TOLERANCE_RATIO,
+  IDENTITY_TRANSFORMS,
   type FilterMode,
   type Point,
-  applyFilter,
+  type ScanTransforms,
   detectDocumentQuad,
-  downscaleGray,
   imageDataToGray,
+  quadArea,
+  quadDiagonal,
   quadIsStable,
-  warpQuadToRect,
+  renderPage,
+  transformsAffectPixels,
 } from "./scanPipeline";
 
 export type VaultFile = {
@@ -280,14 +286,17 @@ type Props = {
   initialFiles: VaultFile[];
 };
 
+// A scan draft page is the *immutable raw source* (the unmodified capture or
+// upload) plus a set of transforms (crop quad, rotation, filter). The
+// `renderedFile` and `previewUrl` are derived — re-computed via renderPage()
+// whenever the transforms change. This is what allows "Original" filter to
+// fully restore even after multiple crop/rotate cycles.
 export type ScanDraftPage = {
   id: string;
-  file: File;
+  sourceFile: File;
+  transforms: ScanTransforms;
+  renderedFile: File;
   previewUrl: string;
-  fallbackFile: File | null;
-  fallbackPreviewUrl: string | null;
-  isTextEnhanced: boolean;
-  isEdited: boolean;
 };
 
 async function normalizeScanImageFile(input: File): Promise<File> {
@@ -374,39 +383,19 @@ async function autoRotateScanImageFile(input: File): Promise<File> {
   return rotateScanImageFile(input, "right");
 }
 
-// Bake a captured camera frame into a deskewed, filtered, and compressed
-// scan-ready JPEG. Runs entirely in-memory; the source canvas is released
-// before the function returns.
-async function bakeCapturedFrame(
-  source: HTMLCanvasElement,
-  detectedQuad: Point[] | null,
-  filter: FilterMode,
-): Promise<File> {
-  let working: HTMLCanvasElement = source;
-  if (detectedQuad) {
-    try {
-      working = warpQuadToRect(source, detectedQuad);
-      source.width = 1;
-      source.height = 1;
-    } catch {
-      // Singular/degenerate quads fall back to the raw frame.
-      working = source;
-    }
-  }
-  const filtered = filter === "original" ? working : applyFilter(working, filter);
-  if (filtered !== working) {
-    working.width = 1;
-    working.height = 1;
-  }
+// Encode a captured canvas to a JPEG File — used as the immutable `sourceFile`
+// for a freshly captured page. The actual warp/filter happens later inside
+// renderPage() so the source stays intact and transforms can be edited.
+async function canvasToSourceFile(source: HTMLCanvasElement): Promise<File> {
   const blob = await new Promise<Blob>((resolve, reject) => {
-    filtered.toBlob(
+    source.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Could not encode scan."))),
       "image/jpeg",
-      0.92,
+      0.94,
     );
   });
-  filtered.width = 1;
-  filtered.height = 1;
+  source.width = 1;
+  source.height = 1;
   return new File([blob], `scan-${Date.now()}.jpg`, {
     type: "image/jpeg",
     lastModified: Date.now(),
@@ -426,10 +415,16 @@ async function buildSearchablePdfFromImages(
     import("jspdf"),
     import("tesseract.js"),
   ]);
+  type OcrBaseline = { x0: number; y0: number; x1: number; y1: number; has_baseline?: boolean };
+  type OcrWord = {
+    text: string;
+    bbox: { x0: number; y0: number; x1: number; y1: number };
+    baseline?: OcrBaseline;
+  };
   const tesseract = tesseractModule as unknown as {
-    createWorker: (lang: string) => Promise<{
+    createWorker: (lang: string | string[]) => Promise<{
       recognize: (image: HTMLCanvasElement | File) => Promise<{
-        data: { words: { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] };
+        data: { words: OcrWord[] };
       }>;
       terminate: () => Promise<void>;
     }>;
@@ -441,7 +436,9 @@ async function buildSearchablePdfFromImages(
   const margin = 24;
 
   onProgress?.(0, images.length, "Loading OCR engine");
-  const worker = await tesseract.createWorker("eng");
+  // English + Afrikaans cover the vast majority of SA matric documents.
+  // Tesseract handles multi-language in a single pass.
+  const worker = await tesseract.createWorker(["eng", "afr"]);
   try {
     for (let index = 0; index < images.length; index += 1) {
       if (index > 0) pdf.addPage("a4", "portrait");
@@ -476,17 +473,48 @@ async function buildSearchablePdfFromImages(
       }).setTextRenderingMode;
       if (setRenderingMode) setRenderingMode.call(pdf, 3);
 
+      // Bucket words by quantised font size so we don't emit a setFontSize
+      // operator for every single word — that bloats the content stream and
+      // slows large pages noticeably.
+      type Placed = { text: string; xPt: number; yPt: number };
+      const buckets = new Map<number, Placed[]>();
       for (const w of words) {
         if (!w.text.trim()) continue;
         const wPt = (w.bbox.x1 - w.bbox.x0) * pxToPt;
         const hPt = (w.bbox.y1 - w.bbox.y0) * pxToPt;
         if (wPt <= 0 || hPt <= 0) continue;
-        const xPt = x + w.bbox.x0 * pxToPt;
-        const yPt = y + w.bbox.y1 * pxToPt;
-        // Approximate text size from the bbox height. jsPDF measures size in pt.
-        const fontSize = Math.max(2, hPt * 0.85);
+
+        // Anchor the invisible glyph at the *alphabetic baseline*, not the
+        // bbox bottom. Tesseract exposes a baseline line segment per word;
+        // when it's present we use it directly. Otherwise we approximate by
+        // pulling the bbox bottom up by a typical descender ratio (~22% of
+        // word height) — closer to truth than just using the bbox bottom,
+        // which sits below descenders for words containing g/j/p/q/y.
+        let baselinePx: number;
+        if (w.baseline && w.baseline.has_baseline !== false) {
+          baselinePx = (w.baseline.y0 + w.baseline.y1) / 2;
+        } else {
+          baselinePx = w.bbox.y1 - (w.bbox.y1 - w.bbox.y0) * 0.22;
+        }
+
+        // Cap-height to font-size ratio is ~0.7 for typical fonts; bbox
+        // height is closer to em-height when the word includes both
+        // ascenders and descenders. hPt itself is therefore the better
+        // first-order estimate of font size than hPt * 0.85.
+        const fontSize = Math.max(2, Math.round(hPt * 2) / 2);
+        const list = buckets.get(fontSize) ?? [];
+        list.push({
+          text: w.text,
+          xPt: x + w.bbox.x0 * pxToPt,
+          yPt: y + baselinePx * pxToPt,
+        });
+        buckets.set(fontSize, list);
+      }
+      for (const [fontSize, list] of buckets) {
         pdf.setFontSize(fontSize);
-        pdf.text(w.text, xPt, yPt, { baseline: "alphabetic" });
+        for (const placed of list) {
+          pdf.text(placed.text, placed.xPt, placed.yPt, { baseline: "alphabetic" });
+        }
       }
       if (setRenderingMode) setRenderingMode.call(pdf, 0);
 
@@ -537,6 +565,11 @@ export default function VaultClient({ initialFiles }: Props) {
   const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const captureLockRef = useRef(false);
   const videoNaturalSizeRef = useRef<{ w: number; h: number } | null>(null);
+  // Timestamp (performance.now) of the last frame in which we observed
+  // significant device motion. Auto-capture is gated on this being old
+  // enough that the device is genuinely settled — visual stability alone
+  // can be fooled by a hand drifting smoothly across the frame.
+  const motionLastMoveRef = useRef<number>(0);
   const [scanDraftPages, setScanDraftPages] = useState<ScanDraftPage[]>([]);
   const [showScanReview, setShowScanReview] = useState(false);
   const [editingPage, setEditingPage] = useState<ScanDraftPage | null>(null);
@@ -577,6 +610,75 @@ export default function VaultClient({ initialFiles }: Props) {
     }
   }, [cameraOpen]);
 
+  // Device-motion gating for auto-capture. Visual quad stability can be
+  // fooled by a hand drifting smoothly across the frame — the page tracks
+  // along with the phone and looks "stable" frame-to-frame even though
+  // capture would yield a smeared shot. The gyroscope/accelerometer gives
+  // an independent motion signal we combine with the visual stability test.
+  // iOS 13+ gates DeviceMotionEvent behind a permission prompt; on
+  // browsers without it (desktop Chrome, older Android), we just skip the
+  // gate and fall back to visual stability alone.
+  useEffect(() => {
+    if (!cameraOpen) return;
+    if (typeof window === "undefined" || typeof window.DeviceMotionEvent === "undefined") return;
+
+    let cancelled = false;
+    // 0.4 m/s² magnitude on the gravity-removed signal is roughly the
+    // boundary between "phone resting on a hand that's holding still" and
+    // "phone visibly moving". Tuned by feel — too low produces false
+    // motion alarms from breathing/heartbeat, too high lets actual drift
+    // through.
+    const MOTION_THRESHOLD = 0.4;
+
+    const onMotion = (event: DeviceMotionEvent) => {
+      const acc = event.acceleration ?? event.accelerationIncludingGravity;
+      if (!acc) return;
+      const ax = acc.x ?? 0;
+      const ay = acc.y ?? 0;
+      const az = acc.z ?? 0;
+      // If only accelerationIncludingGravity is exposed (some Android
+      // browsers), subtract a 9.8 baseline along the dominant axis. This
+      // is rough but enough for the on/off-motion classification we need.
+      let magnitude: number;
+      if (event.acceleration) {
+        magnitude = Math.hypot(ax, ay, az);
+      } else {
+        magnitude = Math.abs(Math.hypot(ax, ay, az) - 9.8);
+      }
+      if (magnitude > MOTION_THRESHOLD) {
+        motionLastMoveRef.current = performance.now();
+      }
+    };
+
+    const install = () => {
+      if (cancelled) return;
+      window.addEventListener("devicemotion", onMotion, { passive: true });
+    };
+
+    // iOS 13+ requires an explicit user gesture to prompt for permission.
+    // The camera was just opened via a tap, which counts. If the call
+    // throws or returns "denied", silently fall back to visual-only gating.
+    const motionCtor = window.DeviceMotionEvent as typeof DeviceMotionEvent & {
+      requestPermission?: () => Promise<"granted" | "denied" | "default">;
+    };
+    if (typeof motionCtor.requestPermission === "function") {
+      motionCtor
+        .requestPermission()
+        .then((result) => {
+          if (result === "granted") install();
+        })
+        .catch(() => undefined);
+    } else {
+      install();
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("devicemotion", onMotion);
+      motionLastMoveRef.current = 0;
+    };
+  }, [cameraOpen]);
+
   // Live document-edge detection. Runs while the camera is open. We sample
   // the video at ~10 fps onto a hidden 240-px-wide canvas, run the quad
   // detector, and (when stable for ~900 ms) auto-trigger capture.
@@ -588,8 +690,6 @@ export default function VaultClient({ initialFiles }: Props) {
     let cancelled = false;
     let lastRun = 0;
     const DETECT_INTERVAL_MS = 100;
-    const STABLE_MS = 900;
-    const STABILITY_TOLERANCE_DETECT_PX = 8; // tolerance in detect-canvas pixels
 
     const tick = (ts: number) => {
       if (cancelled) return;
@@ -638,10 +738,17 @@ export default function VaultClient({ initialFiles }: Props) {
       // capture path can use it directly.
       const upscaled: Point[] = detected.map((p) => ({ x: p.x / scale, y: p.y / scale }));
 
+      // Adaptive stability tolerance — proportional to the quad's diagonal
+      // in detect-space pixels. A page filling the frame can drift several
+      // pixels and still be the same page; a small page in the corner needs
+      // a tighter window.
+      const detectDiagonal = quadDiagonal(detected);
+      const tolerancePx = Math.max(2, detectDiagonal * AUTO_CAPTURE_TOLERANCE_RATIO);
+
       const previous = liveQuadRef.current;
       const stableNow =
         previous !== null &&
-        quadIsStable(previous, upscaled, STABILITY_TOLERANCE_DETECT_PX / scale);
+        quadIsStable(previous, upscaled, tolerancePx / scale);
 
       liveQuadRef.current = upscaled;
       setLiveQuad(upscaled);
@@ -650,9 +757,22 @@ export default function VaultClient({ initialFiles }: Props) {
         if (liveQuadStableSinceRef.current === null) {
           liveQuadStableSinceRef.current = ts;
           setLiveQuadStable(false);
-        } else if (ts - liveQuadStableSinceRef.current >= STABLE_MS) {
+        } else if (ts - liveQuadStableSinceRef.current >= AUTO_CAPTURE_STABLE_MS) {
           setLiveQuadStable(true);
-          if (autoCapture && !captureLockRef.current) {
+          // Area-fraction stand-in for confidence: refuse auto-capture when
+          // the detected quad covers too little of the frame, since small
+          // detections are usually false-positives on background clutter.
+          const areaRatio = quadArea(detected) / (dw * dh);
+          // Motion gate: require ~200 ms of accelerometer-quiet before
+          // firing. Browsers without DeviceMotionEvent leave the timestamp
+          // at 0, which trivially passes the gate (visual-only mode).
+          const motionQuiet = ts - motionLastMoveRef.current >= 200;
+          if (
+            autoCapture &&
+            !captureLockRef.current &&
+            areaRatio >= AUTO_CAPTURE_MIN_AREA_RATIO &&
+            motionQuiet
+          ) {
             void captureFromInAppCamera();
           }
         }
@@ -684,7 +804,6 @@ export default function VaultClient({ initialFiles }: Props) {
       }
       scanDraftPagesRef.current.forEach((page) => {
         URL.revokeObjectURL(page.previewUrl);
-        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
       });
     };
   }, []);
@@ -850,14 +969,14 @@ export default function VaultClient({ initialFiles }: Props) {
         normalizedFiles.push(oriented);
       }
 
+      // Uploaded images become the immutable source. Initial transforms are
+      // identity — the user can crop/rotate/filter them in the editor later.
       const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
         id: `${Date.now()}-${index}-${file.name}`,
-        file,
+        sourceFile: file,
+        transforms: { ...IDENTITY_TRANSFORMS },
+        renderedFile: file,
         previewUrl: URL.createObjectURL(file),
-        fallbackFile: null,
-        fallbackPreviewUrl: null,
-        isTextEnhanced: false,
-        isEdited: false,
       }));
 
       setScanDraftPages((prev) => [...prev, ...newPages]);
@@ -915,19 +1034,51 @@ export default function VaultClient({ initialFiles }: Props) {
       setCaptureFlash(true);
       setTimeout(() => setCaptureFlash(false), 120);
 
-      // Bake = warp-to-rect + apply selected filter + JPEG encode.
-      const baked = await bakeCapturedFrame(canvas, scaledQuad, captureFilter);
-      const oriented = autoRotateScans ? await autoRotateScanImageFile(baked) : baked;
-      const normalized = await normalizeScanImageFile(oriented);
+      // Save the *raw* frame as the immutable source. The detected quad and
+      // selected filter are stored as transforms so the user can later switch
+      // back to "Original" or re-crop without compounding pixel loss.
+      const rawWidth = canvas.width;
+      const rawHeight = canvas.height;
+      const rawSource = await canvasToSourceFile(canvas);
+      const oriented = autoRotateScans ? await autoRotateScanImageFile(rawSource) : rawSource;
+      const sourceFile = await normalizeScanImageFile(oriented);
+
+      // cropQuad came from the raw captured frame's pixel space but the final
+      // source went through autoRotate (possibly 90° right) + normalizeScanImage
+      // (which downscales to maxWidthOrHeight: 2000). Recompute the quad in
+      // the actual stored source's pixel coords.
+      const sourceDim = await getImageDimensions(sourceFile);
+      let sourceQuad: Point[] | null = null;
+      if (scaledQuad) {
+        const wasRotatedRight = sourceDim.width < sourceDim.height && rawWidth > rawHeight;
+        const intermediateW = wasRotatedRight ? rawHeight : rawWidth;
+        const intermediateH = wasRotatedRight ? rawWidth : rawHeight;
+        const sx = sourceDim.width / intermediateW;
+        const sy = sourceDim.height / intermediateH;
+        sourceQuad = scaledQuad.map((p) => {
+          // Apply 90° right rotation first (if any), then uniform scale.
+          const rx = wasRotatedRight ? rawHeight - p.y : p.x;
+          const ry = wasRotatedRight ? p.x : p.y;
+          return { x: rx * sx, y: ry * sy };
+        });
+      }
+
+      const transforms: ScanTransforms = {
+        cropQuad: sourceQuad,
+        rotation: 0,
+        filter: captureFilter,
+      };
+
+      const renderedFile = transformsAffectPixels(transforms)
+        ? await renderPage(sourceFile, transforms)
+        : sourceFile;
 
       const newPage: ScanDraftPage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${normalized.name}`,
-        file: normalized,
-        previewUrl: URL.createObjectURL(normalized),
-        fallbackFile: null,
-        fallbackPreviewUrl: null,
-        isTextEnhanced: captureFilter !== "original",
-        isEdited: scaledQuad !== null,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sourceFile.name}`,
+        sourceFile,
+        transforms,
+        renderedFile,
+        previewUrl: URL.createObjectURL(renderedFile),
       };
 
       setScanDraftPages((prev) => {
@@ -967,7 +1118,6 @@ export default function VaultClient({ initialFiles }: Props) {
     setScanDraftPages((prev) => {
       prev.forEach((page) => {
         URL.revokeObjectURL(page.previewUrl);
-        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
       });
       return [];
     });
@@ -979,7 +1129,6 @@ export default function VaultClient({ initialFiles }: Props) {
       const page = prev.find((item) => item.id === pageId);
       if (page) {
         URL.revokeObjectURL(page.previewUrl);
-        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
       }
       return prev.filter((item) => item.id !== pageId);
     });
@@ -1004,19 +1153,11 @@ export default function VaultClient({ initialFiles }: Props) {
       prev.map((page) => {
         if (page.id !== payload.pageId) return page;
         URL.revokeObjectURL(page.previewUrl);
-        if (page.fallbackPreviewUrl) URL.revokeObjectURL(page.fallbackPreviewUrl);
-        const previewUrl = URL.createObjectURL(payload.newFile);
-        const fallbackPreviewUrl = payload.fallbackFile
-          ? URL.createObjectURL(payload.fallbackFile)
-          : null;
         return {
           ...page,
-          file: payload.newFile,
-          previewUrl,
-          fallbackFile: payload.fallbackFile,
-          fallbackPreviewUrl,
-          isTextEnhanced: payload.isTextEnhanced,
-          isEdited: true,
+          transforms: payload.transforms,
+          renderedFile: payload.renderedFile,
+          previewUrl: URL.createObjectURL(payload.renderedFile),
         };
       }),
     );
@@ -1051,7 +1192,7 @@ export default function VaultClient({ initialFiles }: Props) {
     setOcrProgress(null);
 
     try {
-      const filesForPdf = scanDraftPages.map((page) => page.file);
+      const filesForPdf = scanDraftPages.map((page) => page.renderedFile);
       const pdfBlob = ocrEnabled
         ? await buildSearchablePdfFromImages(filesForPdf, (page, total, status) =>
             setOcrProgress({ page, total, status }),
@@ -1556,9 +1697,9 @@ export default function VaultClient({ initialFiles }: Props) {
                       <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/90">
                         Tap to edit
                       </span>
-                      {(page.isTextEnhanced || page.isEdited) && (
+                      {transformsAffectPixels(page.transforms) && (
                         <span className="absolute right-2 top-2 rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
-                          {page.isTextEnhanced ? "Enhanced" : "Edited"}
+                          {page.transforms.filter !== "original" ? "Enhanced" : "Edited"}
                         </span>
                       )}
                     </div>

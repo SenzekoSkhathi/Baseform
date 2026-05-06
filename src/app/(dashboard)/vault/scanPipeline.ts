@@ -22,29 +22,6 @@ export function imageDataToGray(data: Uint8ClampedArray, length: number): Uint8C
   return out;
 }
 
-export function downscaleGray(
-  src: Uint8ClampedArray,
-  sw: number,
-  sh: number,
-  maxSide: number,
-): { gray: Uint8ClampedArray; width: number; height: number; scale: number } {
-  const scale = Math.min(1, maxSide / Math.max(sw, sh));
-  if (scale >= 1) return { gray: src, width: sw, height: sh, scale: 1 };
-  const dw = Math.max(1, Math.round(sw * scale));
-  const dh = Math.max(1, Math.round(sh * scale));
-  const out = new Uint8ClampedArray(dw * dh);
-  const xRatio = sw / dw;
-  const yRatio = sh / dh;
-  for (let y = 0; y < dh; y++) {
-    const sy = Math.floor(y * yRatio);
-    for (let x = 0; x < dw; x++) {
-      const sx = Math.floor(x * xRatio);
-      out[y * dw + x] = src[sy * sw + sx];
-    }
-  }
-  return { gray: out, width: dw, height: dh, scale };
-}
-
 // ---------------------------------------------------------------------------
 // Document-quad detection
 //
@@ -175,7 +152,7 @@ function dist(a: Point, b: Point): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function quadArea(q: Point[]): number {
+export function quadArea(q: Point[]): number {
   // Shoelace for 4 points.
   return Math.abs(
     (q[0].x * q[1].y - q[1].x * q[0].y) +
@@ -185,12 +162,38 @@ function quadArea(q: Point[]): number {
   ) / 2;
 }
 
+export function quadDiagonal(q: Point[]): number {
+  return Math.max(dist(q[0], q[2]), dist(q[1], q[3]));
+}
+
 export function quadIsStable(a: Point[], b: Point[], tolerance: number): boolean {
   for (let i = 0; i < 4; i++) {
     if (dist(a[i], b[i]) > tolerance) return false;
   }
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Auto-capture tuning — single source of truth so the live loop and any
+// other consumers stay in sync. Exported to avoid the constant duplicating
+// across files.
+// ---------------------------------------------------------------------------
+
+// How long the quad must stay visually stable before auto-capture fires.
+// Tighter than the previous 900 ms; combined with the adaptive tolerance
+// below it still rejects shaky hands but stops feeling laggy on a steady shot.
+export const AUTO_CAPTURE_STABLE_MS = 550;
+
+// Stability tolerance, expressed as a fraction of the quad's diagonal.
+// A quad spanning more of the frame can drift further (in absolute pixels)
+// and still be "the same page", so we scale the tolerance by its size
+// rather than using a fixed pixel count.
+export const AUTO_CAPTURE_TOLERANCE_RATIO = 0.018;
+
+// Minimum quad area (as a fraction of the frame) before we'll trust the
+// detection enough to auto-capture. Stand-in for confidence when the
+// classical detector can't score itself.
+export const AUTO_CAPTURE_MIN_AREA_RATIO = 0.22;
 
 // ---------------------------------------------------------------------------
 // Homography + perspective warp
@@ -359,7 +362,10 @@ export function flattenIllumination(src: HTMLCanvasElement): HTMLCanvasElement {
   const d = img.data;
 
   const radius = Math.max(8, Math.round(Math.min(w, h) / 10));
-  const MAX_SHIFT = 55;
+  // Higher cap so strong cool/warm casts under fluorescent lighting don't
+  // hit the ceiling and produce banding in Sauvola output. Only used by
+  // the B&W path; Auto/Magic don't go through here.
+  const MAX_SHIFT = 90;
 
   const channels: Float32Array[] = [
     new Float32Array(w * h),
@@ -555,4 +561,162 @@ export function applyFilter(src: HTMLCanvasElement, mode: FilterMode): HTMLCanva
   if (mode === "magic") return applyMagicColor(src);
   if (mode === "grayscale") return applyGrayscale(src);
   return applySauvola(src);
+}
+
+// ---------------------------------------------------------------------------
+// Immutable-source render pipeline
+//
+// Every page in the scan draft is { sourceFile, transforms }. The displayed
+// JPEG is *always* re-derived from sourceFile by running renderPage(). This
+// is what lets the user roundtrip "magic → original" or chain crop/rotate/
+// filter changes without compounding pixel loss.
+//
+// Order of operations: crop → rotate → filter. Crop first so cropQuad lives
+// in the *raw* source's pixel coords — the editor can show the unrotated,
+// unfiltered source with the quad overlaid and the user always sees the
+// document as the camera captured it.
+// ---------------------------------------------------------------------------
+
+export type Rotation = 0 | 90 | 180 | 270;
+
+export type ScanTransforms = {
+  // Quad in rotated-source pixel coords. null = no crop, use full frame.
+  cropQuad: Point[] | null;
+  rotation: Rotation;
+  filter: FilterMode;
+};
+
+export const IDENTITY_TRANSFORMS: ScanTransforms = {
+  cropQuad: null,
+  rotation: 0,
+  filter: "original",
+};
+
+export function transformsAreIdentity(t: ScanTransforms): boolean {
+  return t.cropQuad === null && t.rotation === 0 && t.filter === "original";
+}
+
+export function transformsAffectPixels(t: ScanTransforms): boolean {
+  // Used by the UI to decide whether to badge a page as "edited". Rotation by
+  // itself is technically a transform but we only badge when the result
+  // diverges from the raw capture in a user-visible way.
+  return t.cropQuad !== null || t.rotation !== 0 || t.filter !== "original";
+}
+
+export function fileToCanvas(file: File | Blob): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        reject(new Error("Canvas unavailable."));
+        return;
+      }
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, img.width, img.height);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Image load failed."));
+    };
+    img.src = url;
+  });
+}
+
+export function rotateCanvas(src: HTMLCanvasElement, rotation: Rotation): HTMLCanvasElement {
+  if (rotation === 0) return src;
+  const swap = rotation === 90 || rotation === 270;
+  const out = document.createElement("canvas");
+  out.width = swap ? src.height : src.width;
+  out.height = swap ? src.width : src.height;
+  const ctx = out.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.translate(out.width / 2, out.height / 2);
+  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  return out;
+}
+
+export function canvasToJpegFile(
+  canvas: HTMLCanvasElement,
+  name: string,
+  quality = 0.92,
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Could not encode image."));
+          return;
+        }
+        resolve(new File([blob], name, { type: "image/jpeg", lastModified: Date.now() }));
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+function releaseCanvas(c: HTMLCanvasElement) {
+  c.width = 1;
+  c.height = 1;
+}
+
+/**
+ * Render the source image through the given transforms and return a JPEG File.
+ * Pure function over (sourceFile, transforms): no caching, no side effects on
+ * inputs. Always start from the immutable source so transforms can be freely
+ * edited without compounding lossy operations.
+ */
+export async function renderPage(
+  sourceFile: File,
+  transforms: ScanTransforms,
+  outputName?: string,
+  quality = 0.92,
+): Promise<File> {
+  const fileName = outputName ?? sourceFile.name ?? `scan-${Date.now()}.jpg`;
+  let stage: HTMLCanvasElement = await fileToCanvas(sourceFile);
+
+  // 1. Crop. Validate the quad before warping — degenerate quads collapse to
+  // a 1×1 canvas which would silently corrupt the page.
+  if (transforms.cropQuad) {
+    try {
+      const warped = warpQuadToRect(stage, transforms.cropQuad);
+      const minSide = Math.min(stage.width, stage.height) * 0.15;
+      if (warped.width >= minSide && warped.height >= minSide) {
+        releaseCanvas(stage);
+        stage = warped;
+      } else {
+        releaseCanvas(warped);
+      }
+    } catch {
+      // Singular homography from a degenerate quad — keep the source frame.
+    }
+  }
+
+  // 2. Rotation
+  if (transforms.rotation !== 0) {
+    const rotated = rotateCanvas(stage, transforms.rotation);
+    releaseCanvas(stage);
+    stage = rotated;
+  }
+
+  // 3. Filter
+  if (transforms.filter !== "original") {
+    const filtered = applyFilter(stage, transforms.filter);
+    releaseCanvas(stage);
+    stage = filtered;
+  }
+
+  const file = await canvasToJpegFile(stage, fileName, quality);
+  releaseCanvas(stage);
+  return file;
 }
