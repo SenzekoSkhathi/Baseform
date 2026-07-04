@@ -98,3 +98,7 @@ env:
   - variable: SENTRY_AUTH_TOKEN
     secret: SENTRY_AUTH_TOKEN
     availability: [BUILD]
+  # Cloud Scheduler -> /api/cron/* (Authorization: Bearer header)
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+    availability: [RUNTIME]
