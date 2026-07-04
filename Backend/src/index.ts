@@ -11,8 +11,7 @@ import applications from "./routes/applications.js";
 import ai from "./routes/ai.js";
 import aiPublic from "./routes/aiPublic.js";
 import email from "./routes/email.js";
-import { startScanJob } from "./jobs/scanJob.js";
-import { startDeadlineJob } from "./jobs/deadlineJob.js";
+import jobs from "./routes/jobs.js";
 import { rateLimitDefault, rateLimitAi } from "./middleware/rateLimit.js";
 import { log } from "./lib/logger.js";
 
@@ -58,6 +57,8 @@ app.route("/ai", ai);
 aiPublic.use("*", rateLimitAi);
 app.route("/ai-public", aiPublic);
 app.route("/email", email);
+// Cloud Scheduler triggers (secret-gated; replaces in-process setInterval jobs)
+app.route("/jobs", jobs);
 
 // ── 404 ─────────────────────────────────────────────────────────────────────
 
@@ -67,8 +68,6 @@ app.notFound((ctx) => ctx.json({ error: "Route not found" }, 404));
 
 serve({ fetch: app.fetch, port: PORT }, () => {
   log.info(`Baseform backend running on http://localhost:${PORT}`);
-  startScanJob();
-  startDeadlineJob();
 });
 
 export default app;

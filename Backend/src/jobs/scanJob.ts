@@ -1,5 +1,6 @@
 /**
- * Background scan job — runs every 6 hours.
+ * Email scan job — triggered every 6 hours by Cloud Scheduler via
+ * POST /jobs/scan (see routes/jobs.ts).
  * Fetches all active Gmail connections and triggers a scan for each user.
  *
  * Pacing: 600ms between users → ~100 users/minute.
@@ -9,14 +10,13 @@
 import { supabaseAdmin } from "../lib/supabase.js";
 import { scanUserEmails } from "../services/emailScanner.js";
 
-const INTERVAL_MS      = 6 * 60 * 60 * 1000; // 6 hours
-const USER_DELAY_MS    = 600;                  // 600ms between users ≈ 100/min
+const USER_DELAY_MS = 600; // 600ms between users ≈ 100/min
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-async function runScanForAllUsers() {
+export async function runScanForAllUsers() {
   console.log("[scanJob] Starting scheduled email scan...");
 
   const { data: connections, error } = await supabaseAdmin
@@ -53,16 +53,6 @@ async function runScanForAllUsers() {
   console.log("[scanJob] Scheduled scan complete.");
 }
 
-export function startScanJob() {
-  // Run once shortly after startup (30s delay so server is fully up)
-  setTimeout(() => {
-    runScanForAllUsers().catch(console.error);
-  }, 30_000);
-
-  // Then repeat every 6 hours
-  setInterval(() => {
-    runScanForAllUsers().catch(console.error);
-  }, INTERVAL_MS);
-
-  console.log("[scanJob] Email scan job registered — runs every 6 hours.");
-}
+// NOTE: previously self-scheduled via setInterval every 6h (INTERVAL_MS).
+// On Cloud Run instances scale to zero, so scheduling moved to Cloud
+// Scheduler → POST /jobs/scan (see routes/jobs.ts).

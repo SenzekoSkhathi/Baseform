@@ -1,0 +1,100 @@
+# Firebase App Hosting configuration — replaces vercel.json.
+# Docs: https://firebase.google.com/docs/app-hosting/configure
+#
+# Secrets referenced below must be created in Cloud Secret Manager first:
+#   firebase apphosting:secrets:set SECRET_NAME
+# (the CLI prompts for the value and grants the App Hosting service
+#  account access automatically)
+
+runConfig:
+  # Keep one instance warm — avoids cold-start lag for SA mobile users.
+  minInstances: 1
+  maxInstances: 4
+  cpu: 1
+  memoryMiB: 1024
+  concurrency: 80
+
+env:
+  # ── Public (ship in the client bundle — not secret) ──────────────────────
+  - variable: NEXT_PUBLIC_SUPABASE_URL
+    value: https://twswbccbxitlhkmrvomm.supabase.co
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_SUPABASE_ANON_KEY
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3c3diY2NieGl0bGhrbXJ2b21tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0MzY0NDQsImV4cCI6MjA5MTAxMjQ0NH0.R9IA5OPMSbrayf2aRZCiAyg3QfX5IXVMPH-0wsrqAEY
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://baseformapplications.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_SENTRY_DSN
+    value: https://a55b74e745dde364c33462f02b3f8455@o4511198416994304.ingest.de.sentry.io/4511198429446224
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    value: BLSUJFqloxw1QxsDV7X1fBFCAIPtkbu2yJkO2zRjlvNjfo7Z7sQ180J3vVK8mQmN7tG7ZaVQHPOjQGrOCw7ly1I
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_PAYFAST_SANDBOX
+    value: "false"
+    availability: [BUILD, RUNTIME]
+
+  # ── Backend (Hono on Cloud Run) ──────────────────────────────────────────
+  # TODO(phase 2): replace with the Cloud Run service URL after
+  # `gcloud run deploy baseform-backend` — e.g.
+  # https://baseform-backend-xxxxx-ew.a.run.app
+  - variable: BACKEND_URL
+    value: https://baseform.onrender.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_BACKEND_URL
+    value: https://baseform.onrender.com
+    availability: [BUILD, RUNTIME]
+
+  # ── Plain server config (not secret) ─────────────────────────────────────
+  - variable: PAYFAST_SANDBOX
+    value: "false"
+    availability: [RUNTIME]
+  - variable: VAPID_SUBJECT
+    value: mailto:info@baseformapplications.com
+    availability: [RUNTIME]
+  - variable: EMAIL_RESEND_FROM
+    value: Baseform Invoices <invoice@baseformapplications.com>
+    availability: [RUNTIME]
+  - variable: GOOGLE_REDIRECT_URI
+    value: https://baseformapplications.com/api/email/callback
+    availability: [RUNTIME]
+
+  # ── Secrets (Cloud Secret Manager) ───────────────────────────────────────
+  - variable: SUPABASE_SERVICE_ROLE_KEY
+    secret: SUPABASE_SERVICE_ROLE_KEY
+    availability: [RUNTIME]
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability: [RUNTIME]
+  - variable: GOOGLE_CLIENT_ID
+    secret: GOOGLE_CLIENT_ID
+    availability: [RUNTIME]
+  - variable: GOOGLE_CLIENT_SECRET
+    secret: GOOGLE_CLIENT_SECRET
+    availability: [RUNTIME]
+  - variable: PAYFAST_MERCHANT_ID
+    secret: PAYFAST_MERCHANT_ID
+    availability: [RUNTIME]
+  - variable: PAYFAST_MERCHANT_KEY
+    secret: PAYFAST_MERCHANT_KEY
+    availability: [RUNTIME]
+  - variable: PAYFAST_PASSPHRASE
+    secret: PAYFAST_PASSPHRASE
+    availability: [RUNTIME]
+  - variable: VAPID_PRIVATE_KEY
+    secret: VAPID_PRIVATE_KEY
+    availability: [RUNTIME]
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+    availability: [RUNTIME]
+  - variable: UPSTASH_REDIS_REST_URL
+    secret: UPSTASH_REDIS_REST_URL
+    availability: [RUNTIME]
+  - variable: UPSTASH_REDIS_REST_TOKEN
+    secret: UPSTASH_REDIS_REST_TOKEN
+    availability: [RUNTIME]
+  # Sentry source-map upload happens at build time
+  - variable: SENTRY_AUTH_TOKEN
+    secret: SENTRY_AUTH_TOKEN
+    availability: [BUILD]

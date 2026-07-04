@@ -37,6 +37,8 @@ const nextConfig: NextConfig = {
       // No external fonts — system stack only
       "font-src 'self' data:",
       // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend, PayFast
+      // TODO(firebase migration): replace baseform.onrender.com with the
+      // Cloud Run URL once `gcloud run deploy baseform-backend` is done.
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform.onrender.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Vault PDF (blob:), Office preview, PayFast onsite modal
       "frame-src blob: https://view.officeapps.live.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
