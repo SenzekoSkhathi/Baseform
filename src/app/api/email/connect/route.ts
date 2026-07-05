@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isEffectivelyFreeTier } from "@/lib/access/tiers";
+import { externalOrigin } from "@/lib/requestOrigin";
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   }
 
   const clientId    = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = new URL("/api/email/callback", req.url).toString();
+  const redirectUri = `${externalOrigin(req)}/api/email/callback`;
 
   if (!clientId || !redirectUri) {
     return NextResponse.json({ error: "Google OAuth not configured" }, { status: 500 });

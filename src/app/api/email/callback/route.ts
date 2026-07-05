@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/sender";
 import { isEffectivelyFreeTier } from "@/lib/access/tiers";
+import { externalOrigin } from "@/lib/requestOrigin";
 
 async function sendGmailConnectedEmail(to: string, firstName: string, gmailAddress: string, appUrl: string): Promise<"sent" | "skipped"> {
   const html = `<!DOCTYPE html>
@@ -129,7 +130,7 @@ async function resolveConnectedEmail(accessToken: string): Promise<string> {
 }
 
 function getAppUrl(req: NextRequest) {
-  return new URL(req.url).origin;
+  return externalOrigin(req);
 }
 
 export const dynamic = "force-dynamic";
@@ -161,7 +162,7 @@ export async function GET(req: NextRequest) {
 
   const clientId     = process.env.GOOGLE_CLIENT_ID!;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-  const redirectUri  = new URL("/api/email/callback", req.url).toString();
+  const redirectUri  = `${externalOrigin(req)}/api/email/callback`;
 
   // Exchange auth code for tokens
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
