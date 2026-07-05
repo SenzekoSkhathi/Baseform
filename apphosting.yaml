@@ -36,14 +36,11 @@ env:
     availability: [BUILD, RUNTIME]
 
   # ── Backend (Hono on Cloud Run) ──────────────────────────────────────────
-  # TODO(phase 2): replace with the Cloud Run service URL after
-  # `gcloud run deploy baseform-backend` — e.g.
-  # https://baseform-backend-xxxxx-ew.a.run.app
   - variable: BACKEND_URL
-    value: https://baseform.onrender.com
+    value: https://baseform-backend-247234473298.europe-west4.run.app
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_BACKEND_URL
-    value: https://baseform.onrender.com
+    value: https://baseform-backend-247234473298.europe-west4.run.app
     availability: [BUILD, RUNTIME]
 
   # ── Plain server config (not secret) ─────────────────────────────────────

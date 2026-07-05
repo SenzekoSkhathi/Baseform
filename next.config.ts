@@ -36,10 +36,8 @@ const nextConfig: NextConfig = {
       "img-src 'self' data: blob: https://upload.wikimedia.org https://*.supabase.co https://tenderbulletins.co.za https://www.skillsportal.co.za https://veldfiremedia.com https://studentroom.co.za https://sagea.org.za https://www.itweb.co.za https://www.univen.ac.za https://cms.cut.ac.za https://media.cdn.gradconnection.com https://i1.rgstatic.net https://images.sftcdn.net",
       // No external fonts — system stack only
       "font-src 'self' data:",
-      // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend, PayFast
-      // TODO(firebase migration): replace baseform.onrender.com with the
-      // Cloud Run URL once `gcloud run deploy baseform-backend` is done.
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform.onrender.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
+      // API calls: Supabase REST + Realtime WS, Sentry EU ingest, Hono backend (Cloud Run), PayFast
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.de.sentry.io https://baseform-backend-247234473298.europe-west4.run.app https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Vault PDF (blob:), Office preview, PayFast onsite modal
       "frame-src blob: https://view.officeapps.live.com https://www.payfast.co.za https://sandbox.payfast.co.za https://payment.payfast.io",
       // Service worker (PWA)
