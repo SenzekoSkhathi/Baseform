@@ -6,6 +6,7 @@ export const metadata = {
   title: "About — Baseform",
   description:
     "Why Baseform exists: flattening the playing field for every South African matric facing university applications, bursaries, and deadlines.",
+  alternates: { canonical: "/about" },
 };
 
 const VALUES = [
@@ -75,11 +76,11 @@ export default function AboutPage() {
       {/* Masthead */}
       <div className="border-b border-ink/15">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
-          <Link href="/website" aria-label="Baseform home">
+          <Link href="/" aria-label="Baseform home">
             <Logo variant="lockup" size="md" />
           </Link>
           <Link
-            href="/website"
+            href="/"
             className="inline-flex items-center gap-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/65 hover:text-ink"
           >
             <ArrowLeft size={12} />

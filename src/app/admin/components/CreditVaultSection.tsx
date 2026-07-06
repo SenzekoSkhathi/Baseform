@@ -319,7 +319,7 @@ export function CreditVaultSection({ onToast }: Props) {
           <p className="mt-2 text-xs text-gray-500">No deposits yet.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-xs">
+            <table className="w-full min-w-160 border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[11px] uppercase tracking-wide text-gray-500">
                   <th className="py-2 pr-3 font-medium">Date</th>

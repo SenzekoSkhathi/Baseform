@@ -21,6 +21,7 @@ export const metadata = {
   title: "How it works — Baseform",
   description:
     "Walk through the Baseform app: onboarding, sign-up, and what every learner sees inside — narrated by Skhathi and Ande.",
+  alternates: { canonical: "/how-it-works" },
 };
 
 /* ---------- Tour-guide character system ---------- */
@@ -617,11 +618,11 @@ export default function HowItWorksPage() {
       {/* Masthead */}
       <div className="border-b border-ink/15">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
-          <Link href="/website" aria-label="Baseform home">
+          <Link href="/" aria-label="Baseform home">
             <Logo variant="lockup" size="md" />
           </Link>
           <Link
-            href="/website"
+            href="/"
             className="inline-flex items-center gap-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/65 hover:text-ink"
           >
             <ArrowLeft size={12} />
@@ -922,7 +923,7 @@ export default function HowItWorksPage() {
               <ArrowRight size={14} />
             </Link>
             <Link
-              href="/website"
+              href="/"
               className="inline-flex items-center gap-2 border border-ink px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.22em] text-ink hover:bg-ink hover:text-paper"
             >
               Back to home

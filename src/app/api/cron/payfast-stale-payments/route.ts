@@ -2,8 +2,9 @@ import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Auth: Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}` automatically
-// when CRON_SECRET is set. Same header pattern works for manual calls.
+// Scheduling: a Cloud Scheduler job must hit this route every 5 minutes
+// (was `*/5 * * * *` in the deleted vercel.json) with
+// `Authorization: Bearer ${CRON_SECRET}`. Same header works for manual calls.
 function authorize(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;

@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // Landing page moved from /website to / — keep old shared links working.
+      { source: "/website", destination: "/", permanent: true },
+    ];
+  },
   async headers() {
     // Content-Security-Policy — built from individual directives so each line
     // is readable and easy to extend.

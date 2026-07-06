@@ -116,7 +116,9 @@ export function isAmountMatch(actual: string, expected: string): boolean {
     return false;
   }
 
-  return Math.abs(actualNumber - expectedNumber) < 0.01;
+  // Compare in integer cents: float subtraction makes a real 1-cent
+  // difference come out as 0.00999…, which slips under a `< 0.01` check.
+  return Math.round(actualNumber * 100) === Math.round(expectedNumber * 100);
 }
 
 export function getPayFastApiUrl(config: PayFastConfig): string {

@@ -1,27 +1,38 @@
-# Allow search engines to crawl public pages
+# Allow search engines to crawl public marketing pages,
+# block auth, app, and API routes (route groups like (auth) never
+# appear in URLs, so the real paths are listed below).
 User-agent: *
 Allow: /
-Allow: /website
-Allow: /how-it-works
-Allow: /about
-Allow: /pricing
-Allow: /plans
-Allow: /contact
 
-# Disallow indexing of auth pages (login, signup, etc.)
-Disallow: /(auth)/
-Disallow: /auth/
-Disallow: /(dashboard)/
-Disallow: /dashboard/
-Disallow: /admin/
+# Auth pages
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+
+# App (auth-gated) pages
+Disallow: /dashboard
+Disallow: /basebot
+Disallow: /bursaries
+Disallow: /coach
+Disallow: /discover
+Disallow: /notifications
+Disallow: /profile
+Disallow: /programmes
+Disallow: /settings
+Disallow: /targets
+Disallow: /tracker
+Disallow: /vault
+
+# Admin, API, and flow pages
+Disallow: /admin
 Disallow: /api/
-Disallow: /onboarding/
-Disallow: /parent/
-Disallow: /payment/
-Disallow: /share/
+Disallow: /onboarding
+Disallow: /parent
+Disallow: /payment
+Disallow: /share
+Disallow: /reveal
+Disallow: /monitoring
 
-# Crawl delay (optional - rate limit bot crawling)
-Crawl-delay: 1
-
-# Sitemap location (create this if you want)
-# Sitemap: https://baseform.com/sitemap.xml
+Sitemap: https://baseformapplications.com/sitemap.xml

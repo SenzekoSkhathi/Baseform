@@ -44,6 +44,23 @@ export type CreditTransaction = {
   createdAt: string;
 };
 
+/**
+ * Pure weekly-usage math, extracted so it can be unit-tested without a DB.
+ * weekStartBalance is the denominator so the % works for any weekly allowance.
+ */
+export function summarizeWeeklyUsage(
+  balance: number,
+  weekStartBalance: number
+): { weeklyUsed: number; highestThresholdCrossed: CreditThreshold | null } {
+  const weeklyUsed = Math.max(0, weekStartBalance - balance);
+  const allowance = weekStartBalance > 0 ? weekStartBalance : WEEKLY_TOP_UP;
+  const pctUsed = (weeklyUsed / allowance) * 100;
+  const highestThresholdCrossed = [...CREDIT_THRESHOLDS]
+    .reverse()
+    .find((t) => pctUsed >= t) ?? null;
+  return { weeklyUsed, highestThresholdCrossed };
+}
+
 /** Fetch the current balance for a user. Returns null if no credits row exists. */
 export async function getUserCredits(userId: string): Promise<CreditBalance | null> {
   const supabase = createAdminClient();
@@ -55,13 +72,10 @@ export async function getUserCredits(userId: string): Promise<CreditBalance | nu
 
   if (!data) return null;
 
-  const weeklyUsed = Math.max(0, data.week_start_balance - data.balance);
-  // Use week_start_balance as denominator so the % is correct for any weekly allowance
-  const allowance = data.week_start_balance > 0 ? data.week_start_balance : WEEKLY_TOP_UP;
-  const pctUsed = (weeklyUsed / allowance) * 100;
-  const highestThresholdCrossed = [...CREDIT_THRESHOLDS]
-    .reverse()
-    .find((t) => pctUsed >= t) ?? null;
+  const { weeklyUsed, highestThresholdCrossed } = summarizeWeeklyUsage(
+    data.balance,
+    data.week_start_balance
+  );
 
   const anchor = data.last_topped_up_at ?? data.plan_start_date;
   const nextTopUpAt = new Date(new Date(anchor).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();

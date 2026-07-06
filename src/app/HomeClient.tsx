@@ -280,7 +280,7 @@ function TryAi() {
 
 /* ---------- Page ---------- */
 
-export default function WebsitePage() {
+export default function HomeClient() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [plans, setPlans] = useState<PublicPlan[]>(DEFAULT_PLANS);
 

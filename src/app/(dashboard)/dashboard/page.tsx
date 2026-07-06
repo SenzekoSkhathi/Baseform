@@ -32,9 +32,14 @@ export default async function DashboardPage() {
     .select("status, universities ( abbreviation )")
     .eq("student_id", user.id);
 
+  // The untyped Supabase client can't infer the joined relation; the FK join
+  // returns a single object (or an array when the relationship is ambiguous).
+  type UniversityRel = { abbreviation: string | null } | { abbreviation: string | null }[] | null;
+
   const institutionStatuses = new Map<string, { hasSubmitted: boolean }>();
   for (const app of applications ?? []) {
-    const uni = (app as any).universities;
+    const rel = app.universities as UniversityRel;
+    const uni = Array.isArray(rel) ? rel[0] : rel;
     const rawAbbr = typeof uni?.abbreviation === "string" ? uni.abbreviation.trim().toUpperCase() : "";
     const groupKey = ["UKZN", "DUT", "MUT", "UNIZULU", "UNISA"].includes(rawAbbr)
       ? "CAO"

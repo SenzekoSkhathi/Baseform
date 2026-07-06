@@ -3,7 +3,15 @@ import "./globals.css";
 import { HeartbeatProvider } from "@/components/HeartbeatProvider";
 
 export const metadata: Metadata = {
-  title: "Baseform — Your University Application Co-pilot",
+  // Resolves relative OG/canonical URLs; opengraph-image.tsx provides the
+  // share card WhatsApp/Twitter render from this base.
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://baseformapplications.com"
+  ),
+  title: {
+    default: "Baseform — Your University Application Co-pilot",
+    template: "%s · Baseform",
+  },
   description:
     "Discover universities and bursaries you qualify for, track every application, and never miss a deadline.",
   manifest: "/manifest.json",
@@ -22,17 +30,22 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    title: "Baseform",
-    description: "Your SA university application co-pilot",
+    siteName: "Baseform",
+    title: "Baseform — Your University Application Co-pilot",
+    description:
+      "Discover universities and bursaries you qualify for, track every application, and never miss a deadline.",
+  },
+  twitter: {
+    card: "summary_large_image",
   },
 };
 
+// Zoom stays enabled (WCAG 1.4.4) — students need to pinch-zoom APS tables
+// and bursary details on small screens; iOS ignores user-scalable=no anyway.
 export const viewport: Viewport = {
   themeColor: "#fff9f2",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
