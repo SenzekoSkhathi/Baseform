@@ -3,6 +3,7 @@ import { anthropic, AI_MODEL } from "../lib/ai.js";
 import { withRetry } from "../lib/retry.js";
 import { redactPII } from "../lib/redact.js";
 import { createLogger } from "../lib/logger.js";
+import { checkRedisWindow } from "../lib/fixedWindowLimiter.js";
 
 const log = createLogger("ai-public");
 const aiPublic = new Hono();
@@ -29,6 +30,11 @@ Key facts:
 If the message is unrelated to careers / studies / applications / bursaries / matric, politely redirect to your area.`;
 
 const DAILY_LIMIT = 8;
+const DAILY_WINDOW_MS = 24 * 60 * 60_000;
+
+// Per-instance fallback only — used when Redis is unreachable/unconfigured.
+// On its own this cap multiplies by Cloud Run instance count and resets on
+// every deploy/scale event, which is why the Redis-backed check is primary.
 const dailyBuckets = new Map<string, { count: number; resetAt: number }>();
 
 setInterval(() => {
@@ -46,11 +52,11 @@ function getIp(headers: Headers): string {
   );
 }
 
-function checkDailyLimit(ip: string): boolean {
+function checkDailyLimitMemory(ip: string): boolean {
   const now = Date.now();
   const bucket = dailyBuckets.get(ip);
   if (!bucket || now > bucket.resetAt) {
-    dailyBuckets.set(ip, { count: 1, resetAt: now + 24 * 60 * 60_000 });
+    dailyBuckets.set(ip, { count: 1, resetAt: now + DAILY_WINDOW_MS });
     return true;
   }
   if (bucket.count >= DAILY_LIMIT) return false;
@@ -58,10 +64,16 @@ function checkDailyLimit(ip: string): boolean {
   return true;
 }
 
+/** Cross-instance daily cap on the unauthenticated demo, with in-memory fallback. */
+async function checkDailyLimit(ip: string): Promise<boolean> {
+  const redisResult = await checkRedisWindow(`ai-public-daily:${ip}`, DAILY_WINDOW_MS, DAILY_LIMIT);
+  return redisResult ?? checkDailyLimitMemory(ip);
+}
+
 aiPublic.post("/coach", async (ctx) => {
   const ip = getIp(ctx.req.raw.headers);
 
-  if (!checkDailyLimit(ip)) {
+  if (!(await checkDailyLimit(ip))) {
     return ctx.json(
       { error: "You've used the free demo for today. Sign up to keep going — it's free." },
       429,

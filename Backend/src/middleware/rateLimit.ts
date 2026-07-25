@@ -1,8 +1,5 @@
 import type { Context, Next } from "hono";
-import { Redis } from "@upstash/redis";
-import { createLogger } from "../lib/logger.js";
-
-const log = createLogger("rateLimit");
+import { checkRedisWindow } from "../lib/fixedWindowLimiter.js";
 
 type BucketConfig = {
   windowMs: number;
@@ -44,43 +41,6 @@ function checkMemory(key: string, config: BucketConfig): boolean {
   return true;
 }
 
-// ── Redis-backed fixed window ────────────────────────────────────────────────
-// Used for the AI tier so the limit holds across instances and deploys —
-// these routes spend real money per request. Fixed window via INCR+EXPIRE:
-// one round trip per request, atomic on the Redis side.
-
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
-
-if (!redis) {
-  log.warn("Upstash env vars missing — AI rate limit is per-instance in-memory only");
-}
-
-/** Returns allowed/blocked, or null when Redis is unavailable (caller falls back). */
-async function checkRedis(key: string, config: BucketConfig): Promise<boolean | null> {
-  if (!redis) return null;
-
-  const windowId = Math.floor(Date.now() / config.windowMs);
-  const redisKey = `bf_rl:${key}:${windowId}`;
-
-  try {
-    const count = await redis.incr(redisKey);
-    if (count === 1) {
-      // +1s of slack so the key never outlives its window by much but also
-      // never expires mid-window due to clock skew.
-      await redis.expire(redisKey, Math.ceil(config.windowMs / 1000) + 1);
-    }
-    return count <= config.max;
-  } catch (err) {
-    log.warn("redis check failed — falling back to in-memory", {
-      key,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return null;
-  }
-}
-
 function getIp(ctx: Context): string {
   return (
     ctx.req.header("x-forwarded-for")?.split(",")[0].trim() ??
@@ -102,7 +62,7 @@ export async function rateLimitDefault(ctx: Context, next: Next) {
 export async function rateLimitAi(ctx: Context, next: Next) {
   const ip = getIp(ctx);
 
-  const redisResult = await checkRedis(`ai:${ip}`, AI);
+  const redisResult = await checkRedisWindow(`ai:${ip}`, AI.windowMs, AI.max);
   const allowed = redisResult ?? checkMemory(`ai:${ip}`, AI);
 
   if (!allowed) {
