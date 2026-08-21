@@ -453,12 +453,12 @@ export default function VaultEditorPage() {
 
     sessionStorage.setItem(EDITOR_RESULT_KEY, JSON.stringify(payload));
     sessionStorage.removeItem(`${EDITOR_INPUT_PREFIX}${pageId}`);
-    router.replace("/vault");
+    router.replace("/app/vault");
   };
 
   const handleBack = () => {
     if (pageId) sessionStorage.removeItem(`${EDITOR_INPUT_PREFIX}${pageId}`);
-    router.replace("/vault");
+    router.replace("/app/vault");
   };
 
   if (!isReady) {

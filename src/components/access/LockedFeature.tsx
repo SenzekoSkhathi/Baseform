@@ -51,7 +51,7 @@ export default function LockedFeature({
           </Link>
 
           <Link
-            href="/dashboard"
+            href="/app/dashboard"
             className="mt-3 block text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
           >
             Back to dashboard

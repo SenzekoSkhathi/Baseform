@@ -12,7 +12,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-16 pt-20 md:px-6">
         {/* Back to dashboard */}
         <Link
-          href="/dashboard"
+          href="/app/dashboard"
           className="mb-6 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm hover:bg-gray-50"
         >
           <ArrowLeft size={13} />

@@ -9,7 +9,7 @@ export default function TopRightActions() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const pathname = usePathname();
-  const showActions = pathname === "/dashboard" || pathname === "/profile";
+  const showActions = pathname === "/app/dashboard" || pathname === "/app/profile";
 
   useEffect(() => {
     const load = () =>
@@ -31,7 +31,7 @@ export default function TopRightActions() {
   return (
     <div className="pointer-events-none fixed right-4 top-4 z-50 flex items-center gap-2 md:right-6 md:top-5">
       <Link
-        href="/notifications"
+        href="/app/notifications"
         className="pointer-events-auto relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white/95 text-gray-600 shadow-sm backdrop-blur transition-colors hover:bg-gray-50"
         aria-label="Notifications"
       >
@@ -44,7 +44,7 @@ export default function TopRightActions() {
       </Link>
 
       <Link
-        href="/settings"
+        href="/app/settings"
         className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white/95 text-gray-600 shadow-sm backdrop-blur transition-colors hover:bg-gray-50"
         aria-label="Settings"
       >

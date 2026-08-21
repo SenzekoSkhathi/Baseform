@@ -22,7 +22,7 @@ export default function NotFound() {
             Go home
           </Link>
           <Link
-            href="/dashboard"
+            href="/app/dashboard"
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <ArrowLeft size={16} />

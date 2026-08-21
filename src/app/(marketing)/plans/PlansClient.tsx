@@ -154,7 +154,7 @@ function PlansPageInner() {
         router.push(`/login?next=${encodeURIComponent("/plans?plan=free")}`);
         return;
       }
-      router.push("/dashboard");
+      router.push("/app/dashboard");
       return;
     }
 

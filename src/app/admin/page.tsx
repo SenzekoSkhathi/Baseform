@@ -6,7 +6,7 @@ export default async function AdminPage() {
   const guard = await requireAdminGuard();
   if (!guard.ok) {
     if (guard.status === 401) redirect("/login");
-    redirect("/dashboard");
+    redirect("/app/dashboard");
   }
 
   return <AdminClient />;

@@ -813,7 +813,7 @@ export default function VaultClient({ initialFiles }: Props) {
       router.back();
       return;
     }
-    router.push("/dashboard");
+    router.push("/app/dashboard");
   }
 
   async function uploadFileToVault(file: File, successLabel?: string) {

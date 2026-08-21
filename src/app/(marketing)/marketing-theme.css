@@ -1,0 +1,65 @@
+/*
+ * Marketing design system — the editorial "paper / ink / forest" palette.
+ *
+ * This is the single source of truth for the public marketing site's look,
+ * previously copy-pasted as an inline <style> block into every marketing page
+ * (landing, about, how-it-works, contact...). It is deliberately SCOPED under
+ * `.marketing-root` (applied by (marketing)/layout.tsx) so these class names
+ * can never bleed into the authenticated app, which uses its own #fff9f2 +
+ * Tailwind recipe.
+ *
+ * Distinct from the app on purpose: ink = deep warm black, paper = warm cream,
+ * forest = dark section background.
+ */
+
+.marketing-root {
+  --paper: #f4ecdf;
+  --ink: #1a1714;
+  --forest: #0f1c16;
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+.marketing-root .bg-paper  { background-color: var(--paper); }
+.marketing-root .bg-ink    { background-color: var(--ink); }
+.marketing-root .bg-forest { background-color: var(--forest); }
+
+.marketing-root .text-paper { color: var(--paper); }
+.marketing-root .text-ink   { color: var(--ink); }
+
+.marketing-root .text-ink\/35 { color: color-mix(in srgb, var(--ink) 35%, transparent); }
+.marketing-root .text-ink\/45 { color: color-mix(in srgb, var(--ink) 45%, transparent); }
+.marketing-root .text-ink\/50 { color: color-mix(in srgb, var(--ink) 50%, transparent); }
+.marketing-root .text-ink\/55 { color: color-mix(in srgb, var(--ink) 55%, transparent); }
+.marketing-root .text-ink\/60 { color: color-mix(in srgb, var(--ink) 60%, transparent); }
+.marketing-root .text-ink\/65 { color: color-mix(in srgb, var(--ink) 65%, transparent); }
+.marketing-root .text-ink\/70 { color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.marketing-root .text-ink\/75 { color: color-mix(in srgb, var(--ink) 75%, transparent); }
+.marketing-root .text-ink\/80 { color: color-mix(in srgb, var(--ink) 80%, transparent); }
+.marketing-root .text-ink\/85 { color: color-mix(in srgb, var(--ink) 85%, transparent); }
+
+.marketing-root .text-paper\/55 { color: color-mix(in srgb, var(--paper) 55%, transparent); }
+.marketing-root .text-paper\/75 { color: color-mix(in srgb, var(--paper) 75%, transparent); }
+
+.marketing-root .border-ink      { border-color: var(--ink); }
+.marketing-root .border-ink\/10  { border-color: color-mix(in srgb, var(--ink) 10%, transparent); }
+.marketing-root .border-ink\/15  { border-color: color-mix(in srgb, var(--ink) 15%, transparent); }
+.marketing-root .border-ink\/25  { border-color: color-mix(in srgb, var(--ink) 25%, transparent); }
+.marketing-root .border-paper\/20 { border-color: color-mix(in srgb, var(--paper) 20%, transparent); }
+
+.marketing-root .font-serif {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+.marketing-root .font-sans {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.marketing-root .dropcap::first-letter {
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  float: left;
+  font-size: 4.6em;
+  line-height: 0.85;
+  padding: 0.08em 0.12em 0 0;
+  font-weight: 600;
+  color: #ea580c;
+}

@@ -6,11 +6,11 @@ import { Home, GraduationCap, Trophy, ClipboardList, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/programmes", label: "Programmes", icon: GraduationCap },
-  { href: "/bursaries", label: "Bursaries", icon: Trophy },
-  { href: "/tracker", label: "Tracker", icon: ClipboardList },
-  { href: "/profile", label: "Profile", icon: User },
+  { href: "/app/dashboard", label: "Home", icon: Home },
+  { href: "/app/programmes", label: "Programmes", icon: GraduationCap },
+  { href: "/app/bursaries", label: "Bursaries", icon: Trophy },
+  { href: "/app/tracker", label: "Tracker", icon: ClipboardList },
+  { href: "/app/profile", label: "Profile", icon: User },
 ];
 
 export default function BottomNav() {
@@ -20,7 +20,7 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 safe-area-pb z-50">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+          const active = pathname === href || (href !== "/app/dashboard" && pathname.startsWith(href));
           return (
             <Link
               key={href}

@@ -23,7 +23,7 @@ export default async function UniversityDetailPage({
     .eq("id", user.id)
     .maybeSingle();
 
-  if (gradeProfile?.grade_year === "Grade 11") redirect("/dashboard");
+  if (gradeProfile?.grade_year === "Grade 11") redirect("/app/dashboard");
 
   const [{ data: subjects }, { data: uni }, { data: applications }] = await Promise.all([
     supabase.from("student_subjects").select("subject_name, mark").eq("profile_id", user.id),

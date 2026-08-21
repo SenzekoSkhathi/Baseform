@@ -58,7 +58,7 @@ export default function LoginPage() {
       appMetadataTier: signedInUser?.app_metadata?.tier,
     });
 
-    router.push(isAdmin ? "/admin" : "/dashboard");
+    router.push(isAdmin ? "/admin" : "/app/dashboard");
   }
 
   return (

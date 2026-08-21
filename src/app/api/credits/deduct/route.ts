@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Free users' 20 monthly credits are restricted to BaseBot messages.
     if (body.action !== "basebot_message") {
       return NextResponse.json(
-        { error: "This feature is available on paid plans only.", upgrade: true, redirect: "/basebot/preview?reason=out-of-credits" },
+        { error: "This feature is available on paid plans only.", upgrade: true, redirect: "/app/basebot/preview?reason=out-of-credits" },
         { status: 403 },
       );
     }
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     sendPushToUser(session.user.id, {
       title: msg.title,
       body: msg.body,
-      href: "/settings/usage",
+      href: "/app/settings/usage",
       tag: `credits-threshold-${result.newThreshold}`,
     }).catch(() => undefined); // non-blocking
   }

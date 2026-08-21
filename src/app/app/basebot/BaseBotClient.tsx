@@ -583,7 +583,7 @@ function Sidebar({
       {/* Footer */}
       {!collapsed && <div className="border-t border-gray-100 px-2 py-3 shrink-0">
         <Link
-          href="/dashboard"
+          href="/app/dashboard"
           className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors text-xs text-gray-400 font-medium"
         >
           <BackIcon />

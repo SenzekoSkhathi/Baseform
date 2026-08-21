@@ -334,7 +334,7 @@ export default function DashboardDetailClient({ universityGroups, aps, studentSu
       router.back();
       return;
     }
-    router.push("/dashboard");
+    router.push("/app/dashboard");
   }
 
   return (
@@ -771,7 +771,7 @@ function UniversityCard({
       {/* View details */}
       <button
         type="button"
-        onClick={() => router.push(`/dashboard/detail/${group.universityId}`)}
+        onClick={() => router.push(`/app/dashboard/detail/${group.universityId}`)}
         className="mt-4 flex w-full items-center justify-between"
       >
         <span className="text-sm font-semibold text-orange-500">View details</span>

@@ -64,7 +64,7 @@ function restartTour() {
       if (key && key.startsWith("bf_tour_v1:")) localStorage.removeItem(key);
     }
   } catch { /* ignore */ }
-  window.location.href = "/dashboard";
+  window.location.href = "/app/dashboard";
 }
 
 export default function HelpPage() {

@@ -162,7 +162,7 @@ export default function SuccessClient() {
   // Auto-redirect to dashboard 4 seconds after success so the user can read the perks.
   useEffect(() => {
     if (phase !== "success") return;
-    const id = window.setTimeout(() => router.push("/dashboard"), 4000);
+    const id = window.setTimeout(() => router.push("/app/dashboard"), 4000);
     return () => window.clearTimeout(id);
   }, [phase, router]);
 
@@ -286,7 +286,7 @@ export default function SuccessClient() {
         {/* CTA / fallback */}
         {phase === "success" && (
           <Link
-            href="/dashboard"
+            href="/app/dashboard"
             className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-6 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(249,115,22,0.35)] hover:bg-orange-600 transition-colors"
           >
             Go to dashboard
@@ -301,7 +301,7 @@ export default function SuccessClient() {
         {phase === "failed" && (
           <div className="mt-6 flex flex-col items-center gap-2">
             <Link
-              href="/dashboard"
+              href="/app/dashboard"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               Continue to dashboard

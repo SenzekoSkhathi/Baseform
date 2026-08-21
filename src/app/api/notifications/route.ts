@@ -49,7 +49,7 @@ function milestonePlanningFirstUni(appliedAt: string): NotificationItem {
     message:
       "You've officially put your first university on the list. That takes courage. Keep building — every application is a door you're opening for yourself.",
     timestamp: appliedAt,
-    href: "/dashboard/detail",
+    href: "/app/dashboard/detail",
   };
 }
 
@@ -61,7 +61,7 @@ function milestonePlanningTwoUnis(appliedAt: string): NotificationItem {
     message:
       "Smart move — keeping your options open is one of the best things you can do right now. You're thinking ahead.",
     timestamp: appliedAt,
-    href: "/dashboard/detail",
+    href: "/app/dashboard/detail",
   };
 }
 
@@ -73,7 +73,7 @@ function milestonePlanningThreeUnis(appliedAt: string): NotificationItem {
     message:
       "Three universities means three chances at the future you want. You're giving yourself the best possible shot. Don't stop now.",
     timestamp: appliedAt,
-    href: "/dashboard/detail",
+    href: "/app/dashboard/detail",
   };
 }
 
@@ -85,7 +85,7 @@ function milestoneGmailConnected(connectedAt: string): NotificationItem {
     message:
       "Your inbox is now being watched. We'll automatically update your application statuses whenever a university email comes in. You can relax on that part.",
     timestamp: connectedAt,
-    href: "/profile",
+    href: "/app/profile",
   };
 }
 
@@ -99,7 +99,7 @@ function milestoneFirstApp(detectedAt: string): NotificationItem {
     message:
       "Congratulations — we detected activity on your first application. You're no longer just planning, you're doing it. Keep that energy going.",
     timestamp: detectedAt,
-    href: "/dashboard/detail",
+    href: "/app/dashboard/detail",
   };
 }
 
@@ -110,7 +110,7 @@ function milestoneInProgress(uniId: string | number, uniName: string, updatedAt:
     title: `Your ${uniName} application is in progress!`,
     message: `You're making real moves. Keep going — you've got this, and ${uniName} is waiting for your story.`,
     timestamp: updatedAt,
-    href: `/dashboard/detail/${uniId}`,
+    href: `/app/dashboard/detail/${uniId}`,
   };
 }
 
@@ -121,7 +121,7 @@ function milestoneSubmitted(uniId: string | number, uniName: string, updatedAt: 
     title: `Well done on completing your ${uniName} application!`,
     message: `That's one in the bag. You put in the work and it shows — your future self will thank you for this.`,
     timestamp: updatedAt,
-    href: `/dashboard/detail/${uniId}`,
+    href: `/app/dashboard/detail/${uniId}`,
   };
 }
 
@@ -132,7 +132,7 @@ function milestoneAccepted(uniId: string | number, uniName: string, updatedAt: s
     title: `You've received an offer from ${uniName}!`,
     message: `This is your moment — congratulations! All those late nights and hard work brought you here. You earned this.`,
     timestamp: updatedAt,
-    href: `/dashboard/detail/${uniId}`,
+    href: `/app/dashboard/detail/${uniId}`,
   };
 }
 
@@ -143,7 +143,7 @@ function milestoneWaitlisted(uniId: string | number, uniName: string, updatedAt:
     title: `You're on the waitlist at ${uniName}`,
     message: `Don't lose hope — being waitlisted means they see potential in you. Stay patient and keep your other options open.`,
     timestamp: updatedAt,
-    href: `/dashboard/detail/${uniId}`,
+    href: `/app/dashboard/detail/${uniId}`,
   };
 }
 
@@ -155,7 +155,7 @@ function milestoneThreeSubmitted(updatedAt: string): NotificationItem {
     message:
       "You've put yourself in front of 3 universities already. Most students stop at one — you're going all in. Keep that energy.",
     timestamp: updatedAt,
-    href: "/tracker",
+    href: "/app/tracker",
   };
 }
 
@@ -167,7 +167,7 @@ function milestoneAllSubmitted(updatedAt: string): NotificationItem {
     message:
       "You've done everything you possibly can — now it's time to breathe, stay positive, and let the results come to you. Proud of you.",
     timestamp: updatedAt,
-    href: "/tracker",
+    href: "/app/tracker",
   };
 }
 
@@ -238,7 +238,7 @@ export async function GET() {
       title: `Auto-detected: ${uni?.name ?? "University"} application`,
       message: `We spotted an email in your inbox about your ${uni?.name ?? "university"} application. Status automatically updated to ${statusLabel}.`,
       timestamp: log.created_at,
-      href: uni?.id ? `/dashboard/detail/${uni.id}` : "/tracker",
+      href: uni?.id ? `/app/dashboard/detail/${uni.id}` : "/app/tracker",
     });
   }
 
@@ -255,7 +255,7 @@ export async function GET() {
         title: `Application update: ${faculty?.name ?? "Programme"}`,
         message: `Status changed to ${String(app.status).replace(/_/g, " ")} at ${uni?.name ?? "your university"}.`,
         timestamp: updatedAt,
-        href: uni?.id ? `/dashboard/detail/${uni.id}` : "/dashboard/detail",
+        href: uni?.id ? `/app/dashboard/detail/${uni.id}` : "/app/dashboard/detail",
       });
     }
 
@@ -268,7 +268,7 @@ export async function GET() {
           title: `${uni.name} deadline approaching`,
           message: `${faculty?.name ?? "A programme"} closes in ${days} day${days === 1 ? "" : "s"}.`,
           timestamp: new Date(uni.closing_date).toISOString(),
-          href: uni?.id ? `/dashboard/detail/${uni.id}` : "/dashboard/detail",
+          href: uni?.id ? `/app/dashboard/detail/${uni.id}` : "/app/dashboard/detail",
         });
       }
     }
@@ -401,7 +401,7 @@ export async function GET() {
         title: content.title,
         message: content.message,
         timestamp: new Date().toISOString(),
-        href: "/settings/usage",
+        href: "/app/settings/usage",
       });
     }
   }
@@ -414,7 +414,7 @@ export async function GET() {
       title: "No alerts yet",
       message: "Add programmes to start receiving deadline and status notifications.",
       timestamp: new Date().toISOString(),
-      href: "/dashboard/detail",
+      href: "/app/dashboard/detail",
     });
   }
 

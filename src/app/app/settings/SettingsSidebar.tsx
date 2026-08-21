@@ -11,25 +11,25 @@ const NAV_GROUPS = [
   {
     label: "Account",
     items: [
-      { href: "/settings/account",       label: "Account",       icon: User },
-      { href: "/settings/notifications",  label: "Notifications", icon: Bell },
-      { href: "/settings/security",       label: "Security",      icon: Shield },
-      { href: "/settings/appearance",     label: "Appearance",    icon: Palette },
+      { href: "/app/settings/account",       label: "Account",       icon: User },
+      { href: "/app/settings/notifications",  label: "Notifications", icon: Bell },
+      { href: "/app/settings/security",       label: "Security",      icon: Shield },
+      { href: "/app/settings/appearance",     label: "Appearance",    icon: Palette },
     ],
   },
   {
     label: "Plan",
     items: [
-      { href: "/settings/usage",   label: "Usage",   icon: BarChart2 },
-      { href: "/settings/billing", label: "Billing", icon: CreditCard },
+      { href: "/app/settings/usage",   label: "Usage",   icon: BarChart2 },
+      { href: "/app/settings/billing", label: "Billing", icon: CreditCard },
     ],
   },
   {
     label: "More",
     items: [
-      { href: "/settings/privacy", label: "Privacy",       icon: Lock },
-      { href: "/settings/help",    label: "Help & Support", icon: HelpCircle },
-      { href: "/settings/about",   label: "About",          icon: Info },
+      { href: "/app/settings/privacy", label: "Privacy",       icon: Lock },
+      { href: "/app/settings/help",    label: "Help & Support", icon: HelpCircle },
+      { href: "/app/settings/about",   label: "About",          icon: Info },
     ],
   },
 ];

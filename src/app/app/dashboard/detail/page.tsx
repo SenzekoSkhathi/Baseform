@@ -102,7 +102,7 @@ export default async function DashboardDetailPage() {
   }));
 
   if ((profile as { grade_year?: string } | null)?.grade_year === "Grade 11") {
-    redirect("/dashboard");
+    redirect("/app/dashboard");
   }
 
   const tier = String((profile as { tier?: string } | null)?.tier ?? "free").trim().toLowerCase();

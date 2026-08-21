@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
         ? {
             error: "You've used all 20 of your monthly Base Credits. Upgrade for more, or wait until the 1st of next month.",
             upgrade: true,
-            redirect: "/basebot/preview?reason=out-of-credits",
+            redirect: "/app/basebot/preview?reason=out-of-credits",
           }
         : { error: "You've run out of Base Credits. Your allowance refills 7 days after your last top-up." },
       { status: 402 },

@@ -148,7 +148,7 @@ export default function UniversityDetailClient({ university, programmes, aps }: 
         // applications list is now empty — send the user back so the grid
         // reflects the removal without a hard refresh.
         if (nextProgrammes.length === 0) {
-          router.replace("/dashboard/detail");
+          router.replace("/app/dashboard/detail");
         }
       })
       .catch(() => {

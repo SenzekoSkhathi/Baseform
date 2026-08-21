@@ -30,7 +30,7 @@ type Props = {
 
 const TILES_GRADE12 = [
   {
-    href: "/basebot",
+    href: "/app/basebot",
     title: "BaseBot",
     icon: "/icon.svg",
     iconBg: "bg-purple-50",
@@ -39,7 +39,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-basebot",
   },
   {
-    href: "/dashboard/detail",
+    href: "/app/dashboard/detail",
     title: "Applications",
     icon: "📝",
     iconBg: "bg-blue-50",
@@ -47,7 +47,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-applications",
   },
   {
-    href: "/programmes",
+    href: "/app/programmes",
     title: "Programmes",
     icon: "🎓",
     iconBg: "bg-orange-50",
@@ -55,7 +55,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-programmes",
   },
   {
-    href: "/bursaries",
+    href: "/app/bursaries",
     title: "Bursaries",
     icon: "💰",
     iconBg: "bg-pink-50",
@@ -63,7 +63,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-bursaries",
   },
   {
-    href: "/tracker",
+    href: "/app/tracker",
     title: "Progress",
     icon: "📈",
     iconBg: "bg-green-50",
@@ -71,7 +71,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-progress",
   },
   {
-    href: "/vault",
+    href: "/app/vault",
     title: "Documents",
     icon: "🗂️",
     iconBg: "bg-teal-50",
@@ -79,7 +79,7 @@ const TILES_GRADE12 = [
     dataTour: "tile-documents",
   },
   {
-    href: "/profile",
+    href: "/app/profile",
     title: "Profile",
     icon: "👤",
     iconBg: "bg-amber-50",
@@ -90,7 +90,7 @@ const TILES_GRADE12 = [
 
 const TILES_GRADE11 = [
   {
-    href: "/basebot",
+    href: "/app/basebot",
     title: "BaseBot",
     icon: "/icon.svg",
     iconBg: "bg-purple-50",
@@ -99,7 +99,7 @@ const TILES_GRADE11 = [
     dataTour: "tile-basebot",
   },
   {
-    href: "/targets",
+    href: "/app/targets",
     title: "My Targets",
     icon: "🎯",
     iconBg: "bg-blue-50",
@@ -107,7 +107,7 @@ const TILES_GRADE11 = [
     dataTour: "tile-targets",
   },
   {
-    href: "/programmes",
+    href: "/app/programmes",
     title: "Programmes",
     icon: "🎓",
     iconBg: "bg-orange-50",
@@ -115,7 +115,7 @@ const TILES_GRADE11 = [
     dataTour: "tile-programmes",
   },
   {
-    href: "/bursaries",
+    href: "/app/bursaries",
     title: "Bursaries",
     icon: "💰",
     iconBg: "bg-pink-50",
@@ -123,7 +123,7 @@ const TILES_GRADE11 = [
     dataTour: "tile-bursaries",
   },
   {
-    href: "/vault",
+    href: "/app/vault",
     title: "Documents",
     icon: "🗂️",
     iconBg: "bg-teal-50",
@@ -131,7 +131,7 @@ const TILES_GRADE11 = [
     dataTour: "tile-documents",
   },
   {
-    href: "/profile",
+    href: "/app/profile",
     title: "Profile",
     icon: "👤",
     iconBg: "bg-amber-50",
@@ -207,7 +207,7 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
               </p>
             </div>
 
-            <Link href="/profile" aria-label="Go to profile" className="relative shrink-0">
+            <Link href="/app/profile" aria-label="Go to profile" className="relative shrink-0">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 md:h-16 md:w-16">
                 <span className="text-lg font-bold text-white md:text-xl">
                   {firstName ? firstName.charAt(0).toUpperCase() : "?"}
@@ -219,7 +219,7 @@ export default function DashboardClient({ userId, profile, aps, subjects, totalI
 
           {profileIncomplete ? (
             <Link
-              href="/profile"
+              href="/app/profile"
               className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2.5 hover:bg-orange-100 transition-colors"
             >
               <p className="text-sm font-semibold text-orange-700">Complete your profile to personalise your experience</p>

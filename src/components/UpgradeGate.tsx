@@ -114,7 +114,7 @@ export default function UpgradeGate({
               Upgrade Plan
             </Link>
             <Link
-              href="/dashboard"
+              href="/app/dashboard"
               className="flex w-full items-center justify-center rounded-2xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
             >
               Back to dashboard
