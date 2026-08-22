@@ -147,7 +147,7 @@ function WaitlistForm() {
   );
 }
 
-export default function WaitlistPage() {
+function WaitlistContent() {
   return (
     <main className="relative min-h-screen bg-[#fff9f2]">
       <div className="pointer-events-none absolute inset-0">
@@ -161,5 +161,14 @@ export default function WaitlistPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+
+export default function WaitlistPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <WaitlistContent />
+    </Suspense>
   );
 }

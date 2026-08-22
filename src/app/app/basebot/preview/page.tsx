@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import BaseBotPreviewClient from "./BaseBotPreviewClient";
@@ -17,7 +18,11 @@ export default async function BaseBotPreviewPage() {
     .eq("id", user.id)
     .single();
 
-  return <BaseBotPreviewClient firstName={profile?.full_name?.split(" ")[0] ?? "there"} />;
+  return (
+    <Suspense fallback={<div className="flex justify-center p-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <BaseBotPreviewClient firstName={profile?.full_name?.split(" ")[0] ?? "there"} />
+    </Suspense>
+  );
 }
 
 export const dynamic = "force-dynamic";

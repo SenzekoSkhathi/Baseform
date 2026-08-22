@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense,  useEffect, useMemo, useState  } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/client";
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialEmail = useMemo(() => searchParams.get("email") ?? "", [searchParams]);
@@ -281,5 +281,14 @@ export default function VerifyEmailPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }

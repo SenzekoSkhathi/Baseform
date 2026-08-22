@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense,  useEffect, useMemo, useState  } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -49,7 +49,7 @@ function mapPlans(rows: PublicPlan[]) {
   );
 }
 
-export default function PaymentPage() {
+function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -324,5 +324,14 @@ export default function PaymentPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <PaymentContent />
+    </Suspense>
   );
 }

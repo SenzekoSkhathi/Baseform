@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense,  useEffect, useMemo, useState  } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
 import imageCompression from "browser-image-compression";
@@ -198,7 +198,7 @@ function applyHorizontalPerspectiveCorrection(
   return outputCanvas;
 }
 
-export default function VaultEditorPage() {
+function VaultEditorContent() {
   const router = useRouter();
   const params = useSearchParams();
   const pageId = useMemo(() => params.get("pageId") ?? "", [params]);
@@ -638,5 +638,14 @@ export default function VaultEditorPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+
+export default function VaultEditorPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <VaultEditorContent />
+    </Suspense>
   );
 }

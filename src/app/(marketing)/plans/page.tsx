@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import PlansClient from "./PlansClient";
 
@@ -9,5 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function PlansPage() {
-  return <PlansClient />;
+  return (
+    <Suspense fallback={<div className="flex justify-center p-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <PlansClient />
+    </Suspense>
+  );
 }

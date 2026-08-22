@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calculateAPS, markToApsPoint } from "@/lib/aps/calculator";
@@ -36,12 +37,14 @@ export default async function ProfilePage() {
   })) ?? [];
 
   return (
-    <ProfileClient
+    <Suspense fallback={<div className="flex justify-center p-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+      <ProfileClient
       profile={profile}
       aps={aps}
       subjects={studentSubjects}
       email={user.email ?? ""}
       userId={user.id}
     />
+    </Suspense>
   );
 }
