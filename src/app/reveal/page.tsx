@@ -388,18 +388,9 @@ function RevealContent() {
   );
 }
 
-function RevealContent() {
-  return (
-    <Suspense>
-      <RevealContent />
-    </Suspense>
-  );
-}
-
-
 export default function RevealPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" /></div>}>
+    <Suspense>
       <RevealContent />
     </Suspense>
   );
