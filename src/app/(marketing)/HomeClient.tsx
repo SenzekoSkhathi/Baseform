@@ -1,249 +1,310 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
-  Menu,
-  X,
   Send,
-  Mail,
-  MessageCircle,
-  Lock,
-  RotateCcw,
   Check,
   Clock,
+  RotateCcw,
   Compass,
   GraduationCap,
-  Trophy,
   ListChecks,
   Bell,
   FolderLock,
+  MessageCircle,
+  Trophy,
   Calculator,
+  BookOpen,
+  Target,
+  Users,
+  BarChart3,
+  HeartHandshake,
+  Mail,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
-import {
-  DEFAULT_PLANS,
-  type PublicPlan,
-} from "@/lib/site-config/defaults";
+import MarketingHeader from "@/components/marketing/MarketingHeader";
+import MarketingFooter from "@/components/marketing/MarketingFooter";
 
-const NAV_LINKS = [
-  { href: "#try", label: "Ask BaseBot" },
-  { href: "/how-it-works", label: "How it works" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#schools", label: "Schools" },
-  { href: "/about", label: "About" },
-];
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL REVEAL HOOK — IntersectionObserver for .reveal elements
+   ═══════════════════════════════════════════════════════════════════════════ */
+function useScrollReveal() {
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.01, rootMargin: "100px 0px 0px 0px" }
+    );
+    
+    // Function to find and observe elements
+    const observeAll = () => {
+      document.querySelectorAll(".reveal, .stat-enter, .feat-visual-animate, .thesis").forEach((el) => {
+        if (!el.classList.contains("in")) io.observe(el);
+      });
+    };
 
-const ROTATING_PROMPTS = [
-  "I got 65% in Maths. What can I actually study?",
-  "How do I apply for NSFAS this year?",
-  "I want to be a doctor but my marks aren't great — what now?",
-  "What bursaries can I get if my family earns under R350k?",
-  "I'm at a no-fee school. Can I still apply to UCT?",
-];
+    // Run immediately and after a short delay for hydration
+    observeAll();
+    const timeoutId = setTimeout(observeAll, 200);
 
-const HOW_IT_WORKS = [
-  {
-    n: "I.",
-    title: "Ask",
-    body: "Tell BaseBot what you got, what you like, what scares you. The AI knows every public university and bursary in South Africa.",
-  },
-  {
-    n: "II.",
-    title: "Match",
-    body: "A shortlist of degrees and bursaries that fit your marks and your life — not just the obvious ones your friends are picking.",
-  },
-  {
-    n: "III.",
-    title: "Apply",
-    body: "Upload your documents once. Track every application, every deadline, every outcome — from your phone, even on a slow connection.",
-  },
-];
+    // Also observe DOM changes in case sections render late
+    const mutationObserver = new MutationObserver(() => observeAll());
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
 
-const INSTITUTIONS = [
-  "UCT", "Wits", "UP", "Stellenbosch", "UJ", "UKZN", "NWU", "UNISA",
-  "Rhodes", "UFS", "UWC", "NMU", "CPUT", "DUT", "TUT", "VUT", "MUT",
-  "CUT", "SPU", "UMP", "UFH", "UNIVEN", "UL", "WSU", "SMU", "UNIZULU",
-];
+    return () => {
+      clearTimeout(timeoutId);
+      io.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, []);
+}
 
-const FUNDERS = [
-  "NSFAS", "Funza Lushaka", "Sasol", "Investec", "ISFAP", "Allan Gray",
-];
+/* ═══════════════════════════════════════════════════════════════════════════
+   HERO APP CARDS — Floating UI cards showing the product in action
+   ═══════════════════════════════════════════════════════════════════════════ */
+function HeroVisual() {
+  return (
+    <div className="relative w-full aspect-[4/5]">
+      {/* Ambient glow */}
+      <div
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/2 size-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-200/40 blur-3xl"
+      />
 
-/* ---------- Live AI demo (wired to /api/basebot/public) ---------- */
+      {/* Card 1: Applications Tracker */}
+      <div className="hero-card absolute left-[3%] top-[6%] w-[58%] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]" style={{ '--card-rotate': '-5deg' } as React.CSSProperties}>
+        <div className="flex items-center justify-between">
+          <p className="label text-[9px]">Applications</p>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-[var(--orange-deep)]">
+            4 / 6
+          </span>
+        </div>
+        <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
+          66<span className="text-base text-gray-400">%</span>
+        </p>
+        <p className="text-[10px] font-medium text-gray-500">complete</p>
+        <div className="mt-2 h-1.5 w-full rounded-full bg-orange-50">
+          <div
+            style={{ width: "66%" }}
+            aria-hidden="true"
+            className="h-full rounded-full bg-[var(--orange)]"
+          />
+        </div>
+        <ul className="mt-3 space-y-1.5">
+          {["Wits", "UJ", "UP", "UCT"].map((uni) => (
+            <li
+              key={uni}
+              className="flex items-center gap-2 text-[11px]"
+            >
+              <span className="grid size-3.5 shrink-0 place-items-center rounded-full bg-[var(--orange)] text-white">
+                <Check size={8} strokeWidth={3.5} />
+              </span>
+              <span className="text-gray-700">{uni}</span>
+            </li>
+          ))}
+          <li className="flex items-center gap-2 text-[11px]">
+            <span className="grid size-3.5 shrink-0 place-items-center rounded-full border border-orange-200 bg-white text-[var(--orange)]">
+              <Clock size={7} />
+            </span>
+            <span className="font-semibold text-gray-900">Stellenbosch</span>
+          </li>
+        </ul>
+      </div>
 
+      {/* Card 2: Next Deadline */}
+      <div className="hero-card absolute left-1/2 top-[38%] w-[60%] -translate-x-1/2 rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_22px_55px_rgba(249,115,22,0.22)]" style={{ '--card-rotate': '3deg' } as React.CSSProperties}>
+        <div className="flex items-center justify-between">
+          <p className="label text-[9px]">Next deadline</p>
+          <span className="flex items-center gap-1 rounded-full bg-[var(--orange)] px-2 py-0.5 text-[9px] font-bold text-white">
+            <Clock size={8} strokeWidth={3} />
+            62 days
+          </span>
+        </div>
+        <p className="mt-2.5 text-lg font-bold leading-tight tracking-tight text-gray-900">
+          Stellenbosch
+        </p>
+        <p className="text-[11px] text-gray-500">BCom Economics</p>
+        <div className="mt-3 flex items-baseline gap-2 rounded-xl bg-orange-50 px-3 py-2">
+          <p className="text-2xl font-bold tracking-tight text-[var(--orange-deep)]">
+            30
+          </p>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--orange-deep)]">
+              June
+            </p>
+            <p className="text-[9px] text-[var(--orange)]/80">2026</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 3: Documents */}
+      <div className="hero-card absolute bottom-[6%] right-[3%] w-[55%] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]" style={{ '--card-rotate': '6deg' } as React.CSSProperties}>
+        <div className="flex items-center justify-between">
+          <p className="label text-[9px]">Documents</p>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-[var(--orange-deep)]">
+            6 / 7
+          </span>
+        </div>
+        <ul className="mt-2.5 space-y-1.5">
+          {["Certified ID", "Matric results", "Motivation letter"].map(
+            (doc) => (
+              <li
+                key={doc}
+                className="flex items-center gap-2 text-[11px]"
+              >
+                <span className="grid size-3.5 shrink-0 place-items-center rounded-full bg-[var(--orange)] text-white">
+                  <Check size={8} strokeWidth={3.5} />
+                </span>
+                <span className="text-gray-700 line-through decoration-orange-300">
+                  {doc}
+                </span>
+              </li>
+            )
+          )}
+          <li className="flex items-center gap-2 text-[11px]">
+            <span className="grid size-3.5 shrink-0 place-items-center rounded-full border border-orange-200 bg-white" />
+            <span className="font-semibold text-gray-900">
+              Reference letter
+            </span>
+          </li>
+        </ul>
+        <div className="mt-2.5 h-1 w-full rounded-full bg-orange-50">
+          <div
+            style={{ width: "86%" }}
+            aria-hidden="true"
+            className="h-full rounded-full bg-[var(--orange)]"
+          />
+        </div>
+      </div>
+
+      {/* Caption */}
+      <p className="absolute -bottom-6 left-0 right-0 text-center label text-[9px] text-[var(--ink-soft)]/45">
+        Every application, deadline &amp; document — one place.
+      </p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRY AI — Live BaseBot playground
+   ═══════════════════════════════════════════════════════════════════════════ */
 function TryAi() {
   const [input, setInput] = useState("");
   const [submitted, setSubmitted] = useState<string | null>(null);
-  const [streamed, setStreamed] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [typedPlaceholder, setTypedPlaceholder] = useState("");
-  const placeholderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const streamTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (submitted) return;
-    const target = ROTATING_PROMPTS[promptIndex];
-    let i = 0;
-    let deleting = false;
-
-    function tick() {
-      if (!deleting) {
-        i += 1;
-        setTypedPlaceholder(target.slice(0, i));
-        if (i >= target.length) {
-          placeholderTimer.current = setTimeout(() => {
-            deleting = true;
-            tick();
-          }, 1800);
-          return;
-        }
-      } else {
-        i -= 1;
-        setTypedPlaceholder(target.slice(0, i));
-        if (i <= 0) {
-          setPromptIndex((p) => (p + 1) % ROTATING_PROMPTS.length);
-          return;
-        }
-      }
-      placeholderTimer.current = setTimeout(tick, deleting ? 25 : 55);
-    }
-    tick();
-    return () => {
-      if (placeholderTimer.current) clearTimeout(placeholderTimer.current);
-    };
-  }, [promptIndex, submitted]);
-
-  function streamText(full: string) {
-    if (streamTimer.current) clearTimeout(streamTimer.current);
-    let i = 0;
-    const tick = () => {
-      i += 2;
-      setStreamed(full.slice(0, i));
-      if (i < full.length) {
-        streamTimer.current = setTimeout(tick, 12);
-      }
-    };
-    tick();
-  }
+  const [reply, setReply] = useState<string>("");
 
   async function handleSubmit() {
-    const value = input.trim() || ROTATING_PROMPTS[promptIndex];
+    const value = input.trim();
+    if (!value) return;
     setSubmitted(value);
-    setStreamed("");
+    setReply("");
     setError(null);
     setLoading(true);
+
     try {
       const res = await fetch("/api/basebot/public", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: value }),
       });
-      const data = (await res.json()) as { reply?: string; error?: string };
+      const data = await res.json();
       if (!res.ok || !data.reply) {
-        setError(data.error ?? "AI is unavailable right now. Try again in a moment.");
-        setLoading(false);
-        return;
+        setError(
+          data.error ?? "AI is unavailable right now. Try again in a moment."
+        );
+      } else {
+        setReply(data.reply);
       }
-      setLoading(false);
-      streamText(data.reply);
     } catch {
-      setError("Network hiccup. Check your connection and try again.");
+      setError("Network error. Please try again.");
+    } finally {
       setLoading(false);
     }
   }
 
-  function reset() {
-    if (streamTimer.current) clearTimeout(streamTimer.current);
-    setSubmitted(null);
-    setStreamed("");
-    setInput("");
-    setError(null);
-    setLoading(false);
-  }
-
   return (
-    <div className="border-t border-b border-ink/15 bg-paper py-10 sm:py-12">
-      {!submitted ? (
-        <>
-          <p className="font-sans text-[11px] font-bold uppercase tracking-[0.18em] text-ink/55">
-            BaseBot · A live conversation
-          </p>
-          <label
-            htmlFor="ai-input"
-            className="mt-3 block font-serif text-3xl font-medium leading-[1.1] tracking-tight text-ink sm:text-4xl"
-          >
-            Ask anything about your future.
-          </label>
-          <p className="mt-3 font-serif text-base italic text-ink/65 sm:text-lg">
-            Real AI. Real answers. No sign-up needed to try.
-          </p>
+    <div className="border-t border-b border-[var(--line)] py-10 sm:py-12">
+      <p className="label text-[11px] text-[var(--ink-soft)]/55">
+        BaseBot · A live conversation
+      </p>
+      <label
+        htmlFor="ai-input"
+        className="mt-3 block text-3xl font-bold leading-[1.1] tracking-tight sm:text-4xl"
+      >
+        Ask anything about your future.
+      </label>
+      <p className="mt-3 text-base text-[var(--ink-soft)] sm:text-lg">
+        Real AI. Real answers. No sign-up needed to try.
+      </p>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-stretch">
-            <input
-              id="ai-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSubmit();
-              }}
-              placeholder={typedPlaceholder + "▎"}
-              className="w-full border-b-2 border-ink bg-transparent px-1 py-3 font-serif text-lg text-ink placeholder:text-ink/35 focus:border-orange-500 focus:outline-none sm:text-xl"
-              maxLength={500}
-            />
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="group inline-flex items-center justify-center gap-2 bg-ink px-6 py-3 font-sans text-xs font-bold uppercase tracking-[0.2em] text-paper transition-colors hover:bg-orange-500"
-            >
-              Ask BaseBot
-              <Send size={13} className="transition-transform group-hover:translate-x-0.5" />
-            </button>
-          </div>
+      <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <input
+          id="ai-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="I got 55% in Maths. What degrees can I get into?"
+          maxLength={500}
+          disabled={loading}
+          className="w-full border-b-2 border-[var(--ink)] bg-transparent px-1 py-3 text-lg placeholder:text-[var(--ink)]/35 focus:border-[var(--orange)] focus:outline-none sm:text-xl"
+        />
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={loading || !input.trim()}
+          className="btn btn-dark group inline-flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-[0.2em] disabled:opacity-50"
+        >
+          Ask BaseBot
+          <Send
+            size={13}
+            className="transition-transform group-hover:translate-x-0.5"
+          />
+        </button>
+      </div>
 
-          <p className="mt-4 font-sans text-xs text-ink/50">
-            Free. No card. Press enter to ask, or hit the button to try the example.
-          </p>
-        </>
-      ) : (
-        <>
-          <div className="grid gap-5 lg:grid-cols-12">
-            <div className="lg:col-span-2">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-ink/55">
-                You asked
-              </p>
+      {/* Reply Area */}
+      {submitted && (
+        <div className="mt-8 space-y-4">
+          <div className="flex w-full justify-end">
+            <div className="max-w-[80%] rounded-2xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-900">
+              {submitted}
             </div>
-            <p className="font-serif text-xl italic leading-snug text-ink lg:col-span-10">
-              &ldquo;{submitted}&rdquo;
-            </p>
           </div>
-
-          <div className="mt-7 grid gap-5 border-t border-ink/15 pt-7 lg:grid-cols-12">
-            <div className="lg:col-span-2">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-orange-600">
-                BaseBot
-              </p>
+          <div className="flex w-full justify-start gap-3">
+            <div className="w-8 h-8 shrink-0 rounded-xl bg-[var(--orange)] flex items-center justify-center">
+              <Image src="/icon.svg" alt="Bot" width={16} height={16} />
             </div>
-            <div className="lg:col-span-10">
-              {loading && !error && (
-                <p className="font-serif text-base italic text-ink/55">
-                  Thinking…
-                </p>
+            <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white border border-[var(--line)] px-5 py-4 shadow-sm text-sm text-gray-800 leading-relaxed">
+              {loading && (
+                <div className="flex items-center gap-2 text-[var(--orange)]">
+                  <div className="h-2 w-2 animate-bounce rounded-full bg-[var(--orange)]" />
+                  <div
+                    className="h-2 w-2 animate-bounce rounded-full bg-[var(--orange)]"
+                    style={{ animationDelay: "0.2s" }}
+                  />
+                  <div
+                    className="h-2 w-2 animate-bounce rounded-full bg-[var(--orange)]"
+                    style={{ animationDelay: "0.4s" }}
+                  />
+                </div>
               )}
-              {error && (
-                <p className="border-l-2 border-rose-500 pl-4 font-serif text-base text-rose-700">
-                  {error}
-                </p>
-              )}
-              {!error && streamed && (
-                <pre className="whitespace-pre-wrap font-serif text-[17px] leading-relaxed text-ink">
-                  {streamed.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+              {error && <span className="text-red-500">{error}</span>}
+              {!loading && !error && reply && (
+                <pre className="whitespace-pre-wrap font-sans">
+                  {reply.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
                     part.startsWith("**") && part.endsWith("**") ? (
-                      <strong key={i} className="font-semibold">
+                      <strong key={i} className="font-bold text-gray-900">
                         {part.slice(2, -2)}
                       </strong>
                     ) : (
@@ -254,902 +315,710 @@ function TryAi() {
               )}
             </div>
           </div>
-
-          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 bg-orange-500 px-6 py-3 font-sans text-xs font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-orange-400"
-            >
-              Continue free — get a personalised plan
-              <ArrowRight size={13} />
-            </Link>
-            <button
-              type="button"
-              onClick={reset}
-              className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-[0.2em] text-ink/60 hover:text-ink"
-            >
-              <RotateCcw size={12} />
-              Ask something else
-            </button>
-          </div>
-        </>
+        </div>
       )}
+
+      {submitted && !loading && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => {
+              setSubmitted(null);
+              setInput("");
+              setReply("");
+            }}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--ink-soft)] hover:text-[var(--ink)]"
+          >
+            <RotateCcw size={12} /> Reset Chat
+          </button>
+        </div>
+      )}
+
+      <p className="mt-4 text-xs text-[var(--ink-soft)]/50">
+        Free. No card. Press enter to ask, or type your own question.
+      </p>
     </div>
   );
 }
 
-/* ---------- Page ---------- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   FEATURE ORBIT — Circular diagram showing all 8 capabilities
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ORBIT_ITEMS = [
+  {
+    label: "Career guidance",
+    icon: Compass,
+    pos: { top: "0%", left: "50%" },
+  },
+  {
+    label: "University matching",
+    icon: GraduationCap,
+    pos: { top: "14.6%", left: "85.4%" },
+  },
+  {
+    label: "Application tracking",
+    icon: ListChecks,
+    pos: { top: "50%", left: "100%" },
+  },
+  {
+    label: "Deadline reminders",
+    icon: Bell,
+    pos: { top: "85.4%", left: "85.4%" },
+  },
+  {
+    label: "Document vault",
+    icon: FolderLock,
+    pos: { top: "100%", left: "50%" },
+  },
+  {
+    label: "AI Coach · BaseBot",
+    icon: MessageCircle,
+    pos: { top: "85.4%", left: "14.6%" },
+  },
+  {
+    label: "Bursary discovery",
+    icon: Trophy,
+    pos: { top: "50%", left: "0%" },
+  },
+  {
+    label: "APS calculator",
+    icon: Calculator,
+    pos: { top: "14.6%", left: "14.6%" },
+  },
+];
 
-export default function HomeClient() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [plans, setPlans] = useState<PublicPlan[]>(DEFAULT_PLANS);
+function FeatureOrbit() {
+  return (
+    <>
+      {/* Desktop orbit */}
+      <div className="relative mx-auto mt-16 hidden aspect-square w-full max-w-[640px] lg:block">
+        <div
+          aria-hidden="true"
+          className="orbit-ring absolute inset-[6%] rounded-full border border-[var(--line)]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-[22%] rounded-full border border-[var(--line)]/60"
+        />
 
-  useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch("/api/site-config", { signal: controller.signal });
-        if (!res.ok) return;
-        const payload = await res.json();
-        if (Array.isArray(payload?.plans) && payload.plans.length > 0) {
-          setPlans(payload.plans as PublicPlan[]);
-        }
-      } catch {
-        // keep defaults on failure
-      }
-    })();
-    return () => controller.abort();
-  }, []);
+        {/* Center Logo */}
+        <div className="orbit-center absolute left-1/2 top-1/2 flex aspect-square w-[34%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-full border border-orange-200 bg-[var(--cream)] shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
+          <Logo variant="lockup" size="md" />
+          <p className="label text-[9px]">Sizokusiza</p>
+        </div>
 
-  const issueDate = new Date().toLocaleDateString("en-ZA", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+        {/* Orbit items */}
+        {ORBIT_ITEMS.map((item) => (
+          <div
+            key={item.label}
+            style={item.pos}
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+          >
+            <div className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--line)] bg-[var(--cream)] px-4 py-2.5 shadow-[0_8px_24px_rgba(26,23,20,0.06)]">
+              <span className="grid size-7 place-items-center rounded-full bg-[var(--orange-soft)] text-[var(--orange-deep)]">
+                <item.icon size={14} />
+              </span>
+              <span className="text-[12px] font-bold uppercase tracking-[0.16em]">
+                {item.label}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile grid */}
+      <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:hidden">
+        {ORBIT_ITEMS.map((item) => (
+          <div
+            key={item.label}
+            className="inline-flex items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--cream)] px-4 py-3"
+          >
+            <span className="grid size-8 place-items-center rounded-full bg-[var(--orange-soft)] text-[var(--orange-deep)]">
+              <item.icon size={15} />
+            </span>
+            <span className="text-[12px] font-bold uppercase tracking-[0.16em]">
+              {item.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUDIENCE TABS — "For Learners" / "For Schools & NGOs"
+   ═══════════════════════════════════════════════════════════════════════════ */
+function AudienceTabs() {
+  const [tab, setTab] = useState<"learners" | "schools">("learners");
+
+  const learnerCards = [
+    {
+      icon: GraduationCap,
+      title: "Matched to the right degrees",
+      desc: "Enter your marks once and Baseform surfaces the programmes your APS and subjects actually qualify you for — no guessing, no blind applications.",
+    },
+    {
+      icon: Trophy,
+      title: "Bursaries that fit you",
+      desc: "Get matched to funding you genuinely qualify for — NSFAS, Funza Lushaka, corporate bursaries and more.",
+    },
+    {
+      icon: MessageCircle,
+      title: "AI guidance, any time",
+      desc: "Ask BaseBot anything about your future — in plain language. It knows every public university and bursary in South Africa.",
+    },
+    {
+      icon: ListChecks,
+      title: "Track every application",
+      desc: "Upload your documents once. Track every application, every deadline, every outcome — from your phone.",
+    },
+  ];
+
+  const schoolCards = [
+    {
+      icon: Users,
+      title: "Bulk school licences",
+      desc: "Give every learner in your school access to AI career guidance, application tracking, and bursary matching.",
+    },
+    {
+      icon: BarChart3,
+      title: "Analytics dashboard",
+      desc: "See how your learners are progressing — applications submitted, offers received, bursaries secured.",
+    },
+    {
+      icon: HeartHandshake,
+      title: "Partner support",
+      desc: "Dedicated onboarding, training, and ongoing support for educators and counsellors. Contact us for details.",
+    },
+  ];
 
   return (
-    <main
-      className="relative min-h-screen text-ink"
-      style={
-        {
-          // Editorial palette — distinct from the app's #fff9f2 + orange-blob recipe.
-          // ink: deep warm black. paper: warm cream. forest: dark section.
-          ["--paper" as const]: "#f4ecdf",
-          ["--ink" as const]: "#1a1714",
-          ["--forest" as const]: "#0f1c16",
-          backgroundColor: "var(--paper)",
-        } as React.CSSProperties
-      }
-    >
-      <style jsx global>{`
-        .bg-paper { background-color: var(--paper); }
-        .bg-ink { background-color: var(--ink); }
-        .bg-forest { background-color: var(--forest); }
-        .text-paper { color: var(--paper); }
-        .text-ink { color: var(--ink); }
-        .text-ink\\/55 { color: color-mix(in srgb, var(--ink) 55%, transparent); }
-        .text-ink\\/65 { color: color-mix(in srgb, var(--ink) 65%, transparent); }
-        .text-ink\\/60 { color: color-mix(in srgb, var(--ink) 60%, transparent); }
-        .text-ink\\/50 { color: color-mix(in srgb, var(--ink) 50%, transparent); }
-        .text-ink\\/35 { color: color-mix(in srgb, var(--ink) 35%, transparent); }
-        .border-ink { border-color: var(--ink); }
-        .border-ink\\/15 { border-color: color-mix(in srgb, var(--ink) 15%, transparent); }
-        .border-ink\\/25 { border-color: color-mix(in srgb, var(--ink) 25%, transparent); }
-        .font-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
-        .font-sans  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        .dropcap::first-letter {
-          font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
-          float: left;
-          font-size: 4.6em;
-          line-height: 0.85;
-          padding: 0.08em 0.12em 0 0;
-          font-weight: 600;
-          color: #ea580c;
-        }
-      `}</style>
+    <>
+      <div className="aud-tabs reveal">
+        <button
+          type="button"
+          className={`aud-tab ${tab === "learners" ? "active" : ""}`}
+          onClick={() => setTab("learners")}
+        >
+          For learners
+        </button>
+        <button
+          type="button"
+          className={`aud-tab ${tab === "schools" ? "active" : ""}`}
+          onClick={() => setTab("schools")}
+        >
+          For schools &amp; NGOs
+        </button>
+      </div>
 
-      {/* ── Masthead strip ─────────────────────────────────────── */}
-      <div className="border-b border-ink/15">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-2 sm:px-8">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/60">
-            Sizokusiza — we&apos;ll help you.
-          </span>
-          <Link
-            href="/onboarding"
-            className="hidden font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/70 hover:text-orange-600 sm:inline-flex"
-          >
-            Subscribe — it&apos;s free →
-          </Link>
+      <div className={`aud-panel ${tab === "learners" ? "active" : ""}`}>
+        <div className="aud-grid">
+          {learnerCards.map((c) => (
+            <article key={c.title} className="aud-card card-hover">
+              <div className="ic">
+                <c.icon />
+              </div>
+              <h3>{c.title}</h3>
+              <p>{c.desc}</p>
+            </article>
+          ))}
         </div>
       </div>
 
-      {/* ── Nav ─────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-ink/15 bg-paper/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
-          <Link href="/" aria-label="Baseform home">
-            <Logo variant="lockup" size="md" />
-          </Link>
-
-          <div className="hidden items-center gap-8 lg:flex">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="font-sans text-[11px] font-bold uppercase tracking-[0.18em] text-ink/65 hover:text-ink"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="hidden items-center gap-5 md:flex">
-            <Link
-              href="/login"
-              className="font-sans text-[11px] font-bold uppercase tracking-[0.18em] text-ink/65 hover:text-ink"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-1.5 bg-ink px-4 py-2.5 font-sans text-[11px] font-bold uppercase tracking-[0.18em] text-paper hover:bg-orange-500"
-            >
-              Start free
-              <ArrowRight size={12} />
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="grid size-10 place-items-center border border-ink/25 text-ink lg:hidden"
-            aria-label="Toggle menu"
-          >
-            {menuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+      <div className={`aud-panel ${tab === "schools" ? "active" : ""}`}>
+        <div className="aud-grid three">
+          {schoolCards.map((c) => (
+            <article key={c.title} className="aud-card card-hover">
+              <div className="ic">
+                <c.icon />
+              </div>
+              <h3>{c.title}</h3>
+              <p>{c.desc}</p>
+            </article>
+          ))}
         </div>
+      </div>
+    </>
+  );
+}
 
-        {menuOpen && (
-          <div className="border-t border-ink/15 bg-paper px-5 py-5 sm:px-8 lg:hidden">
-            <div className="flex flex-col gap-4">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="font-sans text-sm font-bold uppercase tracking-[0.18em] text-ink"
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <div className="mt-2 flex flex-col gap-3 border-t border-ink/15 pt-4">
-                <Link
-                  href="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className="font-sans text-sm font-bold uppercase tracking-[0.18em] text-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/onboarding"
-                  onClick={() => setMenuOpen(false)}
-                  className="inline-flex items-center justify-center gap-1.5 bg-ink px-4 py-3 font-sans text-xs font-bold uppercase tracking-[0.18em] text-paper"
-                >
-                  Start free
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAIN PAGE
+   ═══════════════════════════════════════════════════════════════════════════ */
+export default function HomeClient() {
+  useScrollReveal();
 
-      {/* ── HERO ─────────────────────────────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 pt-12 pb-16 sm:px-8 sm:pt-20 sm:pb-24">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
-            The matric edition · 2026
-          </p>
+  return (
+    <>
+      <MarketingHeader />
 
-          <div className="mt-6 grid gap-10 lg:grid-cols-12 lg:gap-12">
-            {/* Headline + lede */}
-            <div className="lg:col-span-7">
-              <h1 className="font-serif text-[44px] font-medium leading-[0.98] tracking-tight text-ink sm:text-7xl lg:text-[88px]">
-                Your future
-                <br />
-                shouldn&apos;t depend
-                <br />
-                on your{" "}
-                <span className="italic text-orange-600">postcode.</span>
-              </h1>
-
-              <p className="dropcap mt-10 max-w-xl font-serif text-lg leading-[1.55] text-ink/85 sm:text-xl">
-                Baseform is the AI career coach every South African matric should have. Ask
-                it anything. Find degrees that fit. Discover bursaries you qualify for. Apply
-                to all 26 public universities — from one place. Free, forever.
-              </p>
-
-              <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-ink/15 pt-6">
-                <Link
-                  href="/onboarding"
-                  className="inline-flex items-center gap-2 bg-orange-500 px-7 py-4 font-sans text-xs font-bold uppercase tracking-[0.22em] text-white transition-colors hover:bg-ink"
-                >
-                  Start free
-                  <ArrowRight size={14} />
-                </Link>
-                <Link
-                  href="#try"
-                  className="font-serif text-base italic text-ink/70 underline-offset-4 hover:underline"
-                >
-                  …or just ask BaseBot a question first ↓
-                </Link>
-              </div>
-            </div>
-
-            <figure className="lg:col-span-5">
-              <div className="relative aspect-4/5 w-full">
-                {/* Soft orange glow under the stack */}
-                <div
-                  aria-hidden="true"
-                  className="absolute left-1/2 top-1/2 size-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-200/40 blur-3xl"
-                />
-
-                {/* ── Card 1 · Applications (back-left, tilted left) ── */}
-                <div className="absolute left-[3%] top-[6%] w-[58%] -rotate-[5deg] rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
-                      Applications
-                    </p>
-                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600">
-                      4 / 6
-                    </span>
-                  </div>
-
-                  <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900">
-                    66<span className="text-base text-gray-400">%</span>
-                  </p>
-                  <p className="text-[10px] font-medium text-gray-500">complete</p>
-
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-orange-50">
-                    <div
-                      className="h-full rounded-full bg-orange-500"
-                      style={{ width: "66%" }}
-                      aria-hidden="true"
-                    />
-                  </div>
-
-                  <ul className="mt-3 space-y-1.5">
-                    {[
-                      { uni: "Wits", done: true },
-                      { uni: "UJ", done: true },
-                      { uni: "UP", done: true },
-                      { uni: "UCT", done: true },
-                      { uni: "Stellenbosch", done: false },
-                    ].map((a) => (
-                      <li
-                        key={a.uni}
-                        className="flex items-center gap-2 text-[11px]"
-                      >
-                        <span
-                          className={`grid size-3.5 shrink-0 place-items-center rounded-full ${
-                            a.done
-                              ? "bg-orange-500 text-white"
-                              : "border border-orange-200 bg-white text-orange-500"
-                          }`}
-                        >
-                          {a.done ? (
-                            <Check size={8} strokeWidth={3.5} />
-                          ) : (
-                            <Clock size={7} />
-                          )}
-                        </span>
-                        <span
-                          className={
-                            a.done
-                              ? "text-gray-700"
-                              : "font-semibold text-gray-900"
-                          }
-                        >
-                          {a.uni}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+      <main className="relative min-h-screen">
+        {/* ── HERO ────────────────────────────────────────────────── */}
+        <section className="sec" style={{ paddingBottom: 0 }}>
+          <div className="wrap">
+            <div className="grid gap-10 lg:grid-cols-12 lg:gap-12 items-center">
+              {/* Text */}
+              <div className="lg:col-span-7">
+                <div className="flex items-center gap-2.5 mb-4 hero-enter">
+                  <span className="w-2 h-2 rounded-full bg-[var(--orange)] shadow-[0_0_0_4px_var(--orange-soft)]" />
+                  <span className="label">The application co-pilot</span>
                 </div>
 
-                {/* ── Card 2 · Next Deadline (front-center, tilted right) ── */}
-                <div className="absolute left-1/2 top-[38%] w-[60%] -translate-x-1/2 rotate-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_22px_55px_rgba(249,115,22,0.22)]">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
-                      Next deadline
-                    </p>
-                    <span className="flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-bold text-white">
-                      <Clock size={8} strokeWidth={3} />
-                      62 days
-                    </span>
-                  </div>
+                <h1 className="display hero-enter hero-enter-d1">
+                  Your future shouldn&apos;t depend on your{" "}
+                  <span className="accent">postcode.</span>
+                </h1>
 
-                  <p className="mt-2.5 text-lg font-bold leading-tight tracking-tight text-gray-900">
-                    Stellenbosch
-                  </p>
-                  <p className="text-[11px] text-gray-500">BCom Economics</p>
-
-                  <div className="mt-3 flex items-baseline gap-2 rounded-xl bg-orange-50 px-3 py-2">
-                    <p className="text-2xl font-bold tracking-tight text-orange-600">
-                      30
-                    </p>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
-                        June
-                      </p>
-                      <p className="text-[9px] text-orange-500/80">2026</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Card 3 · Documents (bottom-right, tilted right) ── */}
-                <div className="absolute bottom-[6%] right-[3%] w-[55%] rotate-6 rounded-2xl border border-orange-100 bg-white p-4 shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-orange-600">
-                      Documents
-                    </p>
-                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[9px] font-bold text-orange-600">
-                      6 / 7
-                    </span>
-                  </div>
-
-                  <ul className="mt-2.5 space-y-1.5">
-                    {[
-                      { label: "Certified ID", done: true },
-                      { label: "Matric results", done: true },
-                      { label: "Motivation letter", done: true },
-                      { label: "Reference letter", done: false },
-                    ].map((d) => (
-                      <li
-                        key={d.label}
-                        className="flex items-center gap-2 text-[11px]"
-                      >
-                        <span
-                          className={`grid size-3.5 shrink-0 place-items-center rounded-full ${
-                            d.done
-                              ? "bg-orange-500 text-white"
-                              : "border border-orange-200 bg-white"
-                          }`}
-                        >
-                          {d.done && <Check size={8} strokeWidth={3.5} />}
-                        </span>
-                        <span
-                          className={
-                            d.done
-                              ? "text-gray-700 line-through decoration-orange-300"
-                              : "font-semibold text-gray-900"
-                          }
-                        >
-                          {d.label}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="mt-2.5 h-1 w-full rounded-full bg-orange-50">
-                    <div
-                      className="h-full rounded-full bg-orange-500"
-                      style={{ width: "86%" }}
-                      aria-hidden="true"
-                    />
-                  </div>
-                </div>
-              </div>
-              <figcaption className="mt-3 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                Every application, deadline & document — one place.
-              </figcaption>
-            </figure>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pull quote ──────────────────────────────────────────── */}
-      <section className="bg-forest text-paper">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid gap-6 lg:grid-cols-12">
-            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-paper/55 lg:col-span-2">
-              The thesis
-            </p>
-            <blockquote className="font-serif text-3xl font-medium leading-[1.15] tracking-tight text-paper sm:text-5xl lg:col-span-10 lg:text-6xl">
-              In some South African schools, a learner has a counsellor, alumni networks, and
-              parents who&apos;ve been to varsity.{" "}
-              <span className="italic text-orange-400">Most don&apos;t.</span> That isn&apos;t a
-              talent gap — it&apos;s a guidance gap.
-            </blockquote>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Live AI demo ─────────────────────────────────────────── */}
-      <section id="try" className="scroll-mt-24 border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-3">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Demonstration
-              </p>
-              <h2 className="mt-3 font-serif text-3xl font-medium leading-[1.05] tracking-tight text-ink sm:text-4xl">
-                Try it before you trust it.
-              </h2>
-            </div>
-            <div className="lg:col-span-9">
-              <TryAi />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── How it works (editorial spread) ──────────────────────── */}
-      <section id="how" className="scroll-mt-24 border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-4">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                The Method
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
-                Three steps. From{" "}
-                <span className="italic">question</span> to{" "}
-                <span className="italic">acceptance.</span>
-              </h2>
-              <p className="mt-6 max-w-sm font-serif text-lg italic leading-relaxed text-ink/70">
-                You don&apos;t need to know what you want to be. You just need to start asking.
-              </p>
-            </div>
-
-            <ol className="lg:col-span-8 lg:pl-8">
-              {HOW_IT_WORKS.map((s, i) => (
-                <li
-                  key={s.n}
-                  className={`grid gap-4 py-8 lg:grid-cols-12 lg:gap-8 ${
-                    i !== 0 ? "border-t border-ink/15" : ""
-                  }`}
-                >
-                  <p className="font-serif text-3xl italic text-orange-600 lg:col-span-2 lg:text-4xl">
-                    {s.n}
-                  </p>
-                  <div className="lg:col-span-10">
-                    <h3 className="font-serif text-3xl font-medium tracking-tight text-ink sm:text-4xl">
-                      {s.title}
-                    </h3>
-                    <p className="mt-3 max-w-xl font-serif text-lg leading-relaxed text-ink/75">
-                      {s.body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      </section>
-
-      {/* ── What we do (orbital) ──────────────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="max-w-2xl">
-            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-              What we do
-            </p>
-            <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
-              One platform.{" "}
-              <span className="italic text-ink/55">Eight ways we help.</span>
-            </h2>
-            <p className="mt-5 max-w-xl font-serif text-base italic leading-relaxed text-ink/65">
-              Every part of the matric application journey, in one place — from the first
-              question to the offer letter.
-            </p>
-          </div>
-
-          {/* Orbit (lg+) */}
-          <div className="relative mx-auto mt-16 hidden aspect-square w-full max-w-160 lg:block">
-            {/* Outer faint ring */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-[6%] rounded-full border border-ink/15"
-            />
-            {/* Inner faint ring */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-[22%] rounded-full border border-ink/10"
-            />
-
-            {/* Center logo emblem */}
-            <div className="absolute left-1/2 top-1/2 flex aspect-square w-[34%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-full border border-orange-200 bg-paper shadow-[0_18px_45px_rgba(249,115,22,0.18)]">
-              <Logo variant="lockup" size="md" />
-              <p className="font-sans text-[9px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Sizokusiza
-              </p>
-            </div>
-
-            {/* 8 service pills, evenly spaced */}
-            {[
-              { label: "Career guidance", Icon: Compass, top: "0%", left: "50%" },
-              { label: "University matching", Icon: GraduationCap, top: "14.6%", left: "85.4%" },
-              { label: "Application tracking", Icon: ListChecks, top: "50%", left: "100%" },
-              { label: "Deadline reminders", Icon: Bell, top: "85.4%", left: "85.4%" },
-              { label: "Document vault", Icon: FolderLock, top: "100%", left: "50%" },
-              { label: "AI Coach · BaseBot", Icon: MessageCircle, top: "85.4%", left: "14.6%" },
-              { label: "Bursary discovery", Icon: Trophy, top: "50%", left: "0%" },
-              { label: "APS calculator", Icon: Calculator, top: "14.6%", left: "14.6%" },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ top: s.top, left: s.left }}
-              >
-                <div className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-ink/20 bg-paper px-4 py-2.5 shadow-[0_8px_24px_rgba(26,23,20,0.06)]">
-                  <span className="grid size-7 place-items-center rounded-full bg-orange-50 text-orange-600">
-                    <s.Icon size={14} />
-                  </span>
-                  <span className="font-sans text-[12px] font-bold uppercase tracking-[0.16em] text-ink">
-                    {s.label}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Stacked grid (mobile + tablet) */}
-          <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:hidden">
-            {[
-              { label: "Career guidance", Icon: Compass },
-              { label: "University matching", Icon: GraduationCap },
-              { label: "Application tracking", Icon: ListChecks },
-              { label: "Deadline reminders", Icon: Bell },
-              { label: "Document vault", Icon: FolderLock },
-              { label: "AI Coach · BaseBot", Icon: MessageCircle },
-              { label: "Bursary discovery", Icon: Trophy },
-              { label: "APS calculator", Icon: Calculator },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="inline-flex items-center gap-3 rounded-full border border-ink/20 bg-paper px-4 py-3"
-              >
-                <span className="grid size-8 place-items-center rounded-full bg-orange-50 text-orange-600">
-                  <s.Icon size={15} />
-                </span>
-                <span className="font-sans text-[12px] font-bold uppercase tracking-[0.16em] text-ink">
-                  {s.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Coverage ────────────────────────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
-          <div className="grid gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-4">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Coverage
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
-                All 26.{" "}
-                <span className="italic text-ink/55">Plus the bursaries.</span>
-              </h2>
-              <p className="mt-5 max-w-sm font-serif text-base italic text-ink/65">
-                Every public university in South Africa. NSFAS. The bursaries that actually pay.
-              </p>
-            </div>
-
-            <div className="lg:col-span-8 lg:pl-8">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/45">
-                Universities
-              </p>
-              <p className="mt-3 font-serif text-2xl leading-[1.4] text-ink sm:text-3xl">
-                {INSTITUTIONS.join(" · ")}
-              </p>
-
-              <p className="mt-10 font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/45">
-                Funders &amp; bursaries
-              </p>
-              <p className="mt-3 font-serif text-2xl italic leading-[1.4] text-ink sm:text-3xl">
-                {FUNDERS.join(" · ")}
-              </p>
-
-              <p className="mt-8 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-                Missing one? Tell us — we&apos;ll add it.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pricing (editorial table) ───────────────────────────── */}
-      <section id="pricing" className="scroll-mt-24 border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="max-w-2xl">
-            <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-              Pricing
-            </p>
-            <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.02] tracking-tight text-ink sm:text-5xl">
-              Free for every matric.{" "}
-              <span className="italic text-ink/55">Forever.</span>
-            </h2>
-            <p className="mt-5 max-w-xl font-serif text-base italic text-ink/65">
-              Most learners only ever need the free plan. Paid tiers exist for those who want
-              more — the AI Coach, document vault and reminders are free for everyone.
-            </p>
-          </div>
-
-          <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {plans
-              .filter(
-                (p) =>
-                  p.id?.toLowerCase() !== "ultra" &&
-                  p.slug?.toLowerCase() !== "ultra" &&
-                  p.name?.toLowerCase() !== "ultra"
-              )
-              .map((p) => {
-                const isLocked = !p.available;
-                const isHighlighted = p.recommended;
-                const href = isLocked
-                  ? "#pricing"
-                  : p.id === "free"
-                  ? "/onboarding"
-                  : "/plans";
-
-                return (
-                  <li
-                    key={p.id}
-                    className={`flex flex-col border-t-2 pt-7 ${
-                      isHighlighted ? "border-orange-500" : "border-ink"
-                    }`}
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <h3 className="font-serif text-3xl font-medium tracking-tight text-ink">
-                        {p.name}
-                      </h3>
-                      {isHighlighted && (
-                        <span className="font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-orange-600">
-                          · Most popular
-                        </span>
-                      )}
-                      {isLocked && (
-                        <span className="inline-flex items-center gap-1 font-sans text-[9px] font-bold uppercase tracking-[0.2em] text-ink/50">
-                          <Lock size={9} />
-                          Soon
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-2 font-serif text-3xl text-ink">
-                      <span className="font-medium">{p.price}</span>
-                      <span className="ml-1 text-base italic text-ink/55">{p.period}</span>
-                    </p>
-                    {p.tagline && (
-                      <p className="mt-1 font-serif text-sm italic text-ink/55">
-                        {p.tagline}
-                      </p>
-                    )}
-
-                    <ul className="mt-6 flex-1 space-y-2">
-                      {p.features.map((f) => (
-                        <li
-                          key={f}
-                          className="font-serif text-[15px] leading-snug text-ink/80 before:mr-2 before:font-sans before:text-orange-600 before:content-['—']"
-                        >
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <div className="mt-8">
-                      {isLocked ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 border border-ink/25 px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/40"
-                        >
-                          Coming soon
-                        </button>
-                      ) : (
-                        <Link
-                          href={href}
-                          className={`inline-flex w-full items-center justify-center gap-2 px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.2em] transition-colors ${
-                            isHighlighted
-                              ? "bg-orange-500 text-white hover:bg-ink"
-                              : "border border-ink text-ink hover:bg-ink hover:text-paper"
-                          }`}
-                        >
-                          {p.id === "free" ? "Start free" : `Choose ${p.name}`}
-                          <ArrowRight size={12} />
-                        </Link>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-          </ul>
-
-          <p className="mt-8 font-sans text-[10px] uppercase tracking-[0.18em] text-ink/45">
-            Prices in ZAR · Cancel anytime · BaseBot AI Coach on every plan
-          </p>
-        </div>
-      </section>
-
-      {/* ── Schools sidebar ─────────────────────────────────────── */}
-      <section id="schools" className="scroll-mt-24 border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
-          <div className="grid gap-10 lg:grid-cols-12 lg:gap-12">
-            <div className="lg:col-span-7">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                For schools, NGOs &amp; counsellors
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
-                Give every learner you serve{" "}
-                <span className="italic">a career coach.</span>
-              </h2>
-              <p className="mt-5 max-w-xl font-serif text-lg leading-relaxed text-ink/75">
-                Bulk licences for schools and NGOs. Cohort dashboards, deadline broadcasts to
-                whole grades, progress reports for your district or funder. Built for Quintile
-                1–3 schools, scaled for the rest.
-              </p>
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="mailto:info@baseformapplications.com?subject=Schools%20%26%20NGOs%20enquiry"
-                  className="inline-flex items-center gap-2 bg-ink px-6 py-3.5 font-sans text-xs font-bold uppercase tracking-[0.2em] text-paper transition-colors hover:bg-orange-500"
-                >
-                  Talk to us
-                  <ArrowUpRight size={13} />
-                </Link>
-                <Link
-                  href="/contact"
-                  className="inline-flex items-center gap-2 border border-ink px-6 py-3.5 font-sans text-xs font-bold uppercase tracking-[0.2em] text-ink hover:bg-ink hover:text-paper"
-                >
-                  Get in touch
-                  <ArrowRight size={13} />
-                </Link>
-              </div>
-            </div>
-
-            <ul className="border-l border-ink/15 lg:col-span-5 lg:pl-8">
-              {[
-                "Cohort dashboards",
-                "Bulk onboarding",
-                "AI Coach per learner",
-                "Deadline broadcasts",
-                "Progress reports",
-                "Dedicated support",
-              ].map((item, i) => (
-                <li
-                  key={item}
-                  className={`flex items-baseline gap-4 py-3 ${
-                    i !== 0 ? "border-t border-ink/15" : ""
-                  }`}
-                >
-                  <span className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                    0{i + 1}
-                  </span>
-                  <span className="font-serif text-lg text-ink">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Final CTA ───────────────────────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-24 text-center sm:px-8 sm:py-32">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
-            Sizokusiza · we&apos;ll help you
-          </p>
-          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-5xl font-medium leading-[0.98] tracking-tight text-ink sm:text-7xl">
-            Your future starts with{" "}
-            <span className="italic text-orange-600">one question.</span>
-          </h2>
-          <p className="mx-auto mt-7 max-w-md font-serif text-lg italic leading-relaxed text-ink/70">
-            Ask the AI. Discover your paths. Apply with confidence — for free.
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 bg-orange-500 px-9 py-5 font-sans text-xs font-bold uppercase tracking-[0.22em] text-white transition-colors hover:bg-ink"
-            >
-              Start free
-              <ArrowRight size={14} />
-            </Link>
-            <Link
-              href="#try"
-              className="font-serif text-base italic text-ink/65 underline-offset-4 hover:underline"
-            >
-              …or try the AI right here ↑
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer (masthead style) ─────────────────────────────── */}
-      <footer className="bg-paper">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-          <div className="border-t-2 border-ink pt-8">
-            <div className="grid gap-10 lg:grid-cols-12">
-              <div className="lg:col-span-5">
-                <Logo variant="lockup" size="md" />
-                <p className="mt-4 max-w-sm font-serif text-base leading-relaxed text-ink/70">
-                  AI career guidance for every South African learner. From career question to
-                  submitted application — public universities, NSFAS and bursaries, all in one
-                  place.
+                <p className="lead mt-6 hero-enter hero-enter-d2">
+                  Baseform is the AI career coach every South African matric
+                  should have. Ask it anything. Find degrees that fit. Discover
+                  bursaries you qualify for. Apply to all 26 public universities
+                  — from one place. Free, forever.
                 </p>
-                <div className="mt-6 space-y-2">
-                  <Link
-                    href="mailto:info@baseformapplications.com"
-                    className="inline-flex items-center gap-2 font-serif text-sm italic text-ink/70 hover:text-ink"
-                  >
-                    <Mail size={13} className="text-orange-600" />
-                    info@baseformapplications.com
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 hero-enter hero-enter-d3">
+                  <Link href="/onboarding" className="btn btn-primary">
+                    Start free
+                    <ArrowRight size={16} />
                   </Link>
-                  <br />
-                  <Link
-                    href="mailto:support@baseformapplications.com"
-                    className="inline-flex items-center gap-2 font-serif text-sm italic text-ink/70 hover:text-ink"
-                  >
-                    <MessageCircle size={13} className="text-orange-600" />
-                    support@baseformapplications.com
+                  <Link href="#how" className="btn btn-ghost">
+                    See how it works
                   </Link>
+                </div>
+
+                <div className="mt-6 flex items-center gap-2.5 flex-wrap text-sm text-[var(--ink-soft)] hero-enter hero-enter-d4">
+                  <span className="font-semibold text-[var(--ink)]">
+                    26
+                  </span>{" "}
+                  universities
+                  <span className="w-1 h-1 rounded-full bg-[var(--line)]" />
+                  <span className="font-semibold text-[var(--ink)]">
+                    150+
+                  </span>{" "}
+                  bursaries
+                  <span className="w-1 h-1 rounded-full bg-[var(--line)]" />
+                  <span className="font-semibold text-[var(--ink)]">
+                    Free
+                  </span>
+                  , forever
                 </div>
               </div>
 
-              <div className="lg:col-span-2">
-                <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                  Sections
-                </h4>
-                <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                  <li><Link href="#try" className="hover:text-ink">Ask BaseBot</Link></li>
-                  <li><Link href="/how-it-works" className="hover:text-ink">How it works</Link></li>
-                  <li><Link href="#pricing" className="hover:text-ink">Pricing</Link></li>
-                  <li><Link href="/about" className="hover:text-ink">About</Link></li>
-                </ul>
-              </div>
+              {/* Visual */}
+              <figure className="lg:col-span-5 hero-enter hero-enter-d3">
+                <HeroVisual />
+              </figure>
+            </div>
+          </div>
+        </section>
 
-              <div className="lg:col-span-2">
-                <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                  Partners
-                </h4>
-                <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                  <li><Link href="#schools" className="hover:text-ink">Schools</Link></li>
-                  <li><Link href="#schools" className="hover:text-ink">NGOs</Link></li>
+        {/* ── TRUST MARQUEE ───────────────────────────────────────── */}
+        <section className="trust mt-16">
+          <div className="marquee">
+            {Array(3)
+              .fill(0)
+              .map((_, idx) => (
+                <div key={idx} className="flex gap-14">
+                  <span>Tracking applications for UCT &amp; Wits</span>
+                  <span>Matching 150+ Bursaries</span>
+                  <span>Real-time APS Calculator</span>
+                  <span>Instant AI Guidance</span>
+                  <span>All 26 Public Universities</span>
+                </div>
+              ))}
+          </div>
+        </section>
+
+        {/* ── DARK THESIS ─────────────────────────────────────────── */}
+        <section className="sec" style={{ paddingBottom: 0 }}>
+          <div className="thesis reveal">
+            <div className="wrap">
+              <span className="label" style={{ color: "var(--orange)" }}>
+                About our philosophy
+              </span>
+              <h2 className="mt-5">
+                <span className="muted">
+                  In some South African schools, a learner has a counsellor,
+                  alumni networks, and parents who&apos;ve been to varsity.
+                </span>{" "}
+                <span className="accent">Most don&apos;t.</span> That
+                isn&apos;t a talent gap — it&apos;s a guidance gap.
+              </h2>
+
+              <div className="thesis-stats">
+                <div className="stat-enter reveal">
+                  <div className="stat-number">800K+</div>
+                  <p>students write matric every year</p>
+                </div>
+                <div className="stat-enter reveal d1">
+                  <div className="stat-number">
+                    70<span className="accent">%</span>
+                  </div>
+                  <p>qualify for university</p>
+                </div>
+                <div className="stat-enter reveal d2">
+                  <div className="stat-number">
+                    20<span className="accent">%</span>
+                  </div>
+                  <p>
+                    actually apply — the gap is infrastructure, not ambition
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── PROBLEM CARDS ───────────────────────────────────────── */}
+        <section className="sec">
+          <div className="wrap">
+            <div className="sec-head reveal">
+              <span className="label">The problem</span>
+              <h2 className="heading-lg mt-4">
+                For decades, every family has accepted the{" "}
+                <span className="accent">26-portal scramble</span> as reality.
+              </h2>
+              <p>
+                Different portals. Different APS rules. Different deadlines. A
+                separate funding system. The student who finishes school first
+                isn&apos;t always the one who applies — it&apos;s the one who
+                can navigate the maze.
+              </p>
+            </div>
+
+            <div className="prob-grid" style={{ perspective: '1200px' }}>
+              {[
+                {
+                  url: "up.ac.za/applications",
+                  title: "Undergrad Applications",
+                  desc: "APS calculator · 18 documents required before you even begin.",
+                },
+                {
+                  url: "wits.ac.za/study",
+                  title: "How to apply — Wits",
+                  desc: "Different APS rules entirely. Closes on a different date.",
+                },
+                {
+                  url: "nsfas.org.za/funding",
+                  title: "NSFAS Funding",
+                  desc: "A separate portal, with its own separate deadline.",
+                },
+                {
+                  url: "uct.ac.za/apply",
+                  title: "UCT Admissions",
+                  desc: "NBT required — and it has to be booked somewhere else.",
+                },
+              ].map((p, i) => (
+                <div
+                  key={p.url}
+                  className={`prob reveal ${i > 0 ? `d${i}` : ""}`}
+                >
+                  <div className="url">{p.url}</div>
+                  <h3>{p.title}</h3>
+                  <p>{p.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── TRY BASEBOT (Live AI) ───────────────────────────────── */}
+        <section id="try" className="sec scroll-mt-24" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="grid gap-4 lg:grid-cols-12">
+              <div className="lg:col-span-3">
+                <p className="label reveal">Demonstration</p>
+                <h2 className="mt-3 heading-lg reveal d1">
+                  Try it before you trust it.
+                </h2>
+              </div>
+              <div className="lg:col-span-9 reveal d2">
+                <TryAi />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── HOW IT WORKS (Alternating Features) ─────────────────── */}
+        <section id="how" className="sec scroll-mt-24" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="sec-head reveal">
+              <span className="label">The method</span>
+              <h2 className="heading-lg mt-4">
+                Three steps. From <span className="accent">question</span> to{" "}
+                <span className="accent">acceptance.</span>
+              </h2>
+              <p>
+                You don&apos;t need to know what you want to be. You just need
+                to start asking.
+              </p>
+            </div>
+
+            {/* Feature Block 1: Ask */}
+            <div className="feat reveal">
+              <div className="feat-text">
+                <span className="tag">AI career coach</span>
+                <h3>
+                  Tell BaseBot what you got. Get answers that actually{" "}
+                  <span className="accent">help.</span>
+                </h3>
+                <p>
+                  The AI knows every public university and bursary in South
+                  Africa. It&apos;s like having a world-class career counselor
+                  in your pocket, available 24/7.
+                </p>
+                <ul>
                   <li>
-                    <Link
-                      href="mailto:info@baseformapplications.com"
-                      className="hover:text-ink"
-                    >
-                      Press
-                    </Link>
+                    <Check size={20} />
+                    Knows all 26 universities and their requirements
+                  </li>
+                  <li>
+                    <Check size={20} />
+                    Available 24/7 — no office hours, no waiting
                   </li>
                 </ul>
               </div>
-
-              <div className="lg:col-span-3">
-                <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                  Colophon
-                </h4>
-                <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                  <li><Link href="/privacy" className="hover:text-ink">Privacy</Link></li>
-                  <li><Link href="/terms" className="hover:text-ink">Terms</Link></li>
-                  <li className="font-serif text-sm italic text-ink/60">POPIA compliant</li>
-                </ul>
+              <div className="feat-visual feat-visual-animate reveal d2">
+                <div className="w-full max-w-sm rounded-2xl border border-[var(--line)] bg-white p-6 shadow-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--orange)] flex items-center justify-center">
+                      <Image src="/icon.svg" alt="Bot" width={16} height={16} />
+                    </div>
+                    <span className="text-sm font-bold">BaseBot</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-[var(--orange)] text-white px-4 py-2.5 text-sm">
+                        Can I study medicine with a 60% in Physics?
+                      </div>
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-gray-50 border border-gray-100 text-gray-800 px-4 py-2.5 text-sm leading-relaxed">
+                        Medical programs typically require 70%+ in Physics. But
+                        let&apos;s look at BSc Physiotherapy or Radiography —
+                        both accept 60%!
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-ink/15 pt-6 sm:flex-row sm:items-center">
-              <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink/55">
-                © {new Date().getFullYear()} Lumen AI (Pty) Ltd · Made in South Africa
-              </span>
-              <span className="font-serif text-sm italic text-ink/60">
-                Sizokusiza · we&apos;ll help you
-              </span>
+            {/* Feature Block 2: Match */}
+            <div className="feat reveal">
+              <div className="feat-text">
+                <span className="tag">Degree &amp; bursary matching</span>
+                <h3>
+                  Personalised programmes ranked by what you can{" "}
+                  <span className="accent">actually</span> get into.
+                </h3>
+                <p>
+                  A shortlist of degrees and bursaries that fit your marks and
+                  your life — not just the obvious ones your friends are picking.
+                </p>
+                <ul>
+                  <li>
+                    <Check size={20} />
+                    Instantly check APS against minimum requirements
+                  </li>
+                  <li>
+                    <Check size={20} />
+                    Filter by faculty, qualification, or university
+                  </li>
+                </ul>
+              </div>
+              <div className="feat-visual feat-visual-animate reveal d2">
+                <div className="w-full max-w-sm rounded-2xl border border-teal-100 bg-white p-6 shadow-xl shadow-teal-500/10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center text-2xl">
+                      🎓
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">BCom Accounting</p>
+                      <p className="text-sm text-gray-500">
+                        University of Johannesburg
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Your Match
+                    </span>
+                    <span className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">
+                      Excellent
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Feature Block 3: Apply */}
+            <div className="feat reveal">
+              <div className="feat-text">
+                <span className="tag">Application tracking</span>
+                <h3>
+                  Upload once. Track everything. Never miss a{" "}
+                  <span className="accent">deadline.</span>
+                </h3>
+                <p>
+                  Upload your documents once. Track every application, every
+                  deadline, every outcome — from your phone, even on a slow
+                  connection.
+                </p>
+                <ul>
+                  <li>
+                    <Check size={20} />
+                    One document vault for all applications
+                  </li>
+                  <li>
+                    <Check size={20} />
+                    Deadline reminders so nothing slips through
+                  </li>
+                </ul>
+              </div>
+              <div className="feat-visual feat-visual-animate reveal d2">
+                <div className="w-full max-w-sm space-y-3">
+                  <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-xl shadow-blue-500/10 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-900">
+                        UCT Application
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Submitted &bull; Awaiting Decision
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                      <Check size={20} />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-white/60 p-5 flex items-center justify-between opacity-50">
+                    <div>
+                      <p className="font-bold text-gray-900">
+                        Wits Application
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Draft &bull; Missing ID copy
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
-    </main>
+        </section>
+
+        {/* ── FEATURE ORBIT ───────────────────────────────────────── */}
+        <section className="sec border-t border-b border-[var(--line)]" style={{ background: "var(--cream-2)" }}>
+          <div className="wrap">
+            <div className="max-w-2xl reveal">
+              <span className="label">What we do</span>
+              <h2 className="heading-lg mt-4">
+                One platform.{" "}
+                <span className="text-[var(--ink-soft)]">
+                  Eight ways we help.
+                </span>
+              </h2>
+              <p className="mt-4 text-[var(--ink-soft)] max-w-xl">
+                Every part of the matric application journey, in one place —
+                from the first question to the offer letter.
+              </p>
+            </div>
+            <FeatureOrbit />
+          </div>
+        </section>
+
+        {/* ── COVERAGE ────────────────────────────────────────────── */}
+        <section className="sec">
+          <div className="wrap">
+            <div className="grid gap-8 lg:grid-cols-12 reveal">
+              <div className="lg:col-span-4">
+                <span className="label">Coverage</span>
+                <h2 className="heading-lg mt-4">
+                  All 26.{" "}
+                  <span className="text-[var(--ink-soft)]">
+                    Plus the bursaries.
+                  </span>
+                </h2>
+                <p className="mt-4 text-[var(--ink-soft)] max-w-sm">
+                  Every public university in South Africa. NSFAS. The bursaries
+                  that actually pay.
+                </p>
+              </div>
+              <div className="lg:col-span-8 lg:pl-8">
+                <p className="label text-[var(--ink-soft)]/45">Universities</p>
+                <p className="mt-3 text-2xl font-medium leading-[1.4] sm:text-3xl">
+                  UCT · Wits · UP · Stellenbosch · UJ · UKZN · NWU · UNISA ·
+                  Rhodes · UFS · UWC · NMU · CPUT · DUT · TUT · VUT · MUT · CUT
+                  · SPU · UMP · UFH · UNIVEN · UL · WSU · SMU · UNIZULU
+                </p>
+                <p className="mt-10 label text-[var(--ink-soft)]/45">
+                  Funders &amp; bursaries
+                </p>
+                <p className="mt-3 text-2xl font-medium leading-[1.4] sm:text-3xl accent">
+                  NSFAS · Funza Lushaka · Sasol · Investec · ISFAP · Allan Gray
+                </p>
+                <p className="mt-8 text-xs uppercase tracking-[0.18em] text-[var(--ink-soft)]/45">
+                  Missing one? Tell us — we&apos;ll add it.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── AUDIENCE TABS ───────────────────────────────────────── */}
+        <section id="schools" className="sec scroll-mt-24 border-t border-[var(--line)]">
+          <div className="wrap">
+            <div className="sec-head reveal">
+              <span className="label">Built for everyone</span>
+              <h2 className="heading-lg mt-4">
+                Built for both sides of the{" "}
+                <span className="accent">application.</span>
+              </h2>
+              <p>
+                One platform does the work of a dozen portals — for the students
+                applying, and the institutions supporting them.
+              </p>
+            </div>
+            <AudienceTabs />
+          </div>
+        </section>
+
+        {/* ── FINAL CTA ───────────────────────────────────────────── */}
+        <section className="sec" style={{ paddingTop: "clamp(48px, 7vw, 96px)", paddingBottom: 0 }}>
+          <div className="final-cta reveal">
+            <h2>
+              If this is for you, the rest is just{" "}
+              <span className="underline underline-offset-4 decoration-2 decoration-white/40">
+                one click.
+              </span>
+            </h2>
+            <p>
+              Talent is universal. Access to opportunity is not. Start your
+              application journey today — or get in touch if you&apos;re a
+              school or NGO.
+            </p>
+            <div className="flex flex-wrap gap-3 relative z-10">
+              <Link href="/onboarding" className="btn btn-dark">
+                Start free
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                href="/contact"
+                className="btn"
+                style={{
+                  background: "rgba(255,255,255,0.18)",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.25)",
+                }}
+              >
+                Get in touch
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <MarketingFooter />
+    </>
   );
 }

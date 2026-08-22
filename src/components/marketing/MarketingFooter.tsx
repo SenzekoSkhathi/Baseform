@@ -3,94 +3,139 @@ import { Mail, MessageCircle } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 
 /**
- * Shared marketing site footer (masthead style).
- *
- * Extracted from the landing page. Section links use absolute hashes
- * (`/#try`) so they resolve from any marketing sub-page. Relies on the
- * `.marketing-root` theme from (marketing)/layout.tsx.
+ * Shared marketing site footer — modern sans-serif design.
+ * 4-column grid matching the new Baseform design system.
  */
 export default function MarketingFooter() {
   return (
-    <footer className="bg-paper">
-      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-        <div className="border-t-2 border-ink pt-8">
-          <div className="grid gap-10 lg:grid-cols-12">
-            <div className="lg:col-span-5">
-              <Logo variant="lockup" size="md" />
-              <p className="mt-4 max-w-sm font-serif text-base leading-relaxed text-ink/70">
-                AI career guidance for every South African learner. From career question to
-                submitted application — public universities, NSFAS and bursaries, all in one
-                place.
-              </p>
-              <div className="mt-6 space-y-2">
-                <Link
-                  href="mailto:info@baseformapplications.com"
-                  className="inline-flex items-center gap-2 font-serif text-sm italic text-ink/70 hover:text-ink"
-                >
-                  <Mail size={13} className="text-orange-600" />
-                  info@baseformapplications.com
-                </Link>
-                <br />
-                <Link
-                  href="mailto:support@baseformapplications.com"
-                  className="inline-flex items-center gap-2 font-serif text-sm italic text-ink/70 hover:text-ink"
-                >
-                  <MessageCircle size={13} className="text-orange-600" />
-                  support@baseformapplications.com
-                </Link>
-              </div>
-            </div>
-
-            <div className="lg:col-span-2">
-              <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                Sections
-              </h4>
-              <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                <li><Link href="/#try" className="hover:text-ink">Ask BaseBot</Link></li>
-                <li><Link href="/how-it-works" className="hover:text-ink">How it works</Link></li>
-                <li><Link href="/#pricing" className="hover:text-ink">Pricing</Link></li>
-                <li><Link href="/about" className="hover:text-ink">About</Link></li>
-              </ul>
-            </div>
-
-            <div className="lg:col-span-2">
-              <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                Partners
-              </h4>
-              <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                <li><Link href="/#schools" className="hover:text-ink">Schools</Link></li>
-                <li><Link href="/#schools" className="hover:text-ink">NGOs</Link></li>
-                <li>
-                  <Link
-                    href="mailto:info@baseformapplications.com"
-                    className="hover:text-ink"
-                  >
-                    Press
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div className="lg:col-span-3">
-              <h4 className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink">
-                Colophon
-              </h4>
-              <ul className="mt-5 space-y-2.5 font-serif text-base text-ink/75">
-                <li><Link href="/privacy" className="hover:text-ink">Privacy</Link></li>
-                <li><Link href="/terms" className="hover:text-ink">Terms</Link></li>
-                <li className="font-serif text-sm italic text-ink/60">POPIA compliant</li>
-              </ul>
+    <footer className="relative z-10" style={{ background: "var(--cream)" }}>
+      <div className="mx-auto max-w-[1180px] px-6 py-16">
+        <div className="grid gap-10 lg:grid-cols-12">
+          {/* Brand */}
+          <div className="lg:col-span-5">
+            <Logo variant="lockup" size="md" />
+            <p className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-[var(--ink-soft)]">
+              AI career guidance for every South African learner. From career
+              question to submitted application — public universities, NSFAS and
+              bursaries, all in one place.
+            </p>
+            <div className="mt-6 space-y-2">
+              <Link
+                href="mailto:info@baseformapplications.com"
+                className="inline-flex items-center gap-2 text-sm text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+              >
+                <Mail size={13} className="text-[var(--orange)]" />
+                info@baseformapplications.com
+              </Link>
+              <br />
+              <Link
+                href="mailto:support@baseformapplications.com"
+                className="inline-flex items-center gap-2 text-sm text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+              >
+                <MessageCircle size={13} className="text-[var(--orange)]" />
+                support@baseformapplications.com
+              </Link>
             </div>
           </div>
 
-          <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-ink/15 pt-6 sm:flex-row sm:items-center">
-            <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-ink/55">
-              © {new Date().getFullYear()} Lumen AI (Pty) Ltd · Made in South Africa
-            </span>
-            <span className="font-serif text-sm italic text-ink/60">
-              Sizokusiza · we&apos;ll help you
-            </span>
+          {/* Sections */}
+          <div className="lg:col-span-2">
+            <h4 className="label text-[0.68rem]">Product</h4>
+            <ul className="mt-5 space-y-2.5 text-[0.95rem]">
+              <li>
+                <Link
+                  href="/#try"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  Ask BaseBot
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/how-it-works"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  How it works
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/about"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  About
+                </Link>
+              </li>
+            </ul>
           </div>
+
+          {/* Partners */}
+          <div className="lg:col-span-2">
+            <h4 className="label text-[0.68rem]">Partners</h4>
+            <ul className="mt-5 space-y-2.5 text-[0.95rem]">
+              <li>
+                <Link
+                  href="/#schools"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  Schools
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/#schools"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  NGOs
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/contact"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  Contact us
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div className="lg:col-span-3">
+            <h4 className="label text-[0.68rem]">Legal</h4>
+            <ul className="mt-5 space-y-2.5 text-[0.95rem]">
+              <li>
+                <Link
+                  href="/privacy"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
+                >
+                  Terms of Service
+                </Link>
+              </li>
+              <li className="text-sm text-[var(--ink-soft)]/60">
+                POPIA compliant
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom */}
+        <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-[var(--line)] pt-6 sm:flex-row sm:items-center">
+          <span className="text-[0.72rem] font-medium uppercase tracking-[0.18em] text-[var(--ink-soft)]/55">
+            © {new Date().getFullYear()} Lumen AI (Pty) Ltd · Made in South
+            Africa
+          </span>
+          <span className="label text-[0.68rem] text-[var(--orange)]">
+            Sizokusiza · we&apos;ll help you
+          </span>
         </div>
       </div>
     </footer>

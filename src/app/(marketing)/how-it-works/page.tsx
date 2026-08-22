@@ -15,7 +15,8 @@ import {
   User,
   Wallet,
 } from "lucide-react";
-import Logo from "@/components/ui/Logo";
+import MarketingHeader from "@/components/marketing/MarketingHeader";
+import MarketingFooter from "@/components/marketing/MarketingFooter";
 
 export const metadata = {
   title: "How it works — Baseform",
@@ -33,7 +34,7 @@ const CHARACTERS: Record<Character, { name: string; role: string; ring: string; 
     name: "Skhathi",
     role: "Your Baseform guide",
     ring: "ring-orange-200",
-    tone: "text-orange-600",
+    tone: "text-[var(--orange-deep)]",
   },
   ande: {
     name: "Ande",
@@ -130,18 +131,18 @@ function Avatar({ who, size = "md" }: { who: Character; size?: "sm" | "md" | "lg
 function Speech({ who, lines }: { who: Character; lines: string[] }) {
   const c = CHARACTERS[who];
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex items-start gap-4">
       <Avatar who={who} />
       <div className="flex-1">
-        <p className={`font-sans text-[10px] font-bold uppercase tracking-[0.22em] ${c.tone}`}>
+        <p className={`text-[0.7rem] font-bold uppercase tracking-[0.2em] ${c.tone}`}>
           {c.name}
-          <span className="ml-2 text-ink/45">· {c.role}</span>
+          <span className="ml-2 text-[var(--ink-soft)] opacity-80">· {c.role}</span>
         </p>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2.5 space-y-2">
           {lines.map((l, i) => (
             <div
               key={i}
-              className="relative rounded-2xl rounded-tl-sm border border-ink/15 bg-white px-4 py-3 font-serif text-[15px] leading-snug text-ink shadow-[0_6px_18px_rgba(26,23,20,0.05)]"
+              className="relative rounded-2xl rounded-tl-sm border border-[var(--line)] bg-white px-5 py-3.5 text-[1rem] leading-relaxed text-[var(--ink)] shadow-sm"
             >
               {l}
             </div>
@@ -156,18 +157,18 @@ function Speech({ who, lines }: { who: Character; lines: string[] }) {
 
 function PhoneFrame({ children, label, bg = "#fff9f2" }: { children: React.ReactNode; label?: string; bg?: string }) {
   return (
-    <div className="relative mx-auto w-full max-w-75">
+    <div className="relative mx-auto w-full max-w-[320px]">
       {/* Frame */}
-      <div className="relative aspect-9/19 rounded-[42px] border-10 border-ink bg-ink p-1 shadow-[0_30px_60px_rgba(26,23,20,0.25)]">
+      <div className="relative aspect-[9/19] rounded-[42px] border-[10px] border-[var(--ink)] bg-[var(--ink)] p-1 shadow-[0_30px_60px_rgba(26,23,20,0.25)]">
         {/* Notch */}
-        <div className="absolute left-1/2 top-1.5 z-20 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-ink" />
+        <div className="absolute left-1/2 top-1 z-20 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-[var(--ink)]" />
         {/* Screen */}
-        <div className="relative h-full w-full overflow-hidden rounded-4xl" style={{ backgroundColor: bg }}>
+        <div className="relative h-full w-full overflow-hidden rounded-[30px]" style={{ backgroundColor: bg }}>
           {children}
         </div>
       </div>
       {label && (
-        <p className="mt-3 text-center font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-ink/50">
+        <p className="mt-4 text-center text-[0.7rem] font-bold uppercase tracking-[0.2em] text-[var(--ink-soft)]">
           {label}
         </p>
       )}
@@ -177,7 +178,7 @@ function PhoneFrame({ children, label, bg = "#fff9f2" }: { children: React.React
 
 function StatusBar() {
   return (
-    <div className="flex items-center justify-between px-5 pt-3 font-sans text-[9px] font-bold text-ink/70">
+    <div className="flex items-center justify-between px-5 pt-4 text-[9px] font-bold text-gray-700">
       <span>09:41</span>
       <span>● ● ●</span>
     </div>
@@ -199,43 +200,37 @@ function ScreenSubjects() {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="h-0.75 w-full bg-gray-100">
+      <div className="h-1 w-full bg-gray-100">
         <div className="h-full w-2/3 bg-orange-500" />
       </div>
       <StatusBar />
-      <div className="flex flex-col gap-1 px-4 pt-4">
-        <p className="font-sans text-[7px] text-gray-400">← Back</p>
-        <h3 className="font-sans text-[15px] font-bold leading-tight text-gray-900">
+      <div className="flex flex-col gap-1 px-4 pt-5">
+        <p className="text-[9px] text-gray-400">← Back</p>
+        <h3 className="text-lg font-bold leading-tight text-gray-900">
           Your subjects &amp; marks
         </h3>
-        <p className="font-sans text-[8px] text-gray-500">
+        <p className="text-[10px] text-gray-500">
           We calculate your APS as you go.
         </p>
       </div>
 
-      {/* Live APS chip */}
-      <div className="mx-4 mt-2 flex items-center justify-between rounded-xl bg-orange-50 px-2 py-1.5">
-        <p className="font-sans text-[8px] font-semibold text-orange-700">
-          Live APS
-        </p>
-        <p className="font-sans text-[14px] font-black text-orange-600">
-          {aps}
-        </p>
+      <div className="mx-4 mt-3 flex items-center justify-between rounded-xl bg-orange-50 px-3 py-2">
+        <p className="text-[9px] font-semibold text-orange-700">Live APS</p>
+        <p className="text-xl font-black text-orange-600">{aps}</p>
       </div>
 
-      {/* Subject rows */}
-      <div className="mx-4 mt-2 flex flex-col gap-1">
+      <div className="mx-4 mt-3 flex flex-col gap-1.5">
         {subjects.slice(0, 5).map((s) => (
           <div
             key={s.name}
-            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2 py-1"
+            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2 py-1.5"
           >
-            <p className="truncate font-sans text-[8px] font-medium text-gray-800">
+            <p className="truncate text-[10px] font-medium text-gray-800">
               {s.name}
             </p>
-            <div className="flex items-center gap-1">
-              <span className="font-sans text-[8px] text-gray-500">{s.mark}%</span>
-              <span className="rounded bg-orange-100 px-1 py-0.5 font-sans text-[7px] font-bold text-orange-700">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-gray-500">{s.mark}%</span>
+              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
                 {s.points}
               </span>
             </div>
@@ -243,12 +238,12 @@ function ScreenSubjects() {
         ))}
       </div>
 
-      <div className="mx-4 mt-1.5 flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 py-1 font-sans text-[8px] font-semibold text-gray-500">
+      <div className="mx-4 mt-2 flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 py-1.5 text-[9px] font-semibold text-gray-500">
         + Add subject
       </div>
 
       <div className="mt-auto px-4 pb-4">
-        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[11px] font-semibold text-white">
+        <div className="rounded-2xl bg-orange-500 py-3 text-center text-[12px] font-semibold text-white">
           Continue
         </div>
       </div>
@@ -259,35 +254,34 @@ function ScreenSubjects() {
 function ScreenOnboarding() {
   return (
     <div className="flex h-full flex-col bg-white">
-      {/* Thin progress bar at very top — matches real app */}
-      <div className="h-0.75 w-full bg-gray-100">
+      <div className="h-1 w-full bg-gray-100">
         <div className="h-full w-1/3 bg-orange-500" />
       </div>
       <StatusBar />
       <div className="flex flex-col gap-1 px-5 pt-5">
-        <h3 className="font-sans text-[18px] font-bold leading-tight text-gray-900">
+        <h3 className="text-lg font-bold leading-tight text-gray-900">
           Let&apos;s get started
         </h3>
-        <p className="font-sans text-[10px] text-gray-500">
+        <p className="text-[10px] text-gray-500">
           We&apos;ll find every opportunity you qualify for.
         </p>
       </div>
-      <div className="mt-4 flex flex-col gap-3 px-5">
+      <div className="mt-5 flex flex-col gap-3.5 px-5">
         {[
           { label: "Your first name", value: "Thabo" },
           { label: "Your last name", value: "Mokoena" },
           { label: "Phone number", value: "0821234567" },
         ].map((f) => (
-          <div key={f.label} className="space-y-1">
-            <p className="font-sans text-[8px] font-medium text-gray-700">{f.label}</p>
-            <div className="rounded-xl border border-gray-200 bg-white px-2.5 py-2">
-              <p className="font-sans text-[10px] text-gray-900">{f.value}</p>
+          <div key={f.label} className="space-y-1.5">
+            <p className="text-[9px] font-medium text-gray-700">{f.label}</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <p className="text-[11px] text-gray-900">{f.value}</p>
             </div>
           </div>
         ))}
       </div>
       <div className="mt-auto px-5 pb-5">
-        <div className="rounded-2xl bg-orange-500 py-2.5 text-center font-sans text-[11px] font-semibold text-white">
+        <div className="rounded-2xl bg-orange-500 py-3 text-center text-[12px] font-semibold text-white">
           Continue
         </div>
       </div>
@@ -297,52 +291,52 @@ function ScreenOnboarding() {
 
 function ScreenReveal() {
   return (
-    <div className="flex h-full flex-col px-3 pt-3">
+    <div className="flex h-full flex-col px-4 pt-4">
       <StatusBar />
-      <div className="mt-2 flex flex-col items-center text-center">
-        <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 font-sans text-[8px] font-semibold text-orange-700">
-          <Sparkles size={9} />
+      <div className="mt-3 flex flex-col items-center text-center">
+        <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[9px] font-semibold text-orange-700">
+          <Sparkles size={11} />
           Your Opportunity Report
         </span>
-        <h3 className="mt-2 font-sans text-[13px] font-black leading-tight text-slate-900">
+        <h3 className="mt-3 text-[16px] font-black leading-tight text-slate-900">
           Thabo, here&apos;s what you<br />qualify for
         </h3>
       </div>
-      <div className="mt-3 rounded-2xl border border-orange-100 bg-white p-2 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
-        <div className="rounded-xl bg-orange-500 p-2 text-white">
-          <p className="font-sans text-[7px] uppercase tracking-wider text-orange-100">
+      <div className="mt-4 rounded-[20px] border border-orange-100 bg-white p-3 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
+        <div className="rounded-xl bg-orange-500 p-3 text-white">
+          <p className="text-[9px] uppercase tracking-wider text-orange-100">
             Your APS Score
           </p>
-          <p className="mt-0.5 font-sans text-2xl font-black leading-none">32</p>
-          <span className="mt-1.5 inline-flex rounded-full bg-white/20 px-1.5 py-0.5 font-sans text-[8px] font-semibold">
+          <p className="mt-0.5 text-3xl font-black leading-none">32</p>
+          <span className="mt-2 inline-flex rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-semibold">
             Strong
           </span>
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-1">
+        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
           {[
             { Icon: GraduationCap, v: "8", l: "unis", c: "text-orange-500" },
             { Icon: Trophy, v: "12", l: "bursaries", c: "text-amber-500" },
             { Icon: Bell, v: "62", l: "days", c: "text-rose-500" },
           ].map((s) => (
-            <div key={s.l} className="rounded-lg border border-gray-100 bg-white py-1.5 text-center">
-              <s.Icon size={11} className={`mx-auto ${s.c}`} />
-              <p className="mt-0.5 font-sans text-[11px] font-black text-slate-900">{s.v}</p>
-              <p className="font-sans text-[6px] leading-tight text-slate-500">{s.l}</p>
+            <div key={s.l} className="rounded-xl border border-gray-100 bg-white py-2 text-center">
+              <s.Icon size={14} className={`mx-auto ${s.c}`} />
+              <p className="mt-1 text-[13px] font-black text-slate-900">{s.v}</p>
+              <p className="text-[8px] leading-tight text-slate-500">{s.l}</p>
             </div>
           ))}
         </div>
-        <div className="mt-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2 py-1.5 text-center">
-          <p className="font-sans text-[8px] font-medium text-orange-800">
+        <div className="mt-2.5 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-center">
+          <p className="text-[10px] font-medium text-orange-800">
             You qualify for{" "}
             <span className="font-black text-orange-600">42 programmes</span>
           </p>
         </div>
       </div>
-      <div className="mt-auto pb-4">
-        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-bold text-white">
+      <div className="mt-auto pb-5">
+        <div className="rounded-2xl bg-orange-500 py-3 text-center text-[12px] font-bold text-white">
           Create your free account →
         </div>
-        <p className="mt-1.5 text-center font-sans text-[7px] text-slate-500">
+        <p className="mt-2 text-center text-[9px] text-slate-500">
           Free · No credit card · Takes 2 minutes
         </p>
       </div>
@@ -352,44 +346,43 @@ function ScreenReveal() {
 
 function ScreenSignup() {
   return (
-    <div className="flex h-full flex-col bg-gray-50 px-4 pt-3">
+    <div className="flex h-full flex-col bg-gray-50 px-5 pt-5">
       <StatusBar />
-      {/* Step dots — matches real signup page */}
-      <div className="mt-3 flex items-center gap-1.5">
-        <div className="grid size-4 place-items-center rounded-full bg-orange-500 font-sans text-[7px] font-bold text-white">
+      <div className="mt-4 flex items-center gap-1.5">
+        <div className="grid size-5 place-items-center rounded-full bg-orange-500 text-[9px] font-bold text-white">
           1
         </div>
         <div className="h-0.5 w-6 bg-gray-200" />
-        <div className="grid size-4 place-items-center rounded-full bg-gray-100 font-sans text-[7px] font-bold text-gray-400">
+        <div className="grid size-5 place-items-center rounded-full bg-gray-100 text-[9px] font-bold text-gray-400">
           2
         </div>
-        <span className="ml-1 font-sans text-[7px] text-gray-400">Step 1 of 2</span>
+        <span className="ml-1 text-[9px] text-gray-400">Step 1 of 2</span>
       </div>
-      <h3 className="mt-3 font-sans text-[15px] font-bold leading-tight text-gray-900">
+      <h3 className="mt-4 text-lg font-bold leading-tight text-gray-900">
         Create your account
       </h3>
-      <p className="font-sans text-[9px] text-gray-500">
+      <p className="text-[11px] text-gray-500">
         Save your matched paths and get started.
       </p>
-      <div className="mt-3 flex flex-col gap-2">
+      <div className="mt-5 flex flex-col gap-3">
         {[
           { label: "Email", value: "thabo@example.co.za" },
           { label: "Password", value: "••••••••" },
           { label: "Confirm password", value: "••••••••" },
         ].map((f) => (
-          <div key={f.label} className="space-y-0.5">
-            <p className="font-sans text-[7px] font-medium text-gray-700">{f.label}</p>
-            <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
-              <p className="font-sans text-[9px] text-gray-900">{f.value}</p>
+          <div key={f.label} className="space-y-1">
+            <p className="text-[9px] font-medium text-gray-700">{f.label}</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <p className="text-[11px] text-gray-900">{f.value}</p>
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-auto pb-4">
-        <div className="rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
+      <div className="mt-auto pb-5">
+        <div className="rounded-2xl bg-orange-500 py-3 text-center text-[12px] font-semibold text-white">
           Continue
         </div>
-        <p className="mt-2 text-center font-sans text-[8px] text-gray-500">
+        <p className="mt-3 text-center text-[10px] text-gray-500">
           Already have an account?{" "}
           <span className="font-semibold text-orange-600">Sign in</span>
         </p>
@@ -400,54 +393,52 @@ function ScreenSignup() {
 
 function ScreenLogin() {
   return (
-    <div className="flex h-full flex-col bg-gray-50 px-3 pt-1">
+    <div className="flex h-full flex-col bg-gray-50 px-4 pt-3">
       <StatusBar />
-      {/* White card */}
-      <div className="mt-2 rounded-2xl bg-white p-3 shadow-sm">
-        {/* Logo lockup */}
-        <div className="flex items-center gap-1.5">
-          <div className="grid size-5 place-items-center rounded-md bg-orange-500">
-            <span className="font-sans text-[10px] font-black leading-none text-white">↑</span>
+      <div className="mt-3 rounded-[24px] bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="grid size-6 place-items-center rounded-lg bg-orange-500">
+            <span className="text-[12px] font-black leading-none text-white">↑</span>
           </div>
-          <p className="font-sans text-[12px] font-black tracking-tight text-gray-900">
+          <p className="text-[14px] font-black tracking-tight text-gray-900">
             base<span className="text-orange-500">form</span>
           </p>
         </div>
 
-        <h3 className="mt-3 font-sans text-[15px] font-bold leading-tight text-gray-900">
+        <h3 className="mt-4 text-lg font-bold leading-tight text-gray-900">
           Welcome back
         </h3>
-        <p className="font-sans text-[8px] text-gray-500">
+        <p className="text-[10px] text-gray-500 mb-5">
           Log in to your Baseform account.
         </p>
 
-        <div className="mt-3 space-y-0.5">
-          <p className="font-sans text-[8px] font-medium text-gray-800">Email address</p>
-          <div className="rounded-xl border border-gray-200 bg-white px-2 py-1.5">
-            <p className="font-sans text-[9px] text-gray-400">you@example.com</p>
+        <div className="space-y-1.5 mb-3">
+          <p className="text-[9px] font-medium text-gray-800">Email address</p>
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <p className="text-[11px] text-gray-400">you@example.com</p>
           </div>
         </div>
 
-        <div className="mt-2 space-y-0.5">
-          <p className="font-sans text-[8px] font-medium text-gray-800">Password</p>
-          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-2 py-1.5">
-            <p className="font-sans text-[9px] text-gray-400">Your password</p>
-            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500">
+        <div className="space-y-1.5 mb-2">
+          <p className="text-[9px] font-medium text-gray-800">Password</p>
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <p className="text-[11px] text-gray-400">Your password</p>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
           </div>
         </div>
 
-        <p className="mt-1.5 text-right font-sans text-[8px] font-semibold text-orange-600">
+        <p className="mb-4 text-right text-[10px] font-semibold text-orange-600">
           Forgot password?
         </p>
 
-        <div className="mt-2 rounded-2xl bg-orange-500 py-2 text-center font-sans text-[10px] font-semibold text-white">
+        <div className="rounded-2xl bg-orange-500 py-3 text-center text-[12px] font-semibold text-white mb-3">
           Log in
         </div>
 
-        <p className="mt-2 text-center font-sans text-[8px] text-gray-500">
+        <p className="text-center text-[10px] text-gray-500">
           Don&apos;t have an account?{" "}
           <span className="font-semibold text-orange-600">Get started free</span>
         </p>
@@ -483,89 +474,85 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
       : "Jump into your key application tools";
 
   return (
-    <div className="flex h-full flex-col px-2 pt-2">
+    <div className="flex h-full flex-col px-3 pt-3">
       <StatusBar />
-      {/* Greeting card */}
-      <div className="mt-1.5 rounded-2xl border border-orange-100 bg-white/85 p-2 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
-        <div className="flex items-start justify-between gap-2">
+      <div className="mt-2 rounded-[20px] border border-orange-100 bg-white/85 p-3 shadow-[0_8px_20px_rgba(249,115,22,0.10)]">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="font-sans text-[6px] font-semibold uppercase tracking-widest text-gray-400">
+            <p className="text-[8px] font-semibold uppercase tracking-widest text-gray-400">
               Tue, April 28
             </p>
-            <p className="mt-0.5 font-sans text-[12px] font-extrabold leading-tight text-gray-900">
+            <p className="mt-1 text-[15px] font-extrabold leading-tight text-gray-900">
               Good Morning, <span className="text-orange-500">Thabo</span>
             </p>
-            <p className="mt-0.5 font-sans text-[7px] leading-snug text-gray-500">
+            <p className="mt-1 text-[9px] leading-snug text-gray-500">
               {grade === "11"
                 ? "You're in planning mode. Build your APS now."
                 : "Keep moving — applications and APS in one place."}
             </p>
           </div>
           <div className="relative">
-            <div className="grid size-7 place-items-center rounded-xl bg-orange-500">
-              <span className="font-sans text-[10px] font-bold text-white">T</span>
+            <div className="grid size-9 place-items-center rounded-xl bg-orange-500">
+              <span className="text-[12px] font-bold text-white">T</span>
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-white bg-green-500" />
+            <span className="absolute -bottom-1 -right-1 size-3 rounded-full border-2 border-white bg-green-500" />
           </div>
         </div>
-        {/* Grade · School pill row */}
-        <div className="mt-1.5 flex items-center gap-1.5 rounded-xl bg-orange-50/80 px-1.5 py-1">
+        <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-orange-50/80 px-2.5 py-1.5">
           <div>
-            <p className="font-sans text-[5px] text-gray-500">Grade</p>
-            <p className="font-sans text-[7px] font-semibold text-gray-800">
+            <p className="text-[7px] text-gray-500">Grade</p>
+            <p className="text-[9px] font-semibold text-gray-800">
               Grade {grade}
             </p>
           </div>
-          <span className="size-0.5 rounded-full bg-gray-300" />
+          <span className="size-1 rounded-full bg-gray-300" />
           <div className="min-w-0 flex-1">
-            <p className="font-sans text-[5px] text-gray-500">School</p>
-            <p className="truncate font-sans text-[7px] font-semibold text-gray-800">
+            <p className="text-[7px] text-gray-500">School</p>
+            <p className="truncate text-[9px] font-semibold text-gray-800">
               Pretoria HS
             </p>
           </div>
           {grade === "11" && (
-            <span className="rounded-full bg-blue-100 px-1 py-0.5 font-sans text-[5px] font-bold uppercase tracking-wide text-blue-700">
+            <span className="rounded-full bg-blue-100 px-2 py-1 text-[7px] font-bold uppercase tracking-wide text-blue-700">
               Planning
             </span>
           )}
         </div>
-        {/* Mini APS card */}
-        <div className="mt-1.5 rounded-xl bg-orange-500 px-2 py-1.5 text-white">
+        <div className="mt-2.5 rounded-xl bg-orange-500 px-3 py-2.5 text-white">
           <div className="flex items-center justify-between">
-            <p className="font-sans text-[6px] uppercase tracking-wider text-orange-100">
+            <p className="text-[8px] uppercase tracking-wider text-orange-100">
               {grade === "11" ? "Projected APS" : "Your APS"}
             </p>
-            <span className="rounded-full bg-white/20 px-1 py-0.5 font-sans text-[6px] font-semibold">
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[8px] font-semibold">
               Strong
             </span>
           </div>
-          <p className="font-sans text-lg font-black leading-none">32</p>
+          <p className="text-2xl font-black leading-none mt-1.5">32</p>
         </div>
       </div>
 
-      {/* Quick Access section */}
-      <div className="mt-1.5 rounded-2xl border border-gray-100 bg-white/90 p-1.5 shadow-sm">
-        <div className="mb-1 flex items-end justify-between px-0.5">
+      <div className="mt-3 rounded-2xl border border-gray-100 bg-white/90 p-2 shadow-sm">
+        <div className="mb-2 flex items-end justify-between px-1.5">
           <div>
-            <h4 className="font-sans text-[9px] font-bold tracking-tight text-gray-900">
+            <h4 className="text-[12px] font-bold tracking-tight text-gray-900">
               Quick Access
             </h4>
-            <p className="font-sans text-[5px] font-medium text-gray-400">{sub}</p>
+            <p className="text-[8px] font-medium text-gray-400">{sub}</p>
           </div>
-          <span className="rounded-full bg-orange-50 px-1 py-0.5 font-sans text-[5px] font-semibold uppercase text-orange-600">
+          <span className="rounded-full bg-orange-50 px-1.5 py-1 text-[7px] font-semibold uppercase text-orange-600">
             {tiles.length} tools
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-1">
+        <div className="grid grid-cols-2 gap-1.5">
           {tiles.map((t) => (
             <div
               key={t.label}
-              className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-gray-100 bg-white py-1.5"
+              className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-100 bg-white py-2.5"
             >
-              <span className={`grid size-6 place-items-center rounded-md ${t.bg}`}>
-                <t.Icon size={11} className={t.fg} />
+              <span className={`grid size-8 place-items-center rounded-lg ${t.bg}`}>
+                <t.Icon size={14} className={t.fg} />
               </span>
-              <span className="font-sans text-[7px] font-semibold text-gray-700">
+              <span className="text-[9px] font-semibold text-gray-700">
                 {t.label}
               </span>
             </div>
@@ -580,358 +567,302 @@ function DashboardScreen({ grade }: { grade: "11" | "12" }) {
 
 export default function HowItWorksPage() {
   return (
-    <main
-      className="relative min-h-screen text-ink"
-      style={
-        {
-          ["--paper" as const]: "#f4ecdf",
-          ["--ink" as const]: "#1a1714",
-          ["--forest" as const]: "#0f1c16",
-          backgroundColor: "var(--paper)",
-        } as React.CSSProperties
-      }
-    >
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        .bg-paper { background-color: var(--paper); }
-        .bg-ink { background-color: var(--ink); }
-        .bg-forest { background-color: var(--forest); }
-        .text-paper { color: var(--paper); }
-        .text-ink { color: var(--ink); }
-        .text-ink\\/85 { color: color-mix(in srgb, var(--ink) 85%, transparent); }
-        .text-ink\\/75 { color: color-mix(in srgb, var(--ink) 75%, transparent); }
-        .text-ink\\/65 { color: color-mix(in srgb, var(--ink) 65%, transparent); }
-        .text-ink\\/55 { color: color-mix(in srgb, var(--ink) 55%, transparent); }
-        .text-ink\\/45 { color: color-mix(in srgb, var(--ink) 45%, transparent); }
-        .text-ink\\/35 { color: color-mix(in srgb, var(--ink) 35%, transparent); }
-        .text-paper\\/55 { color: color-mix(in srgb, var(--paper) 55%, transparent); }
-        .border-ink { border-color: var(--ink); }
-        .border-ink\\/15 { border-color: color-mix(in srgb, var(--ink) 15%, transparent); }
-        .border-ink\\/10 { border-color: color-mix(in srgb, var(--ink) 10%, transparent); }
-        .font-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
-        .font-sans  { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-      `,
-        }}
-      />
+    <>
+      <MarketingHeader />
 
-      {/* Masthead */}
-      <div className="border-b border-ink/15">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
-          <Link href="/" aria-label="Baseform home">
-            <Logo variant="lockup" size="md" />
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-ink/65 hover:text-ink"
-          >
-            <ArrowLeft size={12} />
-            Back
-          </Link>
-        </div>
-      </div>
+      <main className="relative min-h-screen">
+        {/* Hero */}
+        <section className="sec border-b border-[var(--line)]" style={{ paddingBottom: "80px" }}>
+          <div className="wrap max-w-4xl text-center">
+            <span className="label">How it works · A four-part tour</span>
+            <h1 className="display mt-6 mb-8">
+              See the app, before you{" "}
+              <span className="accent">touch the app.</span>
+            </h1>
+            <p className="lead mx-auto">
+              Skhathi and Ande will walk you through every screen — onboarding, sign-in, and
+              both the Grade 11 and Grade 12 home dashboards. Four phones, four phases, no
+              sign-up needed to look around.
+            </p>
 
-      {/* Hero */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 pt-12 pb-12 sm:px-8 sm:pt-20 sm:pb-16">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
-            How it works · A four-part tour
-          </p>
-          <h1 className="mt-6 max-w-4xl font-serif text-[40px] font-medium leading-[0.98] tracking-tight text-ink sm:text-7xl lg:text-[80px]">
-            See the app, before you{" "}
-            <span className="italic text-orange-600">touch the app.</span>
-          </h1>
-          <p className="mt-7 max-w-2xl font-serif text-lg italic leading-relaxed text-ink/65 sm:text-xl">
-            Skhathi and Ande will walk you through every screen — onboarding, sign-in, and
-            both the Grade 11 and Grade 12 home dashboards. Four phones, four phases, no
-            sign-up needed to look around.
-          </p>
-
-          {/* Cast intro */}
-          <div className="mt-10 grid gap-5 border-t border-ink/15 pt-8 sm:grid-cols-2">
-            <div className="flex items-start gap-4">
-              <Avatar who="skhathi" size="lg" />
-              <div>
-                <p className="font-serif text-xl font-medium text-ink">Skhathi</p>
-                <p className="mt-1 font-serif text-sm italic text-ink/65">
-                  Hi I&apos;m Skhathi, and I will walk you through Grade 11s planning, targets, and bursary discovery onboarding steps.
-                </p>
+            {/* Cast intro */}
+            <div className="mt-14 grid gap-8 border-t border-[var(--line)] pt-12 sm:grid-cols-2 text-left">
+              <div className="flex items-start gap-4">
+                <Avatar who="skhathi" size="lg" />
+                <div>
+                  <p className="text-xl font-bold text-[var(--ink)]">Skhathi</p>
+                  <p className="mt-1.5 text-sm text-[var(--ink-soft)]">
+                    Hi I&apos;m Skhathi, and I will walk you through Grade 11s planning, targets, and bursary discovery onboarding steps.
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-start gap-4">
-              <Avatar who="ande" size="lg" />
-              <div>
-                <p className="font-serif text-xl font-medium text-ink">Ande</p>
-                <p className="mt-1 font-serif text-sm italic text-ink/65">
-                  Hi I&apos;m Ande, and I will walk you through from sign-up through to live applications of Grade 12s onboarding steps.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Phase I · Onboarding → Reveal ─────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-2 lg:order-1 lg:col-span-5">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Phase I · Onboarding
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
-                A few questions.{" "}
-                <span className="italic text-ink/55">Then a reveal.</span>
-              </h2>
-              <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Three short steps: your name and contact, your subjects and marks, then a
-                bit about your grade, school and field of interest. No account yet. At the
-                end, the Opportunity Report shows what you qualify for.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-5">
-                <Speech
-                  who="skhathi"
-                  lines={[
-                    "Step one is just your name and a phone number. Step two is your subjects — APS gets calculated automatically as you type your marks.",
-                    "Step three is your grade, school, province and what you're curious about studying.",
-                  ]}
-                />
-                <Speech
-                  who="skhathi"
-                  lines={[
-                    "When you finish, you land on the Opportunity Report — your APS, the universities and bursaries you qualify for, and the next deadline. No sign-up needed yet to see it.",
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div className="order-1 lg:order-2 lg:col-span-7">
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
-                <PhoneFrame label="Step 1 · Your details" bg="#ffffff">
-                  <ScreenOnboarding />
-                </PhoneFrame>
-                <PhoneFrame label="Step 2 · Subjects" bg="#ffffff">
-                  <ScreenSubjects />
-                </PhoneFrame>
-              </div>
-              <div className="mt-10 flex justify-center">
-                <div className="w-full sm:max-w-[320px]">
-                  <PhoneFrame label="Opportunity Report">
-                    <ScreenReveal />
-                  </PhoneFrame>
+              <div className="flex items-start gap-4">
+                <Avatar who="ande" size="lg" />
+                <div>
+                  <p className="text-xl font-bold text-[var(--ink)]">Ande</p>
+                  <p className="mt-1.5 text-sm text-[var(--ink-soft)]">
+                    Hi I&apos;m Ande, and I will walk you through from sign-up through to live applications of Grade 12s onboarding steps.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── Phase II · Sign-up → Login ────────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-1 lg:order-1 lg:col-span-7">
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
-                <PhoneFrame label="Sign up" bg="#f9fafb">
-                  <ScreenSignup />
-                </PhoneFrame>
-                <PhoneFrame label="Sign in" bg="#f9fafb">
-                  <ScreenLogin />
-                </PhoneFrame>
-              </div>
-            </div>
+        {/* Phase I */}
+        <section className="sec border-b border-[var(--line)]">
+          <div className="wrap">
+            <div className="grid items-center gap-16 lg:grid-cols-12">
+              <div className="order-2 lg:order-1 lg:col-span-5">
+                <span className="label">Phase I · Onboarding</span>
+                <h2 className="heading-lg mt-3">
+                  A few questions.{" "}
+                  <span className="text-[var(--ink-soft)]">Then a reveal.</span>
+                </h2>
+                <p className="mt-5 max-w-md text-lg text-[var(--ink-soft)]">
+                  Three short steps: your name and contact, your subjects and marks, then a
+                  bit about your grade, school and field of interest. No account yet. At the
+                  end, the Opportunity Report shows what you qualify for.
+                </p>
 
-            <div className="order-2 lg:order-2 lg:col-span-5">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Phase II · Account
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
-                Save your paths.{" "}
-                <span className="italic text-ink/55">Pick them up anywhere.</span>
-              </h2>
-              <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Sign-up is two short steps. Email and password first, then a guardian
-                contact. After that, every device you log in on shows your matched
-                programmes, bursaries and documents.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-5">
-                <Speech
-                  who="ande"
-                  lines={[
-                    "Step one: email, password, confirm. Step two: a guardian contact so we can keep someone in the loop. Your Opportunity Report carries over — nothing gets lost.",
-                  ]}
-                />
-                <Speech
-                  who="ande"
-                  lines={[
-                    "Lost your password? The reset link goes to your email. We never store it in plain text — POPIA compliant by default.",
-                  ]}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Phase III · Inside · Grade 11 ─────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-2 lg:order-1 lg:col-span-5">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-orange-600">
-                Phase III · Inside · Grade 11
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
-                Plan ahead.{" "}
-                <span className="italic text-ink/55">Build your shortlist.</span>
-              </h2>
-              <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Grade 11 is about <em>preparation</em>. Targets you set now decide which
-                doors are open in Grade 12. The home tiles are tuned for that.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-5">
-                <Speech
-                  who="skhathi"
-                  lines={[
-                    "Six tiles. BaseBot for any question, Targets for the marks you're aiming at, then Programmes, Bursaries, Documents and Profile.",
-                  ]}
-                />
-                <Speech
-                  who="skhathi"
-                  lines={[
-                    "No Applications tile yet — it's not application season for you. Less clutter, fewer wrong turns.",
-                    "Targets is your big one. Set the APS you want, see exactly which subjects to push.",
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div className="order-1 lg:order-2 lg:col-span-7">
-              <div className="mx-auto max-w-md">
-                <PhoneFrame label="Home · Grade 11">
-                  <DashboardScreen grade="11" />
-                </PhoneFrame>
+                <div className="mt-10 flex flex-col gap-8">
+                  <Speech
+                    who="skhathi"
+                    lines={[
+                      "Step one is just your name and a phone number. Step two is your subjects — APS gets calculated automatically as you type your marks.",
+                      "Step three is your grade, school, province and what you're curious about studying.",
+                    ]}
+                  />
+                  <Speech
+                    who="skhathi"
+                    lines={[
+                      "When you finish, you land on the Opportunity Report — your APS, the universities and bursaries you qualify for, and the next deadline. No sign-up needed yet to see it.",
+                    ]}
+                  />
+                </div>
               </div>
 
-              <ul className="mx-auto mt-8 grid max-w-md gap-2 text-sm sm:grid-cols-2">
-                {[
-                  { Icon: Bot, label: "BaseBot — ask anything" },
-                  { Icon: Target, label: "Targets — set the APS goal" },
-                  { Icon: GraduationCap, label: "Programmes — explore" },
-                  { Icon: Trophy, label: "Bursaries — discover" },
-                ].map((f) => (
-                  <li
-                    key={f.label}
-                    className="flex items-center gap-2 rounded-full border border-ink/15 bg-white px-3 py-2"
-                  >
-                    <f.Icon size={13} className="text-orange-600" />
-                    <span className="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-ink">
-                      {f.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Phase IV · Inside · Grade 12 ──────────────────────────── */}
-      <section className="border-b border-ink/15">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-          <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
-            <div className="order-1 lg:order-1 lg:col-span-7">
-              <div className="mx-auto max-w-md">
-                <PhoneFrame label="Home · Grade 12">
-                  <DashboardScreen grade="12" />
-                </PhoneFrame>
-              </div>
-
-              <ul className="mx-auto mt-8 grid max-w-md gap-2 text-sm sm:grid-cols-2">
-                {[
-                  { Icon: FileText, label: "Applications — submit & track" },
-                  { Icon: TrendingUp, label: "Progress — XP and level" },
-                  { Icon: ListChecks, label: "Documents — upload once" },
-                  { Icon: Bell, label: "Reminders — never miss a deadline" },
-                ].map((f) => (
-                  <li
-                    key={f.label}
-                    className="flex items-center gap-2 rounded-full border border-ink/15 bg-white px-3 py-2"
-                  >
-                    <f.Icon size={13} className="text-blue-600" />
-                    <span className="font-sans text-[11px] font-bold uppercase tracking-[0.16em] text-ink">
-                      {f.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="order-2 lg:order-2 lg:col-span-5">
-              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.22em] text-blue-600">
-                Phase IV · Inside · Grade 12
-              </p>
-              <h2 className="mt-3 font-serif text-4xl font-medium leading-[1.05] tracking-tight text-ink sm:text-5xl">
-                Apply.{" "}
-                <span className="italic text-ink/55">Track. Land.</span>
-              </h2>
-              <p className="mt-5 max-w-md font-serif text-base italic leading-relaxed text-ink/65">
-                Grade 12 is the live season. Targets give way to <em>Applications</em>{" "}
-                and <em>Progress</em> — what you&apos;ve sent, what you&apos;re waiting
-                on, what&apos;s next.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-5">
-                <Speech
-                  who="ande"
-                  lines={[
-                    "Notice the layout shifts. Applications and Progress take the front-row tiles — the things you'll touch every week.",
-                  ]}
-                />
-                <Speech
-                  who="ande"
-                  lines={[
-                    "Each application has a status — Planning, In progress, Submitted, Accepted. The Progress tile turns it into XP so it actually feels like you're moving.",
-                    "BaseBot stays at the top — same coach, more urgent questions now.",
-                  ]}
-                />
+              <div className="order-1 lg:order-2 lg:col-span-7">
+                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
+                  <PhoneFrame label="Step 1 · Your details" bg="#ffffff">
+                    <ScreenOnboarding />
+                  </PhoneFrame>
+                  <PhoneFrame label="Step 2 · Subjects" bg="#ffffff">
+                    <ScreenSubjects />
+                  </PhoneFrame>
+                </div>
+                <div className="mt-10 flex justify-center">
+                  <div className="w-full sm:max-w-[320px]">
+                    <PhoneFrame label="Opportunity Report">
+                      <ScreenReveal />
+                    </PhoneFrame>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA */}
-      <section>
-        <div className="mx-auto max-w-6xl px-5 py-24 text-center sm:px-8 sm:py-32">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.28em] text-orange-600">
-            Tour&apos;s over · ready to try?
-          </p>
-          <h2 className="mx-auto mt-5 max-w-3xl font-serif text-4xl font-medium leading-none tracking-tight text-ink sm:text-6xl">
-            The real thing is{" "}
-            <span className="italic text-orange-600">free to start.</span>
-          </h2>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 bg-orange-500 px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.22em] text-white transition-colors hover:bg-ink"
-            >
-              Start the real onboarding
-              <ArrowRight size={14} />
-            </Link>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 border border-ink px-8 py-4 font-sans text-xs font-bold uppercase tracking-[0.22em] text-ink hover:bg-ink hover:text-paper"
-            >
-              Back to home
-              <ArrowLeft size={14} />
-            </Link>
+        {/* Phase II */}
+        <section className="sec border-b border-[var(--line)]">
+          <div className="wrap">
+            <div className="grid items-center gap-16 lg:grid-cols-12">
+              <div className="order-1 lg:order-1 lg:col-span-7">
+                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
+                  <PhoneFrame label="Sign up" bg="#f9fafb">
+                    <ScreenSignup />
+                  </PhoneFrame>
+                  <PhoneFrame label="Sign in" bg="#f9fafb">
+                    <ScreenLogin />
+                  </PhoneFrame>
+                </div>
+              </div>
+
+              <div className="order-2 lg:order-2 lg:col-span-5">
+                <span className="label text-blue-600">Phase II · Account</span>
+                <h2 className="heading-lg mt-3">
+                  Save your paths.{" "}
+                  <span className="text-[var(--ink-soft)]">Pick them up anywhere.</span>
+                </h2>
+                <p className="mt-5 max-w-md text-lg text-[var(--ink-soft)]">
+                  Sign-up is two short steps. Email and password first, then a guardian
+                  contact. After that, every device you log in on shows your matched
+                  programmes, bursaries and documents.
+                </p>
+
+                <div className="mt-10 flex flex-col gap-8">
+                  <Speech
+                    who="ande"
+                    lines={[
+                      "Step one: email, password, confirm. Step two: a guardian contact so we can keep someone in the loop. Your Opportunity Report carries over — nothing gets lost.",
+                    ]}
+                  />
+                  <Speech
+                    who="ande"
+                    lines={[
+                      "Lost your password? The reset link goes to your email. We never store it in plain text — POPIA compliant by default.",
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+
+        {/* Phase III */}
+        <section className="sec border-b border-[var(--line)]">
+          <div className="wrap">
+            <div className="grid items-center gap-16 lg:grid-cols-12">
+              <div className="order-2 lg:order-1 lg:col-span-5">
+                <span className="label">Phase III · Inside · Grade 11</span>
+                <h2 className="heading-lg mt-3">
+                  Plan ahead.{" "}
+                  <span className="text-[var(--ink-soft)]">Build your shortlist.</span>
+                </h2>
+                <p className="mt-5 max-w-md text-lg text-[var(--ink-soft)]">
+                  Grade 11 is about <span className="font-semibold text-[var(--ink)]">preparation</span>. Targets you set now decide which
+                  doors are open in Grade 12. The home tiles are tuned for that.
+                </p>
+
+                <div className="mt-10 flex flex-col gap-8">
+                  <Speech
+                    who="skhathi"
+                    lines={[
+                      "Six tiles. BaseBot for any question, Targets for the marks you're aiming at, then Programmes, Bursaries, Documents and Profile.",
+                    ]}
+                  />
+                  <Speech
+                    who="skhathi"
+                    lines={[
+                      "No Applications tile yet — it's not application season for you. Less clutter, fewer wrong turns.",
+                      "Targets is your big one. Set the APS you want, see exactly which subjects to push.",
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <div className="order-1 lg:order-2 lg:col-span-7">
+                <div className="mx-auto max-w-[320px]">
+                  <PhoneFrame label="Home · Grade 11">
+                    <DashboardScreen grade="11" />
+                  </PhoneFrame>
+                </div>
+
+                <ul className="mx-auto mt-10 grid max-w-md gap-3 sm:grid-cols-2">
+                  {[
+                    { Icon: Bot, label: "BaseBot — ask anything" },
+                    { Icon: Target, label: "Targets — set the APS goal" },
+                    { Icon: GraduationCap, label: "Programmes — explore" },
+                    { Icon: Trophy, label: "Bursaries — discover" },
+                  ].map((f) => (
+                    <li
+                      key={f.label}
+                      className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 shadow-sm"
+                    >
+                      <f.Icon size={16} className="text-[var(--orange)]" />
+                      <span className="text-[0.7rem] font-bold uppercase tracking-[0.1em] text-[var(--ink)]">
+                        {f.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Phase IV */}
+        <section className="sec border-b border-[var(--line)]">
+          <div className="wrap">
+            <div className="grid items-center gap-16 lg:grid-cols-12">
+              <div className="order-1 lg:order-1 lg:col-span-7">
+                <div className="mx-auto max-w-[320px]">
+                  <PhoneFrame label="Home · Grade 12">
+                    <DashboardScreen grade="12" />
+                  </PhoneFrame>
+                </div>
+
+                <ul className="mx-auto mt-10 grid max-w-md gap-3 sm:grid-cols-2">
+                  {[
+                    { Icon: FileText, label: "Applications — track" },
+                    { Icon: TrendingUp, label: "Progress — XP & level" },
+                    { Icon: ListChecks, label: "Documents — upload once" },
+                    { Icon: Bell, label: "Reminders — deadlines" },
+                  ].map((f) => (
+                    <li
+                      key={f.label}
+                      className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 shadow-sm"
+                    >
+                      <f.Icon size={16} className="text-blue-600" />
+                      <span className="text-[0.7rem] font-bold uppercase tracking-[0.1em] text-[var(--ink)]">
+                        {f.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="order-2 lg:order-2 lg:col-span-5">
+                <span className="label text-blue-600">Phase IV · Inside · Grade 12</span>
+                <h2 className="heading-lg mt-3">
+                  Apply.{" "}
+                  <span className="text-[var(--ink-soft)]">Track. Land.</span>
+                </h2>
+                <p className="mt-5 max-w-md text-lg text-[var(--ink-soft)]">
+                  Grade 12 is the live season. Targets give way to <span className="font-semibold text-[var(--ink)]">Applications</span>{" "}
+                  and <span className="font-semibold text-[var(--ink)]">Progress</span> — what you&apos;ve sent, what you&apos;re waiting
+                  on, what&apos;s next.
+                </p>
+
+                <div className="mt-10 flex flex-col gap-8">
+                  <Speech
+                    who="ande"
+                    lines={[
+                      "Notice the layout shifts. Applications and Progress take the front-row tiles — the things you'll touch every week.",
+                    ]}
+                  />
+                  <Speech
+                    who="ande"
+                    lines={[
+                      "Each application has a status — Planning, In progress, Submitted, Accepted. The Progress tile turns it into XP so it actually feels like you're moving.",
+                      "BaseBot stays at the top — same coach, more urgent questions now.",
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="sec" style={{ paddingTop: 0 }}>
+          <div className="final-cta text-center flex flex-col items-center">
+            <span className="label text-[var(--ink)] mb-4">Tour&apos;s over · ready to try?</span>
+            <h2 className="mx-auto text-center">
+              The real thing is{" "}
+              <span className="underline underline-offset-4 decoration-2 decoration-white/40">free to start.</span>
+            </h2>
+            <div className="mt-8 flex flex-wrap justify-center gap-3 relative z-10">
+              <Link href="/onboarding" className="btn btn-dark">
+                Start the real onboarding
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                href="/"
+                className="btn"
+                style={{
+                  background: "rgba(255,255,255,0.18)",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.25)",
+                }}
+              >
+                Back to home
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+      <MarketingFooter />
+    </>
   );
 }
