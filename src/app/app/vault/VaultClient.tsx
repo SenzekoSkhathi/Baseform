@@ -18,10 +18,15 @@ import {
   Zap,
   ZapOff,
   ScanText,
+  CheckSquare,
+  Layers,
+  Link,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import ScanEditor, { type ScanEditorSavePayload } from "./ScanEditor";
+import ScannerCamera from "./components/ScannerCamera";
+import ScanReviewGallery, { CATEGORIES, type Category, categoryMeta } from "./components/ScanReviewGallery";
 import {
   AUTO_CAPTURE_STABLE_MS,
   AUTO_CAPTURE_MIN_AREA_RATIO,
@@ -48,15 +53,20 @@ export type VaultFile = {
   mimeType: string;
 };
 
-const CATEGORIES = [
-  { id: "id-document", label: "ID Document", color: "bg-blue-50 text-blue-700 border-blue-100" },
-  { id: "matric-transcript", label: "Matric Transcript", color: "bg-green-50 text-green-700 border-green-100" },
-  { id: "proof-of-address", label: "Proof of Address", color: "bg-purple-50 text-purple-700 border-purple-100" },
-  { id: "motivational-letter", label: "Motivational Letter", color: "bg-amber-50 text-amber-700 border-amber-100" },
-  { id: "other", label: "Other", color: "bg-gray-100 text-gray-600 border-gray-200" },
-] as const;
-
-type Category = (typeof CATEGORIES)[number]["id"];
+export type VisionSuggestion = {
+  category: Category | "other";
+  extractedData?: {
+    name?: string;
+    idNumber?: string;
+    subjects?: Array<{
+      name: string;
+      percentage: number;
+    }>;
+  };
+  qualityIssues: string[];
+  isCertified: boolean;
+  certificationValid: boolean;
+};
 
 const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -77,10 +87,6 @@ const SCAN_IMAGE_COMPRESSION_OPTIONS = {
 // which is the sweet spot for scanned documents — text stays crisp without
 // inflating file size.
 const PDF_PAGE_MAX_SIDE = 2000;
-
-function categoryMeta(id: Category) {
-  return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
-}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -576,12 +582,47 @@ export default function VaultClient({ initialFiles }: Props) {
   const [autoRotateScans, setAutoRotateScans] = useState(true);
   const [uploadNameInput, setUploadNameInput] = useState("");
   const [scanOutputName, setScanOutputName] = useState("");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [visionAnalyzing, setVisionAnalyzing] = useState(false);
+  const [visionSuggestion, setVisionSuggestion] = useState<VisionSuggestion | null>(null);
   const [readerFile, setReaderFile] = useState<VaultFile | null>(null);
   const [readerKind, setReaderKind] = useState<ReaderKind>("unsupported");
   const [readerUrl, setReaderUrl] = useState<string | null>(null);
   const [readerText, setReaderText] = useState<string | null>(null);
   const [readerLoading, setReaderLoading] = useState(false);
   const [readerError, setReaderError] = useState<string | null>(null);
+
+  async function analyzeScanDraft(file: File) {
+    setVisionAnalyzing(true);
+    setVisionSuggestion(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("http://localhost:3001/vision/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json() as VisionSuggestion;
+        setVisionSuggestion(data);
+        if (data.category && data.category !== "other") {
+          setUploadCategory(data.category);
+        }
+        if (data.extractedData?.name) {
+          setUploadNameInput(data.extractedData.name);
+        }
+      } else {
+        console.warn("Vision analysis failed with status", res.status);
+      }
+    } catch (error) {
+      console.warn("Could not analyze document with vision API", error);
+    } finally {
+      setVisionAnalyzing(false);
+    }
+  }
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -596,10 +637,6 @@ export default function VaultClient({ initialFiles }: Props) {
     scanDraftPagesRef.current = scanDraftPages;
   }, [scanDraftPages]);
 
-  // Attach camera stream to the video element after it mounts.
-  // setCameraOpen(true) triggers a re-render; the video ref is only available
-  // after that render completes, so we can't assign srcObject synchronously
-  // inside openInAppCamera.
   useEffect(() => {
     if (!cameraOpen) return;
     const video = cameraVideoRef.current;
@@ -610,24 +647,11 @@ export default function VaultClient({ initialFiles }: Props) {
     }
   }, [cameraOpen]);
 
-  // Device-motion gating for auto-capture. Visual quad stability can be
-  // fooled by a hand drifting smoothly across the frame — the page tracks
-  // along with the phone and looks "stable" frame-to-frame even though
-  // capture would yield a smeared shot. The gyroscope/accelerometer gives
-  // an independent motion signal we combine with the visual stability test.
-  // iOS 13+ gates DeviceMotionEvent behind a permission prompt; on
-  // browsers without it (desktop Chrome, older Android), we just skip the
-  // gate and fall back to visual stability alone.
   useEffect(() => {
     if (!cameraOpen) return;
     if (typeof window === "undefined" || typeof window.DeviceMotionEvent === "undefined") return;
 
     let cancelled = false;
-    // 0.4 m/s² magnitude on the gravity-removed signal is roughly the
-    // boundary between "phone resting on a hand that's holding still" and
-    // "phone visibly moving". Tuned by feel — too low produces false
-    // motion alarms from breathing/heartbeat, too high lets actual drift
-    // through.
     const MOTION_THRESHOLD = 0.4;
 
     const onMotion = (event: DeviceMotionEvent) => {
@@ -636,9 +660,6 @@ export default function VaultClient({ initialFiles }: Props) {
       const ax = acc.x ?? 0;
       const ay = acc.y ?? 0;
       const az = acc.z ?? 0;
-      // If only accelerationIncludingGravity is exposed (some Android
-      // browsers), subtract a 9.8 baseline along the dominant axis. This
-      // is rough but enough for the on/off-motion classification we need.
       let magnitude: number;
       if (event.acceleration) {
         magnitude = Math.hypot(ax, ay, az);
@@ -655,9 +676,6 @@ export default function VaultClient({ initialFiles }: Props) {
       window.addEventListener("devicemotion", onMotion, { passive: true });
     };
 
-    // iOS 13+ requires an explicit user gesture to prompt for permission.
-    // The camera was just opened via a tap, which counts. If the call
-    // throws or returns "denied", silently fall back to visual-only gating.
     const motionCtor = window.DeviceMotionEvent as typeof DeviceMotionEvent & {
       requestPermission?: () => Promise<"granted" | "denied" | "default">;
     };
@@ -679,9 +697,6 @@ export default function VaultClient({ initialFiles }: Props) {
     };
   }, [cameraOpen]);
 
-  // Live document-edge detection. Runs while the camera is open. We sample
-  // the video at ~10 fps onto a hidden 240-px-wide canvas, run the quad
-  // detector, and (when stable for ~900 ms) auto-trigger capture.
   useEffect(() => {
     if (!cameraOpen) return;
     const video = cameraVideoRef.current;
@@ -734,14 +749,8 @@ export default function VaultClient({ initialFiles }: Props) {
         return;
       }
 
-      // Translate detect-space quad to natural-video coordinates so the
-      // capture path can use it directly.
       const upscaled: Point[] = detected.map((p) => ({ x: p.x / scale, y: p.y / scale }));
 
-      // Adaptive stability tolerance — proportional to the quad's diagonal
-      // in detect-space pixels. A page filling the frame can drift several
-      // pixels and still be the same page; a small page in the corner needs
-      // a tighter window.
       const detectDiagonal = quadDiagonal(detected);
       const tolerancePx = Math.max(2, detectDiagonal * AUTO_CAPTURE_TOLERANCE_RATIO);
 
@@ -759,13 +768,7 @@ export default function VaultClient({ initialFiles }: Props) {
           setLiveQuadStable(false);
         } else if (ts - liveQuadStableSinceRef.current >= AUTO_CAPTURE_STABLE_MS) {
           setLiveQuadStable(true);
-          // Area-fraction stand-in for confidence: refuse auto-capture when
-          // the detected quad covers too little of the frame, since small
-          // detections are usually false-positives on background clutter.
           const areaRatio = quadArea(detected) / (dw * dh);
-          // Motion gate: require ~200 ms of accelerometer-quiet before
-          // firing. Browsers without DeviceMotionEvent leave the timestamp
-          // at 0, which trivially passes the gate (visual-only mode).
           const motionQuiet = ts - motionLastMoveRef.current >= 200;
           if (
             autoCapture &&
@@ -791,9 +794,6 @@ export default function VaultClient({ initialFiles }: Props) {
         detectionFrameRef.current = null;
       }
     };
-  // captureFromInAppCamera is referenced through the ref/lock; deps kept tight
-  // intentionally to avoid restarting the loop on unrelated state churn.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOpen, autoCapture]);
 
   useEffect(() => {
@@ -842,7 +842,6 @@ export default function VaultClient({ initialFiles }: Props) {
     setUploadSuccess(`${successLabel ?? file.name} uploaded successfully.`);
     setUploading(false);
 
-    // Refresh file list
     startTransition(async () => {
       const listRes = await fetch("/api/vault");
       if (listRes.ok) {
@@ -873,7 +872,6 @@ export default function VaultClient({ initialFiles }: Props) {
     await uploadFileToVault(fileToUpload);
     setUploadNameInput("");
 
-    // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -905,7 +903,6 @@ export default function VaultClient({ initialFiles }: Props) {
 
       cameraStreamRef.current = stream;
 
-      // Detect torch capability (Chrome on Android exposes this; iOS Safari does not).
       const track = stream.getVideoTracks()[0];
       const caps = track && "getCapabilities" in track ? (track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean }) : undefined;
       setTorchSupported(Boolean(caps?.torch));
@@ -962,15 +959,12 @@ export default function VaultClient({ initialFiles }: Props) {
     try {
       const normalizedFiles: File[] = [];
 
-      // Process one file at a time to avoid memory spikes on low-memory mobile browsers.
       for (const file of selected) {
         const normalized = await normalizeScanImageFile(file);
         const oriented = autoRotateScans ? await autoRotateScanImageFile(normalized) : normalized;
         normalizedFiles.push(oriented);
       }
 
-      // Uploaded images become the immutable source. Initial transforms are
-      // identity — the user can crop/rotate/filter them in the editor later.
       const newPages: ScanDraftPage[] = normalizedFiles.map((file, index) => ({
         id: `${Date.now()}-${index}-${file.name}`,
         sourceFile: file,
@@ -982,6 +976,10 @@ export default function VaultClient({ initialFiles }: Props) {
       setScanDraftPages((prev) => [...prev, ...newPages]);
       setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
       setShowScanReview(true);
+
+      if (scanDraftPages.length === 0 && newPages.length > 0) {
+        void analyzeScanDraft(newPages[0].renderedFile);
+      }
     } catch {
       setUploadError("Your phone is low on memory while scanning. Close other apps and retry with one page at a time.");
     }
@@ -1002,10 +1000,6 @@ export default function VaultClient({ initialFiles }: Props) {
     captureLockRef.current = true;
     setCameraLoading(true);
     try {
-      // Capture at near-native camera resolution so the warp + filters have
-      // enough pixels for readable body text after cropping. 2400 px on the
-      // long side is large enough yet stays within typical Android Chrome
-      // canvas memory limits.
       const maxSide = 2400;
       const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
       const width = Math.max(1, Math.round(sourceWidth * scale));
@@ -1021,8 +1015,6 @@ export default function VaultClient({ initialFiles }: Props) {
       context.fillRect(0, 0, width, height);
       context.drawImage(video, 0, 0, width, height);
 
-      // Translate the live (downscaled) quad into the captured-frame coordinate
-      // system. liveQuad is in the natural video resolution.
       const detected = liveQuadRef.current;
       let scaledQuad: Point[] | null = null;
       if (detected && videoNaturalSizeRef.current) {
@@ -1034,19 +1026,12 @@ export default function VaultClient({ initialFiles }: Props) {
       setCaptureFlash(true);
       setTimeout(() => setCaptureFlash(false), 120);
 
-      // Save the *raw* frame as the immutable source. The detected quad and
-      // selected filter are stored as transforms so the user can later switch
-      // back to "Original" or re-crop without compounding pixel loss.
       const rawWidth = canvas.width;
       const rawHeight = canvas.height;
       const rawSource = await canvasToSourceFile(canvas);
       const oriented = autoRotateScans ? await autoRotateScanImageFile(rawSource) : rawSource;
       const sourceFile = await normalizeScanImageFile(oriented);
 
-      // cropQuad came from the raw captured frame's pixel space but the final
-      // source went through autoRotate (possibly 90° right) + normalizeScanImage
-      // (which downscales to maxWidthOrHeight: 2000). Recompute the quad in
-      // the actual stored source's pixel coords.
       const sourceDim = await getImageDimensions(sourceFile);
       let sourceQuad: Point[] | null = null;
       if (scaledQuad) {
@@ -1056,7 +1041,6 @@ export default function VaultClient({ initialFiles }: Props) {
         const sx = sourceDim.width / intermediateW;
         const sy = sourceDim.height / intermediateH;
         sourceQuad = scaledQuad.map((p) => {
-          // Apply 90° right rotation first (if any), then uniform scale.
           const rx = wasRotatedRight ? rawHeight - p.y : p.x;
           const ry = wasRotatedRight ? p.x : p.y;
           return { x: rx * sx, y: ry * sy };
@@ -1086,13 +1070,16 @@ export default function VaultClient({ initialFiles }: Props) {
         if (next.length >= MAX_SCAN_PAGES) {
           setUploadError(`Scan limit reached. Please keep each scan PDF to ${MAX_SCAN_PAGES} pages or fewer.`);
         }
+        
+        if (prev.length === 0) {
+          void analyzeScanDraft(newPage.renderedFile);
+        }
+
         return next;
       });
       setScanOutputName((prev) => prev || `${uploadCategory}-scan`);
       setShowScanReview(true);
 
-      // Reset stability tracker so auto-capture doesn't immediately fire again
-      // on the same stable frame.
       liveQuadStableSinceRef.current = null;
       setLiveQuadStable(false);
       setCameraError(null);
@@ -1100,7 +1087,6 @@ export default function VaultClient({ initialFiles }: Props) {
       setCameraError("Capture failed due to low memory. Close apps and try again.");
     } finally {
       setCameraLoading(false);
-      // Brief cool-down before another auto-capture can fire.
       setTimeout(() => { captureLockRef.current = false; }, 800);
     }
   }
@@ -1208,9 +1194,30 @@ export default function VaultClient({ initialFiles }: Props) {
       const pageLabel = `${filesForPdf.length} scanned page${filesForPdf.length > 1 ? "s" : ""} PDF${ocrEnabled ? " (searchable)" : ""}`;
       const uploaded = await uploadFileToVault(pdfFile, pageLabel);
       if (uploaded) {
+        if (
+          uploadCategory === "matric-transcript" &&
+          visionSuggestion?.extractedData?.subjects?.length
+        ) {
+          try {
+            const mappedSubjects = visionSuggestion.extractedData.subjects.map(s => ({
+              subject_name: s.name,
+              mark: s.percentage
+            }));
+            await fetch("/api/student-subjects", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ subjects: mappedSubjects })
+            });
+            setUploadSuccess((prev) => `${prev} APS score auto-synced from transcript.`);
+          } catch (e) {
+            console.error("Failed to auto-sync subjects", e);
+          }
+        }
+
         clearScanDraft();
         setScanOutputName("");
         setShowScanReview(false);
+        setVisionSuggestion(null);
       }
     } catch {
       setUploadError(
@@ -1224,17 +1231,134 @@ export default function VaultClient({ initialFiles }: Props) {
     }
   }
 
-  async function handleDownload(path: string) {
-    const res = await fetch(`/api/vault/download?path=${encodeURIComponent(path)}`);
-    const json = await res.json();
-    if (!res.ok || !json.url) return;
-    window.open(json.url, "_blank", "noopener,noreferrer");
+  async  function handleDownload(path: string) {
+    window.open(`/api/vault/download?path=${encodeURIComponent(path)}`, "_blank");
   }
 
-  // Track blob URLs created for the reader so we can revoke them. Mobile
-  // browsers (Samsung Internet, some Chrome builds) refuse to render PDFs
-  // from a cross-origin signed URL inside an <iframe>; fetching the bytes
-  // and pointing the iframe at a same-origin blob: URL sidesteps that.
+  function toggleSelection(path: string) {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function handleCancelSelection() {
+    setSelectionMode(false);
+    setSelectedFiles(new Set());
+  }
+
+  async function handleMergeToPdf() {
+    if (selectedFiles.size < 2) {
+      setUploadError("Please select at least 2 files to merge.");
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
+    setScannerConverting(true); // Re-use scanner converting overlay
+
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const mergedPdf = await PDFDocument.create();
+
+      // Ensure we maintain order of selection, or just sort them
+      const filesToMerge = files.filter(f => selectedFiles.has(f.path));
+      
+      for (const file of filesToMerge) {
+        // Fetch the file through our proxy to avoid CORS
+        const res = await fetch(`/api/vault/download?path=${encodeURIComponent(file.path)}`);
+        const json = await res.json();
+        if (!res.ok || !json.url) throw new Error(`Could not fetch ${file.name}`);
+        
+        const fileRes = await fetch(json.url);
+        const arrayBuffer = await fileRes.arrayBuffer();
+
+        const kind = readerKindForFile(file);
+        if (kind === "pdf") {
+          const doc = await PDFDocument.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(doc, doc.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } else if (kind === "image") {
+          const isJpg = file.mimeType === "image/jpeg" || file.mimeType === "image/jpg";
+          const image = isJpg ? await mergedPdf.embedJpg(arrayBuffer) : await mergedPdf.embedPng(arrayBuffer);
+          
+          const page = mergedPdf.addPage([image.width, image.height]);
+          page.drawImage(image, {
+            x: 0,
+            y: 0,
+            width: image.width,
+            height: image.height,
+          });
+        }
+      }
+
+      const mergedPdfBytes = await mergedPdf.save();
+      const pdfFile = new File([new Uint8Array(mergedPdfBytes)], `Application_Pack_${Date.now()}.pdf`, { type: "application/pdf" });
+      
+      // We will upload it to the 'other' category since it's a mix
+      const previousCategory = uploadCategory;
+      setUploadCategory("other");
+      
+      const uploaded = await uploadFileToVault(pdfFile, "Application Pack");
+      if (uploaded) {
+        setUploadSuccess("Successfully merged documents into an Application Pack!");
+        handleCancelSelection();
+      }
+      setUploadCategory(previousCategory);
+    } catch (e) {
+      setUploadError("Failed to merge documents. Make sure they are PDFs or images.");
+      console.error(e);
+    } finally {
+      setScannerConverting(false);
+    }
+  }
+
+  async function handleCreateBundle() {
+    if (selectedFiles.size === 0) {
+      setUploadError("Please select files to bundle.");
+      return;
+    }
+
+    setUploadError(null);
+    setUploadSuccess(null);
+    setScannerConverting(true); // Re-use spinner overlay
+
+    try {
+      const paths = Array.from(selectedFiles);
+      const res = await fetch("/api/vault/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paths,
+          title: "My Secure Application Bundle",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to create bundle");
+
+      const shareUrl = window.location.origin + json.url;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      setUploadSuccess("Secure bundle created! The link has been copied to your clipboard.");
+      
+      // Clear selection after a delay
+      setTimeout(() => {
+        handleCancelSelection();
+        setUploadSuccess(null);
+      }, 5000);
+      
+    } catch (e) {
+      setUploadError("Failed to create secure bundle link.");
+      console.error(e);
+    } finally {
+      setScannerConverting(false);
+    }
+  }
+
   const readerBlobUrlRef = useRef<string | null>(null);
 
   function revokeReaderBlobUrl() {
@@ -1267,8 +1391,6 @@ export default function VaultClient({ initialFiles }: Props) {
       setReaderKind(kind);
 
       if (kind === "pdf") {
-        // Fetch as blob and inline via blob: URL — iframe inherits our origin
-        // and the storage host's frame-options no longer apply.
         try {
           const pdfRes = await fetch(signedUrl);
           if (!pdfRes.ok) throw new Error("fetch failed");
@@ -1277,8 +1399,6 @@ export default function VaultClient({ initialFiles }: Props) {
           readerBlobUrlRef.current = blobUrl;
           setReaderUrl(blobUrl);
         } catch {
-          // Fallback: direct signed URL. Some browsers will still render it,
-          // and even when blocked the user can still hit Download.
           setReaderUrl(signedUrl);
         }
       } else if (kind === "text") {
@@ -1335,58 +1455,63 @@ export default function VaultClient({ initialFiles }: Props) {
 
   return (
     <>
-    <div className="relative min-h-screen overflow-hidden bg-[#fff9f2]">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_10%_8%,rgba(251,146,60,0.18),transparent_62%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(45%_35%_at_92%_14%,rgba(56,189,248,0.10),transparent_70%)]" />
+    <div className="relative min-h-screen overflow-hidden bg-gray-50">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-orange-400/10 blur-[100px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/10 blur-[120px]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-4xl px-4 pb-8 pt-6 md:px-6 md:pt-8">
-        {/* Header */}
-        <header className="rounded-3xl border border-orange-100 bg-white/90 p-5 shadow-[0_16px_45px_rgba(249,115,22,0.12)] md:p-6">
-          <button
-            onClick={handleBack}
-            className="mb-3 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <ChevronLeft size={14} />
-            Back
-          </button>
+      <div className="relative z-10 mx-auto max-w-4xl px-4 pb-12 pt-6 md:px-6 md:pt-10">
+        <header className="relative overflow-hidden rounded-[2rem] border border-white/50 bg-white/60 p-6 shadow-xl shadow-gray-200/50 backdrop-blur-xl md:p-8">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" />
+          <div className="relative">
+            <button
+              onClick={handleBack}
+              className="mb-4 inline-flex items-center gap-1 rounded-full border border-gray-200/50 bg-white/50 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all"
+            >
+              <ChevronLeft size={16} />
+              Back
+            </button>
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h1 className="text-3xl font-black tracking-tight text-gray-900">Document Vault</h1>
+            <div className="flex flex-col gap-1.5">
+              <h1 className="text-3xl font-black tracking-tight text-gray-900 md:text-4xl">Document Vault</h1>
               <p className="text-sm font-medium text-gray-500">
-                Store and organise your application documents securely.
+                Securely store and organize your application documents.
               </p>
             </div>
-          </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:max-w-sm">
-            <button
-              onClick={handleScanClick}
-              disabled={uploading || scannerConverting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-              title="Scan document"
-            >
-              <Camera size={15} />
-              {scannerConverting ? "Scanning..." : "Scanner"}
-              {pendingScanCount > 0 && (
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
-                  {pendingScanCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setShowUploadPanel((v) => !v);
-                setUploadError(null);
-                setUploadSuccess(null);
-              }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600 transition-colors"
-            >
-              <Upload size={15} />
-              Upload
-            </button>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleScanClick}
+                disabled={uploading || scannerConverting}
+                className="group relative flex flex-1 items-center justify-center gap-3 rounded-2xl bg-gray-900 px-5 py-4 text-sm font-bold text-white shadow-lg shadow-gray-900/20 transition-all hover:bg-black hover:shadow-xl hover:shadow-gray-900/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+              >
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+                <div className="rounded-full bg-white/10 p-1.5 backdrop-blur-sm group-hover:scale-110 transition-transform">
+                  <Camera size={18} />
+                </div>
+                {scannerConverting ? "Scanning..." : "Scan Document"}
+                {pendingScanCount > 0 && (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white shadow-md shadow-orange-500/20">
+                    {pendingScanCount}
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowUploadPanel((v) => !v);
+                  setUploadError(null);
+                  setUploadSuccess(null);
+                }}
+                className="flex flex-1 items-center justify-center gap-3 rounded-2xl border border-gray-200/60 bg-white/80 px-5 py-4 text-sm font-bold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-white hover:shadow-md hover:text-gray-900 active:scale-[0.98]"
+              >
+                <div className="rounded-full bg-gray-100 p-1.5 text-gray-500">
+                  <Upload size={18} />
+                </div>
+                Upload File
+              </button>
+            </div>
           </div>
 
           <input
@@ -1399,569 +1524,225 @@ export default function VaultClient({ initialFiles }: Props) {
             tabIndex={-1}
             aria-hidden="true"
           />
-
         </header>
 
-        {cameraOpen && (
-          <div className="fixed inset-0 z-40 flex flex-col bg-black">
-            {/* Top bar */}
-            <div className="flex items-center justify-between px-4 py-3 pt-safe">
-              <button
-                type="button"
-                onClick={closeInAppCamera}
-                className="rounded-full bg-black/40 p-2 text-white backdrop-blur-sm"
-                aria-label="Close camera"
-              >
-                <X size={20} />
-              </button>
-
-              <div className="flex items-center gap-2">
-                {pendingScanCount > 0 && (
-                  <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
-                    {pendingScanCount} captured
-                  </span>
-                )}
-                <span
-                  className={[
-                    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider backdrop-blur-sm transition-colors",
-                    liveQuadStable
-                      ? "bg-emerald-500/90 text-white"
-                      : liveQuad
-                        ? "bg-amber-400/90 text-amber-900"
-                        : "bg-white/15 text-white/70",
-                  ].join(" ")}
-                >
-                  {liveQuadStable ? "Hold steady…" : liveQuad ? "Page detected" : "Looking for page"}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => scannerInputRef.current?.click()}
-                disabled={cameraLoading || scannerConverting}
-                className="rounded-full bg-black/40 px-3 py-2 text-xs font-bold text-white backdrop-blur-sm disabled:opacity-50"
-              >
-                Gallery
-              </button>
-            </div>
-
-            {/* Quick controls row — torch / auto-capture / filter */}
-            <div className="flex items-center justify-center gap-2 px-3 pb-2">
-              {torchSupported && (
-                <button
-                  type="button"
-                  onClick={toggleTorch}
-                  className={[
-                    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur-sm",
-                    torchOn ? "bg-amber-400 text-amber-900" : "bg-white/10 text-white",
-                  ].join(" ")}
-                >
-                  {torchOn ? <Zap size={12} /> : <ZapOff size={12} />}
-                  {torchOn ? "Torch on" : "Torch"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setAutoCapture((v) => !v)}
-                className={[
-                  "rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur-sm",
-                  autoCapture ? "bg-emerald-500 text-white" : "bg-white/10 text-white",
-                ].join(" ")}
-              >
-                Auto-capture: {autoCapture ? "On" : "Off"}
-              </button>
-              <div className="flex items-center gap-1 rounded-full bg-white/10 p-1 backdrop-blur-sm">
-                {(["original", "auto", "magic", "bw"] as FilterMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setCaptureFilter(mode)}
-                    className={[
-                      "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
-                      captureFilter === mode ? "bg-white text-black" : "text-white/70",
-                    ].join(" ")}
-                  >
-                    {mode === "bw" ? "B&W" : mode === "original" ? "Raw" : mode}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Viewfinder — flex-1 fills all remaining space */}
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-              <video
-                ref={cameraVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-contain"
-              />
-
-              {/* White flash on capture */}
-              {captureFlash && (
-                <div className="pointer-events-none absolute inset-0 bg-white opacity-70" />
-              )}
-
-              {/* Live quad overlay. Drawn in normalised video coords so it
-                  tracks the page wherever it sits in the frame. */}
-              {liveQuad && videoNaturalSizeRef.current && (
-                <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  viewBox={`0 0 ${videoNaturalSizeRef.current.w} ${videoNaturalSizeRef.current.h}`}
-                  preserveAspectRatio="xMidYMid meet"
-                >
-                  <polygon
-                    points={liveQuad.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill={liveQuadStable ? "rgba(16,185,129,0.18)" : "rgba(251,146,60,0.12)"}
-                    stroke={liveQuadStable ? "#10b981" : "#fb923c"}
-                    strokeWidth={Math.max(3, videoNaturalSizeRef.current.w / 240)}
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-
-              {/* Idle guide when no page is detected yet */}
-              {!liveQuad && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="relative aspect-3/4 w-4/5">
-                    <div className="absolute left-0 top-0 h-8 w-8 rounded-tl-lg border-l-2 border-t-2 border-white/40" />
-                    <div className="absolute right-0 top-0 h-8 w-8 rounded-tr-lg border-r-2 border-t-2 border-white/40" />
-                    <div className="absolute bottom-0 left-0 h-8 w-8 rounded-bl-lg border-b-2 border-l-2 border-white/40" />
-                    <div className="absolute bottom-0 right-0 h-8 w-8 rounded-br-lg border-b-2 border-r-2 border-white/40" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Error toast */}
-            {cameraError && (
-              <div className="mx-4 mb-2 rounded-xl bg-red-500/90 px-3 py-2 text-center text-xs font-semibold text-white backdrop-blur-sm">
-                {cameraError}
-              </div>
-            )}
-
-            {/* Bottom controls */}
-            <div className="flex items-center justify-between px-10 pb-10 pt-6 pb-safe">
-              {/* Last captured thumbnail */}
-              <div className="h-12 w-12">
-                {pendingScanCount > 0 && (
-                  <img
-                    src={scanDraftPages[scanDraftPages.length - 1]?.previewUrl}
-                    alt="Last captured page"
-                    className="h-12 w-12 rounded-xl border-2 border-white/50 object-cover"
-                  />
-                )}
-              </div>
-
-              {/* Shutter button */}
-              <button
-                type="button"
-                onClick={captureFromInAppCamera}
-                disabled={cameraLoading || scannerConverting}
-                aria-label="Capture page"
-                className={[
-                  "flex items-center justify-center rounded-full shadow-lg disabled:opacity-60 active:scale-95 transition-transform",
-                  liveQuadStable && autoCapture ? "bg-emerald-400" : "bg-white",
-                ].join(" ")}
-                style={{ height: 72, width: 72 }}
-              >
-                <div
-                  className={[
-                    "h-16 w-16 rounded-full border-[3px] bg-white",
-                    liveQuadStable && autoCapture ? "border-emerald-600" : "border-gray-300",
-                  ].join(" ")}
-                />
-              </button>
-
-              {/* Done button — appears once pages are captured */}
-              <div className="h-12 w-12 flex items-center justify-center">
-                {pendingScanCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={closeInAppCamera}
-                    className="rounded-xl bg-orange-500 px-2 py-1.5 text-[10px] font-black text-white leading-tight text-center"
-                  >
-                    Done
-                  </button>
-                ) : (
-                  <div />
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        <ScannerCamera
+          cameraOpen={cameraOpen}
+          cameraLoading={cameraLoading}
+          cameraError={cameraError}
+          pendingScanCount={pendingScanCount}
+          liveQuad={liveQuad}
+          liveQuadStable={liveQuadStable}
+          autoCapture={autoCapture}
+          torchOn={torchOn}
+          torchSupported={torchSupported}
+          captureFilter={captureFilter}
+          captureFlash={captureFlash}
+          scannerConverting={scannerConverting}
+          cameraVideoRef={cameraVideoRef}
+          videoNaturalSizeRef={videoNaturalSizeRef}
+          scannerInputRef={scannerInputRef}
+          onClose={closeInAppCamera}
+          onCapture={() => void captureFromInAppCamera()}
+          onToggleTorch={() => void toggleTorch()}
+          onToggleAutoCapture={() => setAutoCapture((v) => !v)}
+          onChangeFilter={setCaptureFilter}
+        />
 
         {showScanReview && (
-          <section className="mt-4 rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-gray-900">Scan Preview</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAutoRotateScans((prev) => !prev)}
-                  disabled={scannerConverting}
-                  className={[
-                    "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-60",
-                    autoRotateScans
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
-                  ].join(" ")}
-                >
-                  Auto-rotate: {autoRotateScans ? "On" : "Off"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearScanDraft();
-                    setShowScanReview(false);
-                  }}
-                  disabled={scannerConverting}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
+          <ScanReviewGallery
+            scanDraftPages={scanDraftPages}
+            scannerConverting={scannerConverting}
+            uploading={uploading}
+            autoRotateScans={autoRotateScans}
+            ocrEnabled={ocrEnabled}
+            ocrProgress={ocrProgress}
+            scanOutputName={scanOutputName}
+            uploadCategory={uploadCategory}
+            onSetAutoRotateScans={setAutoRotateScans}
 
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setUploadCategory("id-document")}
-                className={categoryChipClasses(uploadCategory === "id-document")}
-              >
-                ID Document
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadCategory("matric-transcript")}
-                className={categoryChipClasses(uploadCategory === "matric-transcript")}
-              >
-                Matric Transcript
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadCategory("proof-of-address")}
-                className={categoryChipClasses(uploadCategory === "proof-of-address")}
-              >
-                Proof of Address
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadCategory("motivational-letter")}
-                className={categoryChipClasses(uploadCategory === "motivational-letter")}
-              >
-                Motivational Letter
-              </button>
-              <button
-                type="button"
-                onClick={() => setUploadCategory("other")}
-                className={categoryChipClasses(uploadCategory === "other")}
-              >
-                Other
-              </button>
-            </div>
-
-            <p className="mt-2 text-[11px] text-gray-500">
-              Saving as: <span className="font-semibold text-gray-700">{categoryMeta(uploadCategory).label}</span>
-            </p>
-
-            {scanDraftPages.length === 0 ? (
-              <p className="mt-3 text-xs text-gray-500">No pages yet. Tap Scan to PDF to capture pages.</p>
-            ) : (
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {scanDraftPages.map((page, index) => (
-                  <div
-                    key={page.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setEditingPage(page)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setEditingPage(page);
-                      }
-                    }}
-                    className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm transition hover:border-orange-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  >
-                    {/* Page preview */}
-                    <div className="relative aspect-3/4 w-full overflow-hidden bg-gray-100">
-                      <img
-                        src={page.previewUrl}
-                        alt={`Scanned page ${index + 1}`}
-                        className="h-full w-full object-contain"
-                      />
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-black/55 to-transparent" />
-                      <span className="absolute left-2 top-2 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
-                        {index + 1}
-                      </span>
-                      <span className="absolute bottom-2 left-2 text-[10px] font-bold uppercase tracking-wider text-white/90">
-                        Tap to edit
-                      </span>
-                      {transformsAffectPixels(page.transforms) && (
-                        <span className="absolute right-2 top-2 rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
-                          {page.transforms.filter !== "original" ? "Enhanced" : "Edited"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action row — stopPropagation so taps don't open the editor */}
-                    <div
-                      className="flex items-center justify-between border-t border-gray-100 bg-white px-2 py-1.5"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => moveScanDraftPage(page.id, "up")}
-                          disabled={index === 0 || scannerConverting}
-                          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                          aria-label={`Move page ${index + 1} up`}
-                        >
-                          <ArrowUp size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveScanDraftPage(page.id, "down")}
-                          disabled={index === scanDraftPages.length - 1 || scannerConverting}
-                          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                          aria-label={`Move page ${index + 1} down`}
-                        >
-                          <ArrowDown size={12} />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeScanDraftPage(page.id)}
-                        disabled={scannerConverting}
-                        className="rounded-md p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
-                        aria-label={`Remove page ${index + 1}`}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-3">
-              <label className="text-xs font-medium text-gray-500">PDF name</label>
-              <input
-                type="text"
-                value={scanOutputName}
-                onChange={(e) => setScanOutputName(e.target.value)}
-                placeholder="e.g. Grade 11 Report"
-                disabled={scannerConverting}
-                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 disabled:opacity-60"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setOcrEnabled((v) => !v)}
-              disabled={scannerConverting}
-              className={[
-                "mt-3 flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-60",
-                ocrEnabled
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-gray-200 bg-white hover:bg-gray-50",
-              ].join(" ")}
-            >
-              <div className="flex items-center gap-2">
-                <ScanText size={16} className={ocrEnabled ? "text-emerald-600" : "text-gray-400"} />
-                <div>
-                  <p className={["text-xs font-bold", ocrEnabled ? "text-emerald-700" : "text-gray-700"].join(" ")}>
-                    Searchable text {ocrEnabled ? "On" : "Off"}
-                  </p>
-                  <p className="text-[10px] text-gray-500">
-                    Adds an invisible OCR layer so the PDF can be searched and copied. Adds a few seconds per page.
-                  </p>
-                </div>
-              </div>
-              <span
-                className={[
-                  "inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors",
-                  ocrEnabled ? "bg-emerald-500" : "bg-gray-300",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "h-4 w-4 rounded-full bg-white shadow transition-transform",
-                    ocrEnabled ? "translate-x-4" : "translate-x-0",
-                  ].join(" ")}
-                />
-              </span>
-            </button>
-
-            {ocrProgress && (
-              <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
-                {ocrProgress.status} — page {Math.min(ocrProgress.page + 1, ocrProgress.total)} of {ocrProgress.total}
-              </div>
-            )}
-
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={handleScanClick}
-                disabled={scannerConverting || uploading}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-              >
-                <Camera size={13} />
-                Add page
-              </button>
-              <button
-                type="button"
-                onClick={handleCreatePdfFromDraft}
-                disabled={!scanDraftPages.length || scannerConverting || uploading}
-                className="flex-1 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {scannerConverting ? "Creating PDF..." : `Create PDF (${scanDraftPages.length})`}
-              </button>
-            </div>
-          </section>
+            onClearScanDraft={() => {
+              setScanDraftPages([]);
+              setScanOutputName("");
+              setVisionSuggestion(null);
+              setShowScanReview(false);
+            }}
+            onSetUploadCategory={setUploadCategory}
+            onSetEditingPage={setEditingPage}
+            onMovePage={moveScanDraftPage}
+            onRemovePage={removeScanDraftPage}
+            onSetScanOutputName={setScanOutputName}
+            onSetOcrEnabled={setOcrEnabled}
+            onAddPageClick={handleScanClick}
+            onCreatePdfClick={() => void handleCreatePdfFromDraft()}
+            visionAnalyzing={visionAnalyzing}
+            visionSuggestion={visionSuggestion}
+          />
         )}
 
         {/* Upload panel */}
         {showUploadPanel && (
-          <div className="mt-4 rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-900">Upload a document</h2>
-              <button
-                onClick={() => setShowUploadPanel(false)}
-                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          <div className="mt-4 animate-in slide-in-from-top-4 fade-in duration-300">
+            <div className="rounded-[2rem] border border-white bg-white/60 p-6 shadow-lg shadow-gray-200/50 backdrop-blur-xl md:p-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-black text-gray-900">Upload a document</h2>
+                <button
+                  onClick={() => setShowUploadPanel(false)}
+                  className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
 
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500">Document category</label>
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {CATEGORIES.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setUploadCategory(c.id)}
-                      className={categoryChipClasses(uploadCategory === c.id)}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label className="text-[13px] font-bold text-gray-900">Document category</label>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {CATEGORIES.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setUploadCategory(c.id)}
+                        className={[
+                          "rounded-xl border px-4 py-2.5 text-xs font-bold transition-all",
+                          uploadCategory === c.id
+                            ? "border-orange-500 bg-orange-500 text-white shadow-md shadow-orange-500/20"
+                            : "border-gray-200/60 bg-white/80 text-gray-600 hover:border-gray-300 hover:bg-white hover:text-gray-900 shadow-sm",
+                        ].join(" ")}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-500">
-                  Document name <span className="text-gray-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={uploadNameInput}
-                  onChange={(e) => setUploadNameInput(e.target.value)}
-                  placeholder="e.g. My certified ID"
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
-                />
-              </div>
+                <div>
+                  <label className="text-[13px] font-bold text-gray-900">
+                    Document name <span className="text-gray-400 font-medium">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadNameInput}
+                    onChange={(e) => setUploadNameInput(e.target.value)}
+                    placeholder="e.g. My certified ID"
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white/80 px-4 py-3 text-sm font-medium text-gray-900 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 shadow-sm"
+                  />
+                </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-500">
-                  File <span className="text-gray-400">(PDF, JPG, PNG, DOCX — max {MAX_SIZE_MB} MB)</span>
-                </label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                  onChange={handleFileSelect}
-                  disabled={uploading}
-                  className="mt-1 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white hover:file:bg-orange-600 disabled:opacity-60"
-                />
-              </div>
+                <div>
+                  <label className="text-[13px] font-bold text-gray-900">
+                    File <span className="text-gray-400 font-medium">(PDF, JPG, PNG, DOCX — max {MAX_SIZE_MB} MB)</span>
+                  </label>
+                  <div className="mt-2 relative">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                      onChange={handleFileSelect}
+                      disabled={uploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                    />
+                    <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-white/50 px-4 py-6 transition-colors hover:border-orange-400 hover:bg-orange-50/50 text-gray-500">
+                      <div className="rounded-full bg-gray-100 p-3">
+                        <Upload size={20} className="text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-700">Click to browse or drag and drop</p>
+                        <p className="text-[11px] font-medium text-gray-500 mt-0.5">Supported formats: PDF, Images, Word</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleScanClick}
-                disabled={uploading || scannerConverting}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-              >
-                <Camera size={14} />
-                {scannerConverting ? "Converting images to PDF..." : "Scan document"}
-                {pendingScanCount > 0 && (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
-                    {pendingScanCount}
-                  </span>
+                {(uploading || scannerConverting) && (
+                  <div className="flex items-center gap-3 rounded-xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-600">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500/30 border-t-orange-500" />
+                    {scannerConverting ? "Processing scan..." : "Uploading securely..."}
+                  </div>
                 )}
-              </button>
 
-              {(uploading || scannerConverting) && (
-                <p className="text-xs font-medium text-orange-500">
-                  {scannerConverting ? "Processing scan..." : "Uploading..."}
-                </p>
-              )}
+                {uploadError && (
+                  <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-sm font-bold text-red-600 backdrop-blur-sm">
+                    <AlertCircle size={16} />
+                    {uploadError}
+                  </div>
+                )}
 
-              {uploadError && (
-                <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-600">
-                  <AlertCircle size={14} />
-                  {uploadError}
-                </div>
-              )}
-
-              {uploadSuccess && (
-                <div className="flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2.5 text-xs font-medium text-green-700">
-                  <CheckCircle2 size={14} />
-                  {uploadSuccess}
-                </div>
-              )}
+                {uploadSuccess && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm font-bold text-emerald-700 backdrop-blur-sm">
+                    <CheckCircle2 size={16} />
+                    {uploadSuccess}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Category filter */}
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={[
-              "shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
-              activeCategory === "all"
-                ? "border-orange-200 bg-orange-500 text-white"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
-            ].join(" ")}
-          >
-            All ({files.length})
-          </button>
-          {CATEGORIES.map((cat) => (
+        {/* Category filter & Select Toggle */}
+        <div className="mt-8 flex items-center justify-between gap-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none snap-x px-1">
             <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              onClick={() => setActiveCategory("all")}
               className={[
-                "shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
-                activeCategory === cat.id
-                  ? "border-orange-200 bg-orange-500 text-white"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                "shrink-0 snap-start rounded-full border px-4 py-2 text-xs font-bold transition-all",
+                activeCategory === "all"
+                  ? "border-gray-900 bg-gray-900 text-white shadow-md shadow-gray-900/20"
+                  : "border-gray-200/80 bg-white/60 text-gray-600 backdrop-blur-md hover:border-gray-300 hover:bg-white hover:text-gray-900 shadow-sm",
               ].join(" ")}
             >
-              {cat.label} ({countByCategory[cat.id] ?? 0})
+              All <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">{files.length}</span>
             </button>
-          ))}
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={[
+                  "shrink-0 snap-start rounded-full border px-4 py-2 text-xs font-bold transition-all",
+                  activeCategory === cat.id
+                    ? "border-gray-900 bg-gray-900 text-white shadow-md shadow-gray-900/20"
+                    : "border-gray-200/80 bg-white/60 text-gray-600 backdrop-blur-md hover:border-gray-300 hover:bg-white hover:text-gray-900 shadow-sm",
+                ].join(" ")}
+              >
+                {cat.label} <span className="ml-1 rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">{countByCategory[cat.id] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+          
+          <button
+            onClick={() => {
+              if (selectionMode) handleCancelSelection();
+              else setSelectionMode(true);
+            }}
+            className={`shrink-0 mb-2 flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition-all ${
+              selectionMode
+                ? "border-orange-500 bg-orange-50 text-orange-600 shadow-sm"
+                : "border-gray-200/80 bg-white/60 text-gray-600 hover:border-gray-300 hover:bg-white hover:text-gray-900 shadow-sm backdrop-blur-md"
+            }`}
+          >
+            <CheckSquare size={14} />
+            {selectionMode ? "Done" : "Select"}
+          </button>
         </div>
 
         {/* File list */}
-        <section className="mt-3 rounded-3xl border border-gray-100 bg-white/95 p-4 shadow-sm md:p-5">
+        <div className="mt-4">
           {filtered.length === 0 ? (
-            <div className="py-12 text-center">
-              <FolderOpen size={36} className="mx-auto mb-3 text-gray-200" />
-              <p className="font-semibold text-gray-700">
-                {files.length === 0 ? "No documents yet" : "No documents in this category"}
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-300 bg-white/40 py-20 backdrop-blur-sm">
+              <div className="rounded-full bg-gray-100 p-4 shadow-inner mb-4">
+                <FolderOpen size={32} className="text-gray-400" />
+              </div>
+              <p className="text-base font-bold text-gray-900">
+                {files.length === 0 ? "Your vault is empty" : "No documents found"}
               </p>
-              <p className="mt-1 text-sm text-gray-400">
+              <p className="mt-1.5 max-w-sm text-center text-sm font-medium text-gray-500">
                 {files.length === 0
-                  ? "Upload your first document using the button above."
-                  : "Switch to a different category or upload a new document."}
+                  ? "Scan or upload your first document to get started."
+                  : "Try selecting a different category or add a new document."}
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {filtered.map((file) => {
                 const meta = categoryMeta(file.category);
                 const typeMeta = fileTypeMeta(file);
@@ -1971,69 +1752,125 @@ export default function VaultClient({ initialFiles }: Props) {
                     key={file.path}
                     role="button"
                     tabIndex={0}
-                    onClick={() => openReader(file)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
+                    onClick={() => {
+                      if (selectionMode) {
+                        toggleSelection(file.path);
+                      } else {
                         void openReader(file);
                       }
                     }}
-                    className="flex cursor-pointer items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 transition-colors hover:bg-gray-50"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        if (selectionMode) toggleSelection(file.path);
+                        else void openReader(file);
+                      }
+                    }}
+                    className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-3xl border p-4 shadow-sm backdrop-blur-md transition-all hover:shadow-md active:scale-[0.98] ${
+                      selectionMode && selectedFiles.has(file.path)
+                        ? "border-orange-500 bg-orange-50/80 ring-2 ring-orange-200"
+                        : "border-white bg-white/60 hover:border-orange-200 hover:bg-white"
+                    }`}
                   >
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${typeMeta.iconBg}`}>
-                      <FileText size={18} className={typeMeta.iconText} />
-                    </div>
+                    {selectionMode && (
+                      <div className="absolute top-4 right-4 z-10">
+                        <div className={`flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors ${
+                          selectedFiles.has(file.path)
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-gray-300 bg-white/80"
+                        }`}>
+                          {selectedFiles.has(file.path) && <CheckCircle2 size={16} />}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${typeMeta.iconBg} shadow-inner`}>
+                        <FileText size={20} className={typeMeta.iconText} />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {fileDisplayName(file.name)}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${meta.color}`}>
-                          {meta.label}
-                        </span>
-                        <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${typeMeta.chip}`}>
-                          {typeMeta.label}
-                        </span>
-                        <span className="text-[11px] text-gray-400">{formatSize(file.size)}</span>
-                        <span className="text-[11px] text-gray-400">{formatDate(file.createdAt)}</span>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="truncate text-[15px] font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
+                          {fileDisplayName(file.name)}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${meta.color}`}>
+                            {meta.label}
+                          </span>
+                          <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${typeMeta.chip}`}>
+                            {typeMeta.label}
+                          </span>
+                        </div>
                       </div>
                     </div>
-
-                    <div
-                      className="flex shrink-0 items-center gap-1"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => void openReader(file)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-orange-50 hover:text-orange-600"
-                        title="View"
+                    
+                    <div className="mt-4 flex items-center justify-between border-t border-gray-100/50 pt-3">
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400">
+                        <span>{formatSize(file.size)}</span>
+                        <span>•</span>
+                        <span>{formatDate(file.createdAt)}</span>
+                      </div>
+                      
+                      <div
+                        className="flex shrink-0 items-center gap-1 opacity-60 transition-opacity group-hover:opacity-100"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
                       >
-                        <Eye size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDownload(file.path)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                        title="Download"
-                      >
-                        <Download size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(file.path)}
-                        disabled={isDeleting || isPending}
-                        className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
-                        title="Delete"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                        <button
+                          onClick={() => handleDownload(file.path)}
+                          className="rounded-full bg-gray-100 p-2 text-gray-500 transition-all hover:bg-gray-200 hover:text-gray-900"
+                          title="Download"
+                        >
+                          <Download size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(file.path)}
+                          disabled={isDeleting || isPending}
+                          className="rounded-full bg-red-50 p-2 text-red-400 transition-all hover:bg-red-100 hover:text-red-600 disabled:opacity-40"
+                          title="Delete"
+                        >
+                          {isDeleting ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-red-500/30 border-t-red-500" /> : <Trash2 size={14} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
-        </section>
+        </div>
+
+        {/* Floating Action Bar for Selection Mode */}
+        {selectionMode && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4 animate-in slide-in-from-bottom-8">
+            <div className="flex items-center justify-between rounded-full border border-gray-200 bg-white/90 p-2 shadow-xl backdrop-blur-xl">
+              <span className="ml-4 text-sm font-bold text-gray-700">
+                {selectedFiles.size} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancelSelection}
+                  className="rounded-full px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateBundle}
+                  disabled={selectedFiles.size === 0}
+                  className="flex items-center gap-1.5 rounded-full bg-blue-500 px-4 py-2 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-600 disabled:opacity-50"
+                >
+                  <Link size={16} /> Bundle
+                </button>
+                <button
+                  onClick={handleMergeToPdf}
+                  disabled={selectedFiles.size < 2}
+                  className="flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-sm font-bold text-white shadow-md shadow-gray-900/20 transition-all hover:bg-black disabled:opacity-50"
+                >
+                  <Layers size={16} /> Merge
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {readerFile && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 md:items-center md:p-6">

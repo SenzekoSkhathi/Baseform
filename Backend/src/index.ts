@@ -12,6 +12,7 @@ import ai from "./routes/ai.js";
 import aiPublic from "./routes/aiPublic.js";
 import email from "./routes/email.js";
 import jobs from "./routes/jobs.js";
+import vision from "./routes/vision.js";
 import { rateLimitDefault, rateLimitAi } from "./middleware/rateLimit.js";
 import { log } from "./lib/logger.js";
 
@@ -59,6 +60,8 @@ app.route("/ai-public", aiPublic);
 app.route("/email", email);
 // Cloud Scheduler triggers (secret-gated; replaces in-process setInterval jobs)
 app.route("/jobs", jobs);
+vision.use("*", rateLimitAi);
+app.route("/vision", vision);
 
 // ── 404 ─────────────────────────────────────────────────────────────────────
 
