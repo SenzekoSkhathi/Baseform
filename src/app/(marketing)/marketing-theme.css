@@ -571,31 +571,31 @@
 }
 
 /* ── Scroll Reveal ────────────────────────────────────────────────────────── */
-.marketing-root .reveal {
+.reveal {
   opacity: 0;
   transform: translateY(32px);
   transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.marketing-root .reveal.in {
+.reveal.in {
   opacity: 1;
   transform: none;
 }
 
-.marketing-root .reveal.d1 {
+.reveal.d1 {
   transition-delay: 0.1s;
 }
-.marketing-root .reveal.d2 {
+.reveal.d2 {
   transition-delay: 0.2s;
 }
-.marketing-root .reveal.d3 {
+.reveal.d3 {
   transition-delay: 0.3s;
 }
-.marketing-root .reveal.d4 {
+.reveal.d4 {
   transition-delay: 0.4s;
 }
-.marketing-root .reveal.d5 {
+.reveal.d5 {
   transition-delay: 0.5s;
 }
 
@@ -827,7 +827,7 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .marketing-root .reveal,
+  .reveal,
   .marketing-root .stat-enter,
   .marketing-root .hero-enter {
     opacity: 1;
@@ -847,4 +847,15 @@ html {
     animation: none !important;
     background: var(--orange) !important;
   }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.in {
+  opacity: 1;
+  transform: none;
 }
