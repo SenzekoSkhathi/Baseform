@@ -47,6 +47,23 @@ export default function ScannerCamera({
   onToggleAutoCapture,
   onChangeFilter,
 }: ScannerCameraProps) {
+  const [videoSize, setVideoSize] = React.useState<{ w: number; h: number } | null>(null);
+
+  React.useEffect(() => {
+    if (videoNaturalSizeRef.current) {
+      if (
+        !videoSize ||
+        videoSize.w !== videoNaturalSizeRef.current.w ||
+        videoSize.h !== videoNaturalSizeRef.current.h
+      ) {
+        setVideoSize({
+          w: videoNaturalSizeRef.current.w,
+          h: videoNaturalSizeRef.current.h,
+        });
+      }
+    }
+  }, [liveQuad, videoSize, videoNaturalSizeRef]);
+
   if (!cameraOpen) return null;
 
   return (
@@ -116,17 +133,17 @@ export default function ScannerCamera({
         )}
 
         {/* Live quad overlay */}
-        {liveQuad && videoNaturalSizeRef.current && (
+        {liveQuad && videoSize && (
           <svg
             className="pointer-events-none absolute inset-0 h-full w-full z-10 transition-colors duration-200"
-            viewBox={`0 0 ${videoNaturalSizeRef.current.w} ${videoNaturalSizeRef.current.h}`}
+            viewBox={`0 0 ${videoSize.w} ${videoSize.h}`}
             preserveAspectRatio="xMidYMid meet"
           >
             <polygon
               points={liveQuad.map((p) => `${p.x},${p.y}`).join(" ")}
               fill={liveQuadStable ? "rgba(16,185,129,0.25)" : "rgba(251,146,60,0.15)"}
               stroke={liveQuadStable ? "#10b981" : "#fb923c"}
-              strokeWidth={Math.max(4, videoNaturalSizeRef.current.w / 200)}
+              strokeWidth={Math.max(4, videoSize.w / 200)}
               strokeLinejoin="round"
               className="transition-all duration-150"
             />
